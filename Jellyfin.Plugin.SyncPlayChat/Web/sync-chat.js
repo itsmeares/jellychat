@@ -4,13 +4,25 @@
     const buttonId = 'syncPlayChatButton';
     const markerClass = 'syncPlayChatButton';
     const floatingHostId = 'syncPlayChatFloatingHost';
-    const composerId = 'syncPlayChatComposer';
+    const styleId = 'syncPlayChatStyle';
+    const drawerId = 'syncPlayChatDrawer';
+    const titleId = 'syncPlayChatTitle';
+    const closeButtonId = 'syncPlayChatCloseButton';
+    const statusId = 'syncPlayChatStatus';
+    const messagesId = 'syncPlayChatMessages';
+    const emptyStateId = 'syncPlayChatEmptyState';
+    const formId = 'syncPlayChatForm';
     const inputId = 'syncPlayChatInput';
     const sendButtonId = 'syncPlayChatSendButton';
     const refreshIntervalMs = 5000;
-    let shouldShowButton = false;
     let refreshInProgress = false;
     let sendInProgress = false;
+    let currentSyncPlayContext = {
+        inGroup: false,
+        groupId: '',
+        groupName: '',
+        unavailable: true
+    };
 
     function normalizeId(value) {
         if (value === null || value === undefined) {
@@ -33,15 +45,50 @@
         window.console.log('[SyncPlayChat]', message, details);
     }
 
-    function getControlHost() {
-        return document.querySelector('.videoOsdBottom .buttons')
-            || document.querySelector('.videoOsdBottom .videoOsdBottomButtons')
-            || document.querySelector('.videoOsdBottom .osdControls')
-            || document.querySelector('[class*="videoOsd"] [class*="buttons"]')
-            || document.querySelector('[class*="videoOsd"] [class*="controls"]');
+    function ensureStyles() {
+        if (document.getElementById(styleId)) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = [
+            '#' + floatingHostId + ' { position: fixed; right: 1rem; bottom: 1rem; z-index: 99999; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }',
+            '.' + markerClass + ' { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 0.65rem; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(18, 20, 24, 0.86); color: #fff; cursor: pointer; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24); }',
+            '.' + markerClass + ':hover, .' + markerClass + ':focus-visible { background: rgba(30, 34, 40, 0.94); border-color: rgba(255, 255, 255, 0.38); }',
+            '.' + markerClass + '[aria-expanded="true"] { color: #00a4dc; border-color: rgba(0, 164, 220, 0.65); }',
+            '#' + drawerId + ' { position: fixed; top: 0; right: 0; bottom: 0; z-index: 100000; display: flex; width: min(24rem, calc(100vw - 1rem)); max-width: 100vw; box-sizing: border-box; flex-direction: column; background: #101317; color: #f6f8fb; border-left: 1px solid rgba(255, 255, 255, 0.12); box-shadow: -16px 0 28px rgba(0, 0, 0, 0.38); transform: translateX(105%); transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1); font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }',
+            '#' + drawerId + '.is-open { transform: translateX(0); }',
+            '.syncPlayChatHeader { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }',
+            '.syncPlayChatHeader h2 { margin: 0; font-size: 1rem; line-height: 1.25rem; font-weight: 650; letter-spacing: 0; color: #fff; }',
+            '#' + closeButtonId + ' { display: inline-flex; align-items: center; justify-content: center; width: 2.15rem; height: 2.15rem; padding: 0; border: 0; border-radius: 0.45rem; background: transparent; color: #d8dee8; cursor: pointer; font-size: 1.6rem; line-height: 1; }',
+            '#' + closeButtonId + ':hover, #' + closeButtonId + ':focus-visible { background: rgba(255, 255, 255, 0.08); color: #fff; }',
+            '#' + statusId + ' { margin: 0.8rem 1rem 0; padding: 0.6rem 0.7rem; border-radius: 0.5rem; background: rgba(255, 255, 255, 0.06); color: #cbd4df; font-size: 0.86rem; line-height: 1.25rem; }',
+            '#' + statusId + '.is-active { background: rgba(0, 164, 220, 0.16); color: #d8f4ff; }',
+            '#' + messagesId + ' { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 1rem; }',
+            '.syncPlayChatEmptyState { display: flex; min-height: 100%; align-items: center; justify-content: center; text-align: center; color: #aeb8c6; font-size: 0.92rem; line-height: 1.35rem; }',
+            '.syncPlayChatMessage { margin: 0 0 0.75rem; padding: 0.65rem 0.7rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
+            '.syncPlayChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.3rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
+            '.syncPlayChatMessageAuthor { color: #e8edf4; font-weight: 650; }',
+            '.syncPlayChatMessageBody { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.35rem; }',
+            '#' + formId + ' { display: flex; gap: 0.55rem; padding: 0.8rem 1rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); background: #101317; }',
+            '#' + inputId + ' { flex: 1 1 auto; min-width: 0; min-height: 2.35rem; max-height: 7.5rem; box-sizing: border-box; resize: none; overflow-x: hidden; overflow-y: auto; padding: 0.52rem 0.65rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.07); color: #fff; line-height: 1.25rem; font: inherit; font-size: 0.92rem; }',
+            '#' + inputId + '::placeholder { color: #b5bfcc; opacity: 1; }',
+            '#' + inputId + ':focus { outline: 2px solid rgba(0, 164, 220, 0.85); outline-offset: 1px; border-color: rgba(0, 164, 220, 0.85); }',
+            '#' + inputId + ':disabled { opacity: 0.66; cursor: not-allowed; }',
+            '#' + sendButtonId + ' { flex: 0 0 auto; min-width: 4.4rem; min-height: 2.35rem; padding: 0.48rem 0.75rem; border: 1px solid rgba(0, 164, 220, 0.55); border-radius: 0.5rem; background: #00a4dc; color: #001018; cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 650; }',
+            '#' + sendButtonId + ':hover, #' + sendButtonId + ':focus-visible { background: #18b7ed; }',
+            '#' + sendButtonId + ':disabled { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.1); color: #aeb8c6; cursor: not-allowed; }',
+            '@media (max-width: 40rem) { #' + drawerId + ' { width: min(100vw, 22rem); } #' + floatingHostId + ' { right: 0.75rem; bottom: 0.75rem; } }',
+            '@media (prefers-reduced-motion: reduce) { #' + drawerId + ' { transition: none; } }'
+        ].join('\n');
+
+        document.head.appendChild(style);
     }
 
     function getFloatingHost() {
+        ensureStyles();
+
         let host = document.getElementById(floatingHostId);
         if (host) {
             return host;
@@ -49,15 +96,14 @@
 
         host = document.createElement('div');
         host.id = floatingHostId;
-        host.style.position = 'fixed';
-        host.style.right = '1rem';
-        host.style.bottom = '1rem';
-        host.style.zIndex = '99999';
-        host.style.display = 'flex';
-        host.style.alignItems = 'flex-end';
-        host.style.gap = '0.5rem';
         document.body.appendChild(host);
         return host;
+    }
+
+    function setElementText(element, value) {
+        if (element && element.textContent !== value) {
+            element.textContent = value;
+        }
     }
 
     function createButton() {
@@ -66,74 +112,83 @@
         button.type = 'button';
         button.className = 'emby-button ' + markerClass;
         button.setAttribute('aria-label', 'SyncPlay chat');
+        button.setAttribute('aria-controls', drawerId);
+        button.setAttribute('aria-expanded', 'false');
         button.title = 'SyncPlay chat';
         button.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16v11H8l-4 4V4z"/></svg>';
-        button.style.display = 'inline-flex';
-        button.style.alignItems = 'center';
-        button.style.justifyContent = 'center';
-        button.style.flex = '0 0 auto';
-        button.style.alignSelf = 'flex-end';
-        button.style.padding = '0.48rem 0.92rem';
-        button.style.borderRadius = '0.6rem';
-        button.style.background = 'rgba(0, 0, 0, 0.7)';
-        button.style.color = '#fff';
-        button.style.border = '1px solid rgba(255, 255, 255, 0.25)';
-        button.style.fontSize = '0.9rem';
-        button.style.cursor = 'pointer';
         button.addEventListener('click', function () {
-            toggleComposer(button);
+            toggleDrawer();
         });
         return button;
     }
 
-    function createComposer() {
-        const composer = document.createElement('div');
-        composer.id = composerId;
-        composer.style.display = 'none';
-        composer.style.alignItems = 'center';
-        composer.style.gap = '0.45rem';
-        composer.style.padding = '0.45rem';
-        composer.style.borderRadius = '0.6rem';
-        composer.style.background = 'rgba(0, 0, 0, 0.7)';
-        composer.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+    function getOrCreateDrawer() {
+        ensureStyles();
+
+        let drawer = document.getElementById(drawerId);
+        if (drawer) {
+            return drawer;
+        }
+
+        drawer = document.createElement('aside');
+        drawer.id = drawerId;
+        drawer.setAttribute('role', 'dialog');
+        drawer.setAttribute('aria-modal', 'false');
+        drawer.setAttribute('aria-labelledby', titleId);
+        drawer.setAttribute('aria-hidden', 'true');
+        if ('inert' in drawer) {
+            drawer.inert = true;
+        }
+
+        const header = document.createElement('div');
+        header.className = 'syncPlayChatHeader';
+
+        const title = document.createElement('h2');
+        title.id = titleId;
+        title.textContent = 'SyncPlay Chat';
+
+        const closeButton = document.createElement('button');
+        closeButton.id = closeButtonId;
+        closeButton.type = 'button';
+        closeButton.setAttribute('aria-label', 'Close SyncPlay chat');
+        closeButton.innerHTML = '&times;';
+        closeButton.addEventListener('click', closeDrawer);
+
+        header.appendChild(title);
+        header.appendChild(closeButton);
+
+        const status = document.createElement('div');
+        status.id = statusId;
+
+        const messages = document.createElement('div');
+        messages.id = messagesId;
+        messages.setAttribute('role', 'log');
+        messages.setAttribute('aria-live', 'polite');
+        messages.setAttribute('aria-relevant', 'additions');
+
+        const emptyState = document.createElement('div');
+        emptyState.id = emptyStateId;
+        emptyState.className = 'syncPlayChatEmptyState';
+        messages.appendChild(emptyState);
+
+        const form = document.createElement('form');
+        form.id = formId;
+        form.setAttribute('autocomplete', 'off');
 
         const input = document.createElement('textarea');
         input.id = inputId;
         input.rows = 1;
-        input.placeholder = 'Type a message';
+        input.placeholder = 'Join a SyncPlay group to chat';
         input.setAttribute('aria-label', 'SyncPlay chat message');
         input.wrap = 'soft';
-        input.style.width = '15rem';
-        input.style.maxWidth = '54vw';
-        input.style.minHeight = '2rem';
-        input.style.height = '2rem';
-        input.style.maxHeight = '7rem';
-        input.style.padding = '0.35rem 0.55rem';
-        input.style.lineHeight = '1.2rem';
-        input.style.boxSizing = 'border-box';
-        input.style.borderRadius = '0.45rem';
-        input.style.border = '1px solid rgba(255, 255, 255, 0.25)';
-        input.style.background = 'rgba(20, 20, 20, 0.8)';
-        input.style.color = '#fff';
-        input.style.resize = 'none';
-        input.style.overflowX = 'hidden';
-        input.style.overflowY = 'auto';
-        input.style.whiteSpace = 'pre-wrap';
-        input.style.wordBreak = 'break-word';
 
         const sendButton = document.createElement('button');
         sendButton.id = sendButtonId;
-        sendButton.type = 'button';
-        sendButton.className = 'emby-button';
+        sendButton.type = 'submit';
         sendButton.textContent = 'Send';
-        sendButton.style.padding = '0.36rem 0.65rem';
-        sendButton.style.borderRadius = '0.45rem';
-        sendButton.style.background = 'rgba(255, 255, 255, 0.18)';
-        sendButton.style.color = '#fff';
-        sendButton.style.border = '1px solid rgba(255, 255, 255, 0.25)';
-        sendButton.style.cursor = 'pointer';
 
-        sendButton.addEventListener('click', function () {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
             sendComposerMessage();
         });
 
@@ -148,7 +203,7 @@
 
             if (event.key === 'Escape') {
                 event.preventDefault();
-                hideComposer();
+                closeDrawer();
             }
         });
 
@@ -160,20 +215,17 @@
             autoResizeComposerInput();
         });
 
-        composer.appendChild(input);
-        composer.appendChild(sendButton);
-        return composer;
-    }
+        form.appendChild(input);
+        form.appendChild(sendButton);
 
-    function getOrCreateComposer(host) {
-        let composer = document.getElementById(composerId);
-        if (composer) {
-            return composer;
-        }
+        drawer.appendChild(header);
+        drawer.appendChild(status);
+        drawer.appendChild(messages);
+        drawer.appendChild(form);
+        document.body.appendChild(drawer);
 
-        composer = createComposer();
-        host.appendChild(composer);
-        return composer;
+        renderSyncPlayStatus();
+        return drawer;
     }
 
     function autoResizeComposerInput() {
@@ -192,48 +244,159 @@
     function setComposerBusy(isBusy) {
         const input = document.getElementById(inputId);
         const sendButton = document.getElementById(sendButtonId);
+        const isDisabled = isBusy || !currentSyncPlayContext.inGroup;
 
         if (input) {
-            input.disabled = isBusy;
+            input.disabled = isDisabled;
+            input.placeholder = currentSyncPlayContext.inGroup ? 'Type a message' : 'Join a SyncPlay group to chat';
         }
 
         if (sendButton) {
-            sendButton.disabled = isBusy;
-            sendButton.style.opacity = isBusy ? '0.75' : '1';
+            sendButton.disabled = isDisabled;
+            sendButton.textContent = isBusy ? 'Sending...' : 'Send';
         }
     }
 
-    function hideComposer() {
-        const composer = document.getElementById(composerId);
-        if (composer) {
-            composer.style.display = 'none';
+    function updateEntryButtonExpanded(isExpanded) {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
         }
     }
 
-    function toggleComposer(button) {
-        if (!shouldShowButton) {
+    function openDrawer() {
+        const drawer = getOrCreateDrawer();
+        drawer.classList.add('is-open');
+        drawer.setAttribute('aria-hidden', 'false');
+        if ('inert' in drawer) {
+            drawer.inert = false;
+        }
+        updateEntryButtonExpanded(true);
+        renderSyncPlayStatus();
+        refreshSyncPlayState();
+
+        window.setTimeout(function () {
+            const input = document.getElementById(inputId);
+            const closeButton = document.getElementById(closeButtonId);
+            const focusTarget = currentSyncPlayContext.inGroup ? input : closeButton;
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusTarget.focus();
+            }
+
+            autoResizeComposerInput();
+        }, 0);
+    }
+
+    function closeDrawer() {
+        const drawer = document.getElementById(drawerId);
+        if (!drawer) {
             return;
         }
 
-        const host = getFloatingHost();
-        const composer = getOrCreateComposer(host);
+        drawer.classList.remove('is-open');
+        drawer.setAttribute('aria-hidden', 'true');
+        if ('inert' in drawer) {
+            drawer.inert = true;
+        }
+        updateEntryButtonExpanded(false);
+    }
 
-        const isVisible = composer.style.display !== 'none';
-        composer.style.display = isVisible ? 'none' : 'flex';
-
-        if (button) {
-            button.style.opacity = isVisible ? '1' : '0.85';
+    function toggleDrawer() {
+        const drawer = getOrCreateDrawer();
+        if (drawer.classList.contains('is-open')) {
+            closeDrawer();
+            return;
         }
 
-        if (!isVisible) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                window.setTimeout(function () {
-                    autoResizeComposerInput();
-                    input.focus();
-                }, 0);
+        openDrawer();
+    }
+
+    function getCurrentGroupLabel() {
+        if (currentSyncPlayContext.groupName) {
+            return currentSyncPlayContext.groupName;
+        }
+
+        if (currentSyncPlayContext.groupId) {
+            return 'Group ' + currentSyncPlayContext.groupId.slice(0, 8);
+        }
+
+        return 'Current group';
+    }
+
+    function renderEmptyState() {
+        const messages = document.getElementById(messagesId);
+        const emptyState = document.getElementById(emptyStateId);
+        if (!messages || !emptyState) {
+            return;
+        }
+
+        const hasMessages = !!messages.querySelector('.syncPlayChatMessage');
+        const emptyText = currentSyncPlayContext.inGroup ? 'No messages yet.' : 'Join or create a SyncPlay group to send chat messages.';
+        setElementText(emptyState, emptyText);
+        emptyState.style.display = hasMessages ? 'none' : 'flex';
+    }
+
+    function renderSyncPlayStatus() {
+        const status = document.getElementById(statusId);
+        if (status) {
+            if (currentSyncPlayContext.inGroup) {
+                setElementText(status, 'In SyncPlay group: ' + getCurrentGroupLabel());
+                status.classList.add('is-active');
+            } else {
+                setElementText(status, 'Not in a SyncPlay group');
+                status.classList.remove('is-active');
             }
         }
+
+        setComposerBusy(sendInProgress);
+        renderEmptyState();
+    }
+
+    function setCurrentSyncPlayContext(context) {
+        currentSyncPlayContext = {
+            inGroup: !!(context && context.inGroup),
+            groupId: (context && typeof context.groupId === 'string') ? context.groupId : '',
+            groupName: (context && typeof context.groupName === 'string') ? context.groupName : '',
+            unavailable: !!(context && context.unavailable)
+        };
+        renderSyncPlayStatus();
+    }
+
+    function appendLocalMessage(author, text) {
+        getOrCreateDrawer();
+
+        const messages = document.getElementById(messagesId);
+        if (!messages) {
+            return;
+        }
+
+        const message = document.createElement('div');
+        message.className = 'syncPlayChatMessage';
+
+        const meta = document.createElement('div');
+        meta.className = 'syncPlayChatMessageMeta';
+
+        const authorNode = document.createElement('span');
+        authorNode.className = 'syncPlayChatMessageAuthor';
+        authorNode.textContent = author || 'You';
+
+        const timeNode = document.createElement('span');
+        timeNode.textContent = new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const body = document.createElement('div');
+        body.className = 'syncPlayChatMessageBody';
+        body.textContent = text;
+
+        meta.appendChild(authorNode);
+        meta.appendChild(timeNode);
+        message.appendChild(meta);
+        message.appendChild(body);
+        messages.appendChild(message);
+        renderEmptyState();
+        messages.scrollTop = messages.scrollHeight;
     }
 
     function getComposerMessageText() {
@@ -256,6 +419,12 @@
     function sendComposerMessage() {
         const text = getComposerMessageText();
         if (!text) {
+            return;
+        }
+
+        if (!currentSyncPlayContext.inGroup) {
+            logDebug('Send blocked because the current session is not in a SyncPlay group.');
+            renderSyncPlayStatus();
             return;
         }
 
@@ -283,10 +452,6 @@
             for (let i = 1; i < existingButtons.length; i += 1) {
                 existingButtons[i].remove();
             }
-        }
-
-        if (!shouldShowButton && existingButtons.length > 0) {
-            existingButtons[0].remove();
         }
     }
 
@@ -670,6 +835,19 @@
         });
 
         return possibleGroupId || '';
+    }
+
+    function resolveSyncPlayGroupName(group) {
+        const direct = (group && group.GroupName)
+            || (group && group.Name)
+            || (group && group.DisplayName)
+            || (group && group.Group && group.Group.GroupName)
+            || (group && group.Group && group.Group.Name)
+            || (group && group.GroupInfo && group.GroupInfo.GroupName)
+            || (group && group.GroupInfo && group.GroupInfo.Name)
+            || '';
+
+        return typeof direct === 'string' ? direct : '';
     }
 
     function extractLikelySessionIdsFromGroup(group) {
@@ -1133,8 +1311,6 @@
             const messageText = senderName + ': ' + trimmedText;
 
             const groupIds = getGroupIdsForCurrentUserSessions(sessions);
-            const sessionIdsFromSessionGroup = findSessionIdsByGroupIds(sessions, groupIds);
-            const sessionIdsFromGroupPayload = findSessionIdsInGroupPayload(groups, sessions);
             const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
             const relevantGroups = groups.filter(function (group) {
                 return groupsContainCurrentUser([group], sessions);
@@ -1161,8 +1337,8 @@
             logDebug('Sync chat send result', result);
 
             if (result && result.sent > 0) {
+                appendLocalMessage(senderName, trimmedText);
                 clearComposerInput();
-                hideComposer();
             } else {
                 showLocalToast('Failed to send SyncPlay chat message.');
             }
@@ -1221,41 +1397,86 @@
         return dedupedSessions;
     }
 
-    async function isCurrentUserInSyncPlayGroup() {
+    async function resolveCurrentSyncPlayContext() {
         if (!window.ApiClient) {
-            return false;
+            return {
+                inGroup: false,
+                groupId: '',
+                groupName: '',
+                unavailable: true
+            };
         }
 
         const sessions = await fetchSessions();
         const matchingUserSessions = sessions.filter(matchesCurrentUser);
         if (matchingUserSessions.length === 0) {
-            return false;
+            return {
+                inGroup: false,
+                groupId: '',
+                groupName: '',
+                unavailable: false
+            };
         }
 
-        if (matchingUserSessions.some(hasSyncPlayGroup)) {
-            return true;
-        }
+        const groupIds = getGroupIdsForCurrentUserSessions(sessions);
+        let groups = [];
+        let groupsUnavailable = false;
 
         try {
             const groupsResponse = await fetchJson('SyncPlay/List');
-            const groups = normalizeGroupsResponse(groupsResponse);
-            if (groups.length > 0) {
-                if (groupsContainCurrentUser(groups, sessions)) {
-                    return true;
-                }
-
-                if (await isCurrentUserInGroupsViaDetails(groups, sessions)) {
-                    return true;
-                }
-            }
+            groups = normalizeGroupsResponse(groupsResponse);
         } catch (err) {
+            groupsUnavailable = true;
             logDebug('SyncPlay list request failed', err);
+        }
+
+        if (groupIds.length > 0 || matchingUserSessions.some(hasSyncPlayGroup)) {
+            const preferredGroupId = groupIds.length > 0 ? groupIds[0] : '';
+            const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
+            const matchingGroup = groupsBySessionGroupIds[0] || null;
+            return {
+                inGroup: true,
+                groupId: preferredGroupId || resolveSyncPlayGroupId(matchingGroup),
+                groupName: resolveSyncPlayGroupName(matchingGroup),
+                unavailable: false
+            };
+        }
+
+        if (groups.length > 0) {
+            const relevantGroups = groups.filter(function (group) {
+                return groupsContainCurrentUser([group], sessions);
+            });
+            const matchingGroup = relevantGroups[0] || null;
+
+            if (matchingGroup) {
+                return {
+                    inGroup: true,
+                    groupId: resolveSyncPlayGroupId(matchingGroup),
+                    groupName: resolveSyncPlayGroupName(matchingGroup),
+                    unavailable: false
+                };
+            }
+
+            if (await isCurrentUserInGroupsViaDetails(groups, sessions)) {
+                const fallbackGroup = groups.length === 1 ? groups[0] : null;
+                return {
+                    inGroup: true,
+                    groupId: resolveSyncPlayGroupId(fallbackGroup),
+                    groupName: resolveSyncPlayGroupName(fallbackGroup),
+                    unavailable: false
+                };
+            }
         }
 
         logDebug('Current user not in any SyncPlay group', {
             matchingUserSessions: matchingUserSessions.length
         });
-        return false;
+        return {
+            inGroup: false,
+            groupId: '',
+            groupName: '',
+            unavailable: groupsUnavailable
+        };
     }
 
     async function refreshSyncPlayState() {
@@ -1266,9 +1487,15 @@
         refreshInProgress = true;
 
         try {
-            shouldShowButton = await isCurrentUserInSyncPlayGroup();
+            setCurrentSyncPlayContext(await resolveCurrentSyncPlayContext());
         } catch (err) {
             logDebug('Failed to refresh SyncPlay state', err);
+            setCurrentSyncPlayContext({
+                inGroup: false,
+                groupId: '',
+                groupName: '',
+                unavailable: true
+            });
             return;
         } finally {
             refreshInProgress = false;
@@ -1277,39 +1504,22 @@
     }
 
     function addButton() {
-        const controlHost = getControlHost();
         const floatingHost = getFloatingHost();
         removeExtraButtons();
 
-        if (!controlHost && !floatingHost) {
+        if (!floatingHost) {
             return;
         }
 
-        if (!shouldShowButton) {
-            hideComposer();
-
-            if (controlHost) {
-                const controlButton = controlHost.querySelector('.' + markerClass);
-                if (controlButton) {
-                    controlButton.remove();
-                }
-            }
-
-            const floatingButton = floatingHost.querySelector('.' + markerClass);
-            if (floatingButton) {
-                floatingButton.remove();
-            }
-
-            return;
-        }
-
-        getOrCreateComposer(floatingHost);
+        getOrCreateDrawer();
 
         if (floatingHost.querySelector('.' + markerClass)) {
+            renderSyncPlayStatus();
             return;
         }
 
         floatingHost.appendChild(createButton());
+        renderSyncPlayStatus();
     }
 
     function start() {
@@ -1322,6 +1532,7 @@
         const observer = new MutationObserver(addButton);
         observer.observe(document.body, { childList: true, subtree: true });
 
+        addButton();
         refreshSyncPlayState();
         window.setInterval(refreshSyncPlayState, refreshIntervalMs);
         window.addEventListener('focus', refreshSyncPlayState);
