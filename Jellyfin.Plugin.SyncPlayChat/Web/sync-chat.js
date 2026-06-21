@@ -17,6 +17,15 @@
         intervalCount: 0,
         currentGroupId: '',
         lastHistoryFetchAt: null,
+        inputFocused: false,
+        submitCount: 0,
+        keydownListenerCount: 0,
+        composerMountCount: 0,
+        lastFocusReason: '',
+        messageCount: 0,
+        groupCount: 0,
+        groupingWindowMs: 5 * 60 * 1000,
+        lastGroupedAt: null,
         lastError: null
     };
 
@@ -39,12 +48,15 @@
     const inputId = 'syncPlayChatInput';
     const sendButtonId = 'syncPlayChatSendButton';
     const refreshIntervalMs = 2000;
+    const groupingWindowMs = 5 * 60 * 1000;
     let refreshInProgress = false;
     let sendInProgress = false;
     let historyFetchInProgress = false;
     let historyMessages = [];
     let lastHistoryGroupId = '';
     let lastHistoryMessageId = '';
+    let composerInputElement = null;
+    let composerFormElement = null;
     let currentSyncPlayContext = {
         inGroup: false,
         groupId: '',
@@ -114,9 +126,11 @@
             '#' + statusId + '.is-active { background: rgba(0, 164, 220, 0.16); color: #d8f4ff; }',
             '#' + messagesId + ' { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 1rem; }',
             '.syncPlayChatEmptyState { display: flex; min-height: 100%; align-items: center; justify-content: center; text-align: center; color: #aeb8c6; font-size: 0.92rem; line-height: 1.35rem; }',
-            '.syncPlayChatMessage { margin: 0 0 0.75rem; padding: 0.65rem 0.7rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
-            '.syncPlayChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.3rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
+            '.syncPlayChatMessageGroup { margin: 0 0 0.85rem; }',
+            '.syncPlayChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.34rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
             '.syncPlayChatMessageAuthor { color: #e8edf4; font-weight: 650; }',
+            '.syncPlayChatMessageStack { display: flex; flex-direction: column; gap: 0.28rem; }',
+            '.syncPlayChatMessage { padding: 0.52rem 0.65rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
             '.syncPlayChatMessageBody { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.35rem; }',
             '#' + formId + ' { display: flex; gap: 0.55rem; padding: 0.8rem 1rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); background: #101317; }',
             '#' + inputId + ' { flex: 1 1 auto; min-width: 0; min-height: 2.35rem; max-height: 7.5rem; box-sizing: border-box; resize: none; overflow-x: hidden; overflow-y: auto; padding: 0.52rem 0.65rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.07); color: #fff; line-height: 1.25rem; font: inherit; font-size: 0.92rem; }',
@@ -184,6 +198,8 @@
         let drawer = existingDrawers[0] || document.getElementById(drawerId);
         if (drawer) {
             drawer.setAttribute('data-jellychat-root', 'true');
+            composerFormElement = document.getElementById(formId);
+            composerInputElement = document.getElementById(inputId);
             debugState.mounted = true;
             if (debugState.mountCount === 0) {
                 debugState.mountCount = 1;
@@ -236,6 +252,7 @@
         const form = document.createElement('form');
         form.id = formId;
         form.setAttribute('autocomplete', 'off');
+        composerFormElement = form;
 
         const input = document.createElement('textarea');
         input.id = inputId;
@@ -243,6 +260,7 @@
         input.placeholder = 'Join a SyncPlay group to chat';
         input.setAttribute('aria-label', 'SyncPlay chat message');
         input.wrap = 'soft';
+        composerInputElement = input;
 
         const sendButton = document.createElement('button');
         sendButton.id = sendButtonId;
@@ -251,15 +269,22 @@
 
         bindEvent(form, 'submit', function (event) {
             event.preventDefault();
+            debugState.submitCount += 1;
             sendComposerMessage();
         });
 
         bindEvent(input, 'keydown', function (event) {
             event.stopPropagation();
+            debugState.keydownListenerCount = 1;
 
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                sendComposerMessage();
+                if (composerFormElement && typeof composerFormElement.requestSubmit === 'function') {
+                    composerFormElement.requestSubmit();
+                } else {
+                    debugState.submitCount += 1;
+                    sendComposerMessage();
+                }
                 return;
             }
 
@@ -277,6 +302,14 @@
             autoResizeComposerInput();
         });
 
+        bindEvent(input, 'focus', function () {
+            debugState.inputFocused = true;
+        });
+
+        bindEvent(input, 'blur', function () {
+            debugState.inputFocused = false;
+        });
+
         form.appendChild(input);
         form.appendChild(sendButton);
 
@@ -287,6 +320,8 @@
         document.body.appendChild(drawer);
         debugState.mounted = true;
         debugState.mountCount += 1;
+        debugState.composerMountCount += 1;
+        debugState.keydownListenerCount = 1;
         if (window.console && typeof window.console.info === 'function') {
             window.console.info('[JellyChat] drawer mounted');
         }
@@ -296,7 +331,7 @@
     }
 
     function autoResizeComposerInput() {
-        const input = document.getElementById(inputId);
+        const input = getComposerInput();
         if (!input) {
             return;
         }
@@ -309,7 +344,7 @@
     }
 
     function setComposerBusy(isBusy) {
-        const input = document.getElementById(inputId);
+        const input = getComposerInput();
         const sendButton = document.getElementById(sendButtonId);
         const isDisabled = isBusy || !currentSyncPlayContext.inGroup;
 
@@ -321,6 +356,86 @@
         if (sendButton) {
             sendButton.disabled = isDisabled;
             sendButton.textContent = isBusy ? 'Sending...' : 'Send';
+        }
+    }
+
+    function getComposerInput() {
+        if (composerInputElement && composerInputElement.isConnected) {
+            return composerInputElement;
+        }
+
+        composerInputElement = document.getElementById(inputId);
+        return composerInputElement;
+    }
+
+    function isInteractiveElement(element) {
+        if (!element || element === document.body || element === document.documentElement) {
+            return false;
+        }
+
+        const tagName = (element.tagName || '').toLowerCase();
+        return tagName === 'input'
+            || tagName === 'textarea'
+            || tagName === 'select'
+            || tagName === 'button'
+            || tagName === 'a'
+            || element.isContentEditable;
+    }
+
+    function hasActiveTextSelection() {
+        if (!window.getSelection) {
+            return false;
+        }
+
+        const selection = window.getSelection();
+        return !!(selection && selection.type === 'Range' && String(selection).length > 0);
+    }
+
+    function canFocusComposer(reason) {
+        const input = getComposerInput();
+        if (!input || input.disabled || !currentSyncPlayContext.inGroup || !isDrawerOpen()) {
+            return false;
+        }
+
+        if (hasActiveTextSelection()) {
+            return false;
+        }
+
+        const activeElement = document.activeElement;
+        if (activeElement === input) {
+            return true;
+        }
+
+        if (reason === 'drawer-open' || reason === 'send-success') {
+            return true;
+        }
+
+        const closeButton = document.getElementById(closeButtonId);
+        return !isInteractiveElement(activeElement) || activeElement === closeButton;
+    }
+
+    function focusComposer(reason) {
+        const focus = function () {
+            if (!canFocusComposer(reason)) {
+                return;
+            }
+
+            const input = getComposerInput();
+            try {
+                input.focus({ preventScroll: true });
+            } catch (err) {
+                input.focus();
+            }
+
+            debugState.inputFocused = document.activeElement === input;
+            debugState.lastFocusReason = reason;
+            autoResizeComposerInput();
+        };
+
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(focus);
+        } else {
+            window.setTimeout(focus, 0);
         }
     }
 
@@ -341,17 +456,7 @@
         updateEntryButtonExpanded(true);
         renderSyncPlayStatus();
         pollSyncPlayChat();
-
-        window.setTimeout(function () {
-            const input = document.getElementById(inputId);
-            const closeButton = document.getElementById(closeButtonId);
-            const focusTarget = currentSyncPlayContext.inGroup ? input : closeButton;
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-                focusTarget.focus();
-            }
-
-            autoResizeComposerInput();
-        }, 0);
+        focusComposer('drawer-open');
     }
 
     function closeDrawer() {
@@ -481,6 +586,63 @@
         });
     }
 
+    function getMessageTime(message) {
+        const createdAt = new Date(message.createdAtUtc);
+        const ticks = createdAt.getTime();
+        return Number.isNaN(ticks) ? 0 : ticks;
+    }
+
+    function getMessageSenderKey(message) {
+        if (message.userId) {
+            return 'id:' + message.userId;
+        }
+
+        return 'name:' + message.userName;
+    }
+
+    function groupMessages(messages, windowMs) {
+        const sortedMessages = messages.slice().sort(function (left, right) {
+            return getMessageTime(left) - getMessageTime(right);
+        });
+        const groups = [];
+
+        sortedMessages.forEach(function (message) {
+            const previousGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+            const previousMessage = previousGroup && previousGroup.messages.length > 0
+                ? previousGroup.messages[previousGroup.messages.length - 1]
+                : null;
+            const senderKey = getMessageSenderKey(message);
+            const messageTime = getMessageTime(message);
+            const previousMessageTime = previousMessage ? getMessageTime(previousMessage) : 0;
+            const shouldStartGroup = !previousMessage
+                || previousGroup.senderKey !== senderKey
+                || Math.abs(messageTime - previousMessageTime) > windowMs;
+
+            if (shouldStartGroup) {
+                groups.push({
+                    key: message.id,
+                    senderKey: senderKey,
+                    userName: message.userName,
+                    createdAtUtc: message.createdAtUtc,
+                    messages: [message]
+                });
+                return;
+            }
+
+            previousGroup.messages.push(message);
+        });
+
+        debugState.messageCount = sortedMessages.length;
+        debugState.groupCount = groups.length;
+        debugState.groupingWindowMs = windowMs;
+        debugState.lastGroupedAt = new Date().toISOString();
+        return groups;
+    }
+
+    function isMessagesNearBottom(messages) {
+        return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
+    }
+
     function renderHistoryMessages() {
         getOrCreateDrawer();
 
@@ -489,38 +651,56 @@
             return;
         }
 
-        const existing = messages.querySelectorAll('.syncPlayChatMessage');
+        const shouldStickToBottom = historyMessages.length === 0 || isMessagesNearBottom(messages);
+        const existing = messages.querySelectorAll('.syncPlayChatMessageGroup, .syncPlayChatMessage');
         existing.forEach(function (message) {
             message.remove();
         });
 
-        historyMessages.forEach(function (chatMessage) {
-            const message = document.createElement('div');
-            message.className = 'syncPlayChatMessage';
+        const groups = groupMessages(historyMessages, groupingWindowMs);
+        groups.forEach(function (group) {
+            const groupNode = document.createElement('div');
+            groupNode.className = 'syncPlayChatMessageGroup';
+            groupNode.setAttribute('data-jellychat-group-key', group.key);
 
             const meta = document.createElement('div');
             meta.className = 'syncPlayChatMessageMeta';
 
             const authorNode = document.createElement('span');
             authorNode.className = 'syncPlayChatMessageAuthor';
-            authorNode.textContent = chatMessage.userName;
+            authorNode.textContent = group.userName;
 
             const timeNode = document.createElement('span');
-            timeNode.textContent = formatMessageTime(chatMessage);
+            timeNode.textContent = formatMessageTime(group);
 
-            const body = document.createElement('div');
-            body.className = 'syncPlayChatMessageBody';
-            body.textContent = chatMessage.text;
+            const stack = document.createElement('div');
+            stack.className = 'syncPlayChatMessageStack';
 
             meta.appendChild(authorNode);
             meta.appendChild(timeNode);
-            message.appendChild(meta);
-            message.appendChild(body);
-            messages.appendChild(message);
+            groupNode.appendChild(meta);
+
+            group.messages.forEach(function (chatMessage) {
+                const message = document.createElement('div');
+                message.className = 'syncPlayChatMessage';
+                message.setAttribute('data-jellychat-message-key', chatMessage.id);
+
+                const body = document.createElement('div');
+                body.className = 'syncPlayChatMessageBody';
+                body.textContent = chatMessage.text;
+
+                message.appendChild(body);
+                stack.appendChild(message);
+            });
+
+            groupNode.appendChild(stack);
+            messages.appendChild(groupNode);
         });
 
         renderEmptyState();
-        messages.scrollTop = messages.scrollHeight;
+        if (shouldStickToBottom) {
+            messages.scrollTop = messages.scrollHeight;
+        }
     }
 
     function mergeHistoryMessages(messages) {
@@ -608,6 +788,7 @@
     }
 
     function setCurrentSyncPlayContext(context) {
+        const wasInGroup = currentSyncPlayContext.inGroup;
         const nextGroupId = (context && typeof context.groupId === 'string') ? context.groupId : '';
         const groupChanged = nextGroupId !== currentSyncPlayContext.groupId;
         currentSyncPlayContext = {
@@ -626,10 +807,13 @@
         }
 
         renderSyncPlayStatus();
+        if (!wasInGroup && currentSyncPlayContext.inGroup && isDrawerOpen()) {
+            focusComposer('group-joined');
+        }
     }
 
     function getComposerMessageText() {
-        const input = document.getElementById(inputId);
+        const input = getComposerInput();
         if (!input) {
             return '';
         }
@@ -638,7 +822,7 @@
     }
 
     function clearComposerInput() {
-        const input = document.getElementById(inputId);
+        const input = getComposerInput();
         if (input) {
             input.value = '';
             autoResizeComposerInput();
@@ -1521,6 +1705,7 @@
         }
 
         sendInProgress = true;
+        let shouldFocusAfterSend = false;
         setComposerBusy(true);
 
         try {
@@ -1558,6 +1743,7 @@
             if (result && result.id) {
                 mergeHistoryMessages([result]);
                 clearComposerInput();
+                shouldFocusAfterSend = true;
             } else {
                 showLocalToast('Failed to send SyncPlay chat message.');
             }
@@ -1567,6 +1753,9 @@
         } finally {
             sendInProgress = false;
             setComposerBusy(false);
+            if (shouldFocusAfterSend) {
+                focusComposer('send-success');
+            }
         }
     }
 
