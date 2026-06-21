@@ -15,6 +15,8 @@
         mountCount: 0,
         listenerCount: 0,
         intervalCount: 0,
+        currentGroupId: '',
+        lastHistoryFetchAt: null,
         lastError: null
     };
 
@@ -36,9 +38,13 @@
     const formId = 'syncPlayChatForm';
     const inputId = 'syncPlayChatInput';
     const sendButtonId = 'syncPlayChatSendButton';
-    const refreshIntervalMs = 5000;
+    const refreshIntervalMs = 2000;
     let refreshInProgress = false;
     let sendInProgress = false;
+    let historyFetchInProgress = false;
+    let historyMessages = [];
+    let lastHistoryGroupId = '';
+    let lastHistoryMessageId = '';
     let currentSyncPlayContext = {
         inGroup: false,
         groupId: '',
@@ -334,7 +340,7 @@
         }
         updateEntryButtonExpanded(true);
         renderSyncPlayStatus();
-        refreshSyncPlayState();
+        pollSyncPlayChat();
 
         window.setTimeout(function () {
             const input = document.getElementById(inputId);
@@ -372,6 +378,11 @@
         openDrawer();
     }
 
+    function isDrawerOpen() {
+        const drawer = document.getElementById(drawerId);
+        return !!(drawer && drawer.classList.contains('is-open'));
+    }
+
     function getCurrentGroupLabel() {
         if (currentSyncPlayContext.groupName) {
             return currentSyncPlayContext.groupName;
@@ -397,6 +408,189 @@
         emptyState.style.display = hasMessages ? 'none' : 'flex';
     }
 
+    function isUsableDisplayName(value) {
+        if (typeof value !== 'string') {
+            return false;
+        }
+
+        const trimmed = value.trim();
+        return trimmed.length > 0
+            && trimmed.toLowerCase() !== 'true'
+            && trimmed.toLowerCase() !== 'false';
+    }
+
+    function getMessageValue(message, pascalName, camelName) {
+        if (!message || typeof message !== 'object') {
+            return '';
+        }
+
+        if (message[pascalName] !== undefined && message[pascalName] !== null) {
+            return message[pascalName];
+        }
+
+        if (message[camelName] !== undefined && message[camelName] !== null) {
+            return message[camelName];
+        }
+
+        return '';
+    }
+
+    function normalizeChatMessage(message) {
+        const userName = getMessageValue(message, 'UserName', 'userName');
+        return {
+            id: String(getMessageValue(message, 'Id', 'id') || ''),
+            groupId: String(getMessageValue(message, 'GroupId', 'groupId') || ''),
+            userId: String(getMessageValue(message, 'UserId', 'userId') || ''),
+            userName: isUsableDisplayName(userName) ? String(userName).trim() : 'Someone',
+            text: String(getMessageValue(message, 'Text', 'text') || ''),
+            createdAtUtc: String(getMessageValue(message, 'CreatedAtUtc', 'createdAtUtc') || '')
+        };
+    }
+
+    function normalizeHistoryResponse(response) {
+        if (Array.isArray(response)) {
+            return response.map(normalizeChatMessage).filter(function (message) {
+                return message.id && message.text;
+            });
+        }
+
+        if (response && Array.isArray(response.Items)) {
+            return normalizeHistoryResponse(response.Items);
+        }
+
+        if (response && Array.isArray(response.items)) {
+            return normalizeHistoryResponse(response.items);
+        }
+
+        return [];
+    }
+
+    function formatMessageTime(message) {
+        if (!message.createdAtUtc) {
+            return '';
+        }
+
+        const createdAt = new Date(message.createdAtUtc);
+        if (Number.isNaN(createdAt.getTime())) {
+            return '';
+        }
+
+        return createdAt.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function renderHistoryMessages() {
+        getOrCreateDrawer();
+
+        const messages = document.getElementById(messagesId);
+        if (!messages) {
+            return;
+        }
+
+        const existing = messages.querySelectorAll('.syncPlayChatMessage');
+        existing.forEach(function (message) {
+            message.remove();
+        });
+
+        historyMessages.forEach(function (chatMessage) {
+            const message = document.createElement('div');
+            message.className = 'syncPlayChatMessage';
+
+            const meta = document.createElement('div');
+            meta.className = 'syncPlayChatMessageMeta';
+
+            const authorNode = document.createElement('span');
+            authorNode.className = 'syncPlayChatMessageAuthor';
+            authorNode.textContent = chatMessage.userName;
+
+            const timeNode = document.createElement('span');
+            timeNode.textContent = formatMessageTime(chatMessage);
+
+            const body = document.createElement('div');
+            body.className = 'syncPlayChatMessageBody';
+            body.textContent = chatMessage.text;
+
+            meta.appendChild(authorNode);
+            meta.appendChild(timeNode);
+            message.appendChild(meta);
+            message.appendChild(body);
+            messages.appendChild(message);
+        });
+
+        renderEmptyState();
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function mergeHistoryMessages(messages) {
+        const byId = {};
+        historyMessages.forEach(function (message) {
+            if (message.id) {
+                byId[message.id] = message;
+            }
+        });
+
+        messages.forEach(function (message) {
+            if (message.id) {
+                byId[message.id] = message;
+            }
+        });
+
+        historyMessages = Object.keys(byId)
+            .map(function (id) { return byId[id]; })
+            .sort(function (left, right) {
+                return String(left.createdAtUtc).localeCompare(String(right.createdAtUtc));
+            });
+
+        if (historyMessages.length > 100) {
+            historyMessages = historyMessages.slice(historyMessages.length - 100);
+        }
+
+        lastHistoryMessageId = historyMessages.length > 0 ? historyMessages[historyMessages.length - 1].id : '';
+        renderHistoryMessages();
+    }
+
+    async function fetchChatHistory(forceFull) {
+        if (historyFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+            return;
+        }
+
+        let shouldFetchFull = !!forceFull;
+        if (lastHistoryGroupId !== currentSyncPlayContext.groupId) {
+            lastHistoryGroupId = currentSyncPlayContext.groupId;
+            lastHistoryMessageId = '';
+            historyMessages = [];
+            shouldFetchFull = true;
+        }
+
+        historyFetchInProgress = true;
+
+        try {
+            let path = 'SyncPlayChat/History?groupId=' + encodeURIComponent(currentSyncPlayContext.groupId) + '&limit=100';
+            if (!shouldFetchFull && lastHistoryMessageId) {
+                path += '&after=' + encodeURIComponent(lastHistoryMessageId);
+            }
+
+            const response = await fetchJson(path);
+            debugState.lastHistoryFetchAt = new Date().toISOString();
+            const messages = normalizeHistoryResponse(response);
+            if (shouldFetchFull) {
+                historyMessages = [];
+            }
+
+            if (messages.length > 0 || shouldFetchFull) {
+                mergeHistoryMessages(messages);
+            } else {
+                renderEmptyState();
+            }
+        } catch (err) {
+            logDebug('Failed to fetch SyncPlay chat history', err);
+        } finally {
+            historyFetchInProgress = false;
+        }
+    }
+
     function renderSyncPlayStatus() {
         const status = document.getElementById(statusId);
         if (status) {
@@ -414,50 +608,24 @@
     }
 
     function setCurrentSyncPlayContext(context) {
+        const nextGroupId = (context && typeof context.groupId === 'string') ? context.groupId : '';
+        const groupChanged = nextGroupId !== currentSyncPlayContext.groupId;
         currentSyncPlayContext = {
             inGroup: !!(context && context.inGroup),
-            groupId: (context && typeof context.groupId === 'string') ? context.groupId : '',
+            groupId: nextGroupId,
             groupName: (context && typeof context.groupName === 'string') ? context.groupName : '',
             unavailable: !!(context && context.unavailable)
         };
-        renderSyncPlayStatus();
-    }
 
-    function appendLocalMessage(author, text) {
-        getOrCreateDrawer();
-
-        const messages = document.getElementById(messagesId);
-        if (!messages) {
-            return;
+        debugState.currentGroupId = currentSyncPlayContext.groupId;
+        if (!currentSyncPlayContext.inGroup || groupChanged) {
+            historyMessages = [];
+            lastHistoryMessageId = '';
+            lastHistoryGroupId = currentSyncPlayContext.groupId;
+            renderHistoryMessages();
         }
 
-        const message = document.createElement('div');
-        message.className = 'syncPlayChatMessage';
-
-        const meta = document.createElement('div');
-        meta.className = 'syncPlayChatMessageMeta';
-
-        const authorNode = document.createElement('span');
-        authorNode.className = 'syncPlayChatMessageAuthor';
-        authorNode.textContent = author || 'You';
-
-        const timeNode = document.createElement('span');
-        timeNode.textContent = new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        const body = document.createElement('div');
-        body.className = 'syncPlayChatMessageBody';
-        body.textContent = text;
-
-        meta.appendChild(authorNode);
-        meta.appendChild(timeNode);
-        message.appendChild(meta);
-        message.appendChild(body);
-        messages.appendChild(message);
-        renderEmptyState();
-        messages.scrollTop = messages.scrollHeight;
+        renderSyncPlayStatus();
     }
 
     function getComposerMessageText() {
@@ -1336,18 +1504,10 @@
 
         if (!normalized || typeof normalized !== 'object') {
             logDebug('Unexpected server chat send response shape', { response: response, normalized: normalized });
-            return {
-                attempted: 0,
-                sent: 0,
-                failed: 0
-            };
+            return null;
         }
 
-        return {
-            attempted: Number(normalized.Attempted) || 0,
-            sent: Number(normalized.Sent) || 0,
-            failed: Number(normalized.Failed) || 0
-        };
+        return normalizeChatMessage(normalized);
     }
 
     async function onChatButtonClick(chatText) {
@@ -1367,13 +1527,7 @@
             const sessions = await fetchSessions();
             const groupsResponse = await fetchJson('SyncPlay/List');
             const groups = normalizeGroupsResponse(groupsResponse);
-
             const currentSession = getCurrentSession(sessions);
-            const senderName = (currentSession && currentSession.UserName)
-                || (currentSession && currentSession.User && currentSession.User.Name)
-                || getCurrentUserName()
-                || 'Someone';
-            const messageText = senderName + ': ' + trimmedText;
 
             const groupIds = getGroupIdsForCurrentUserSessions(sessions);
             const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
@@ -1394,15 +1548,15 @@
             let result;
             const preferredGroupId = groupIds.length > 0 ? groupIds[0] : resolveSyncPlayGroupId(groupsForDetailLookup[0] || groups[0]);
             result = await sendMessageViaServer(
-                messageText,
+                trimmedText,
                 currentSession && currentSession.Id,
                 preferredGroupId,
                 participantsForSend);
 
             logDebug('Sync chat send result', result);
 
-            if (result && result.sent > 0) {
-                appendLocalMessage(senderName, trimmedText);
+            if (result && result.id) {
+                mergeHistoryMessages([result]);
                 clearComposerInput();
             } else {
                 showLocalToast('Failed to send SyncPlay chat message.');
@@ -1533,9 +1687,6 @@
             }
         }
 
-        logDebug('Current user not in any SyncPlay group', {
-            matchingUserSessions: matchingUserSessions.length
-        });
         return {
             inGroup: false,
             groupId: '',
@@ -1568,6 +1719,13 @@
         }
     }
 
+    async function pollSyncPlayChat() {
+        await refreshSyncPlayState();
+        if (currentSyncPlayContext.inGroup && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
+            await fetchChatHistory(false);
+        }
+    }
+
     function addButton() {
         const floatingHost = getFloatingHost();
         removeExtraButtons();
@@ -1597,20 +1755,20 @@
         window.__syncPlayChatLoaded = true;
 
         addButton();
-        refreshSyncPlayState();
+        pollSyncPlayChat();
 
         if (window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === undefined || window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === null) {
-            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(refreshSyncPlayState, refreshIntervalMs);
+            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(pollSyncPlayChat, refreshIntervalMs);
             debugState.intervalCount = 1;
         } else {
             debugState.intervalCount = 1;
         }
 
         if (!window.__JELLYCHAT_LISTENERS_BOUND__) {
-            bindEvent(window, 'focus', refreshSyncPlayState);
+            bindEvent(window, 'focus', pollSyncPlayChat);
             bindEvent(document, 'visibilitychange', function () {
                 if (!document.hidden) {
-                    refreshSyncPlayState();
+                    pollSyncPlayChat();
                 }
             });
             window.__JELLYCHAT_LISTENERS_BOUND__ = true;

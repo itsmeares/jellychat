@@ -4,8 +4,9 @@
 
 SyncPlay Chat is a Jellyfin server plugin with a small authenticated API and an injected web client script.
 
-- `Jellyfin.Plugin.SyncPlayChat/Api/SyncPlayChatController.cs` exposes `POST /SyncPlayChat/Send`.
-- The controller resolves the current Jellyfin user/session, uses SyncPlay group information as the room context, and sends a Jellyfin `MessageCommand` toast to matching sessions.
+- `Jellyfin.Plugin.SyncPlayChat/Api/SyncPlayChatController.cs` exposes `POST /SyncPlayChat/Send` and `GET /SyncPlayChat/History`.
+- The controller resolves the current Jellyfin user/session, uses SyncPlay group information as the room context, and stores chat messages in plugin-owned memory keyed by SyncPlay group.
+- `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncPlayChatMessageStore.cs` keeps a bounded recent history for each SyncPlay group.
 - `Jellyfin.Plugin.SyncPlayChat/Web/sync-chat.js` is embedded as a resource and injected into Jellyfin Web.
 - `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncChatWebInjectionStartupService.cs` registers a File Transformation callback.
 - `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncChatWebTransformer.cs` injects the embedded script into `index.html`.
@@ -17,13 +18,18 @@ The first drawer milestone keeps the existing backend behavior and moves only th
 - Jellyfin SyncPlay remains responsible for playback synchronization.
 - SyncPlay group/session data is used only to infer the current chat context.
 - The injected client owns a Teleparty-style right-side drawer with local, non-persistent sent-message rendering.
-- The existing `POST /SyncPlayChat/Send` endpoint remains the only send transport for now.
+- The existing `POST /SyncPlayChat/Send` endpoint stores messages and returns the stored chat message.
+- The drawer polls `GET /SyncPlayChat/History` for recent in-memory messages.
 - No external WebSocket server, new port, Node/Bun backend, persistent storage, or new realtime channel is added.
 
 ## Files Changed For This Milestone
 
 - `docs/chat-drawer-plan.md`
 - `Jellyfin.Plugin.SyncPlayChat/Web/sync-chat.js`
+- `Jellyfin.Plugin.SyncPlayChat/Api/SyncPlayChatController.cs`
+- `Jellyfin.Plugin.SyncPlayChat/Api/SyncPlayChatMessage.cs`
+- `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncPlayChatMessageStore.cs`
+- `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncChatWebInjectionRegistrator.cs`
 
 No plugin identity, GUID, package metadata, release manifest, or C# API contracts should change for this milestone.
 
@@ -38,3 +44,5 @@ No plugin identity, GUID, package metadata, release manifest, or C# API contract
 ## Memory Leak Guard
 
 The injected client uses a hard `window.__JELLYCHAT_LOADED__` singleton guard before mounting UI. Drawer DOM, style injection, global event listeners, and the SyncPlay refresh interval are each registered at most once per browser page lifetime. Runtime state is exposed at `window.JellyChatDebug`, including mount, listener, interval, and last-error counters for quick browser-console checks.
+
+The drawer now renders plugin-owned in-memory chat history from `GET /SyncPlayChat/History`; Jellyfin `MessageCommand` toast notifications are optional compatibility behavior and disabled in code by default.
