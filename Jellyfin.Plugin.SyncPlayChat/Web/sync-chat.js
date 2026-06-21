@@ -26,6 +26,24 @@
         groupCount: 0,
         groupingWindowMs: 5 * 60 * 1000,
         lastGroupedAt: null,
+        layoutMode: 'normal-docked',
+        isVideoRoute: false,
+        isFullscreen: false,
+        drawerOpen: false,
+        triggerPlacement: 'normal',
+        drawerWidth: 340,
+        fullscreenPlayerSurfaceSelector: '',
+        videoReservedWidth: 0,
+        lastLayoutUpdateAt: null,
+        lastFullscreenLayoutAt: null,
+        fullscreenElementTag: '',
+        fullscreenHostTag: '',
+        fullscreenHostClass: '',
+        rootParentTag: '',
+        rootParentClass: '',
+        rootMoveCount: 0,
+        lastFullscreenChangeAt: null,
+        controlsOverlapAvoided: false,
         lastError: null
     };
 
@@ -49,12 +67,20 @@
     const sendButtonId = 'syncPlayChatSendButton';
     const refreshIntervalMs = 2000;
     const groupingWindowMs = 5 * 60 * 1000;
+    const drawerWidthPx = 340;
+    const mobileLayoutMaxWidthPx = 899;
     let refreshInProgress = false;
     let sendInProgress = false;
     let historyFetchInProgress = false;
     let historyMessages = [];
     let lastHistoryGroupId = '';
     let lastHistoryMessageId = '';
+    let lastLayoutMode = '';
+    let lastFullscreenHost = null;
+    let fullscreenLayoutSurfaces = [];
+    let activeMountHost = null;
+    let normalMountHost = null;
+    let layoutResizeTimer = 0;
     let composerInputElement = null;
     let composerFormElement = null;
     let currentSyncPlayContext = {
@@ -112,12 +138,28 @@
         style.id = styleId;
         style.setAttribute('data-jellychat-style', 'true');
         style.textContent = [
-            '#' + floatingHostId + ' { position: fixed; right: 1rem; bottom: 1rem; z-index: 99999; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }',
+            ':root { --jellychat-drawer-width: 340px; }',
+            'body.jellychat-drawer-open.jellychat-docked:not(.jellychat-fullscreen) { padding-right: var(--jellychat-drawer-width); box-sizing: border-box; }',
+            'body.jellychat-video-route.jellychat-drawer-open.jellychat-docked { overflow-x: hidden; }',
+            '.jellychat-fullscreen-host { --jellychat-drawer-width: 340px; box-sizing: border-box; }',
+            '.jellychat-fullscreen-host.jellychat-fullscreen-docked { position: relative !important; overflow: hidden !important; }',
+            '.jellychat-fullscreen-host.jellychat-fullscreen-docked [data-jellychat-fullscreen-surface="true"] { width: calc(100% - var(--jellychat-drawer-width)) !important; max-width: calc(100% - var(--jellychat-drawer-width)) !important; min-width: 0 !important; box-sizing: border-box !important; }',
+            '.jellychat-fullscreen-host.jellychat-fullscreen-docked [data-jellychat-fullscreen-surface="true"].jellychat-positioned-surface { right: var(--jellychat-drawer-width) !important; width: auto !important; max-width: none !important; }',
+            '#' + floatingHostId + ' { position: fixed; right: 1rem; bottom: 1rem; z-index: 2147483600; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }',
+            'body.jellychat-video-route #' + floatingHostId + ' { top: 4.5rem; right: 0.75rem; bottom: auto; }',
+            '.jellychat-fullscreen-host #' + floatingHostId + ' { top: max(1rem, env(safe-area-inset-top)) !important; right: max(0.75rem, env(safe-area-inset-right)) !important; bottom: auto !important; z-index: 2147483600; }',
+            'body.jellychat-mobile #' + floatingHostId + ' { right: 0.75rem; bottom: 0.75rem; top: auto; }',
+            '.jellychat-fullscreen-host.jellychat-mobile #' + floatingHostId + ' { top: max(1rem, env(safe-area-inset-top)) !important; right: max(0.75rem, env(safe-area-inset-right)) !important; bottom: auto !important; }',
             '.' + markerClass + ' { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 0.65rem; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(18, 20, 24, 0.86); color: #fff; cursor: pointer; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24); }',
+            'body.jellychat-video-route .' + markerClass + ', .jellychat-fullscreen-host .' + markerClass + ' { border-radius: 0.65rem 0 0 0.65rem; }',
             '.' + markerClass + ':hover, .' + markerClass + ':focus-visible { background: rgba(30, 34, 40, 0.94); border-color: rgba(255, 255, 255, 0.38); }',
             '.' + markerClass + '[aria-expanded="true"] { color: #00a4dc; border-color: rgba(0, 164, 220, 0.65); }',
-            '#' + drawerId + ' { position: fixed; top: 0; right: 0; bottom: 0; z-index: 100000; display: flex; width: min(24rem, calc(100vw - 1rem)); max-width: 100vw; box-sizing: border-box; flex-direction: column; background: #101317; color: #f6f8fb; border-left: 1px solid rgba(255, 255, 255, 0.12); box-shadow: -16px 0 28px rgba(0, 0, 0, 0.38); transform: translateX(105%); transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1); font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }',
+            '#' + drawerId + ' { position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483601; display: flex; width: min(var(--jellychat-drawer-width), calc(100vw - 1rem)); max-width: 100vw; box-sizing: border-box; flex-direction: column; background: #101317; color: #f6f8fb; border-left: 1px solid rgba(255, 255, 255, 0.12); box-shadow: -16px 0 28px rgba(0, 0, 0, 0.38); transform: translateX(105%); transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1); font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }',
             '#' + drawerId + '.is-open { transform: translateX(0); }',
+            'body.jellychat-mobile #' + drawerId + ' { width: min(24rem, 100vw); }',
+            '.jellychat-fullscreen-host #' + drawerId + ' { z-index: 2147483601; }',
+            '.jellychat-fullscreen-host.jellychat-fullscreen-docked #' + drawerId + ' { position: absolute; top: 0; right: 0; bottom: 0; width: var(--jellychat-drawer-width); }',
+            '.jellychat-fullscreen-host.jellychat-mobile #' + drawerId + ' { top: 0; bottom: max(4.75rem, env(safe-area-inset-bottom)); width: min(22rem, calc(100vw - 0.75rem)); }',
             '.syncPlayChatHeader { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }',
             '.syncPlayChatHeader h2 { margin: 0; font-size: 1rem; line-height: 1.25rem; font-weight: 650; letter-spacing: 0; color: #fff; }',
             '#' + closeButtonId + ' { display: inline-flex; align-items: center; justify-content: center; width: 2.15rem; height: 2.15rem; padding: 0; border: 0; border-radius: 0.45rem; background: transparent; color: #d8dee8; cursor: pointer; font-size: 1.6rem; line-height: 1; }',
@@ -140,7 +182,7 @@
             '#' + sendButtonId + ' { flex: 0 0 auto; min-width: 4.4rem; min-height: 2.35rem; padding: 0.48rem 0.75rem; border: 1px solid rgba(0, 164, 220, 0.55); border-radius: 0.5rem; background: #00a4dc; color: #001018; cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 650; }',
             '#' + sendButtonId + ':hover, #' + sendButtonId + ':focus-visible { background: #18b7ed; }',
             '#' + sendButtonId + ':disabled { border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.1); color: #aeb8c6; cursor: not-allowed; }',
-            '@media (max-width: 40rem) { #' + drawerId + ' { width: min(100vw, 22rem); } #' + floatingHostId + ' { right: 0.75rem; bottom: 0.75rem; } }',
+            '@media (max-width: 56.1875rem) { body.jellychat-drawer-open.jellychat-docked { padding-right: 0; } #' + drawerId + ' { width: min(100vw, 24rem); } #' + floatingHostId + ' { right: 0.75rem; bottom: 0.75rem; top: auto; } }',
             '@media (prefers-reduced-motion: reduce) { #' + drawerId + ' { transition: none; } }'
         ].join('\n');
 
@@ -158,13 +200,268 @@
         host = document.createElement('div');
         host.id = floatingHostId;
         host.setAttribute('data-jellychat-host', 'true');
-        document.body.appendChild(host);
+        getActiveMountHost().appendChild(host);
         return host;
     }
 
     function setElementText(element, value) {
         if (element && element.textContent !== value) {
             element.textContent = value;
+        }
+    }
+
+    function getElementTagName(element) {
+        if (!element || !element.tagName) {
+            return '';
+        }
+
+        return element.tagName.toLowerCase();
+    }
+
+    function getElementClassName(element) {
+        if (!element || typeof element.className !== 'string') {
+            return '';
+        }
+
+        return element.className;
+    }
+
+    function getNormalMountHost() {
+        if (!normalMountHost || !normalMountHost.isConnected) {
+            normalMountHost = document.body;
+        }
+
+        return normalMountHost;
+    }
+
+    function getFullscreenHost() {
+        return document.fullscreenElement || null;
+    }
+
+    function getActiveMountHost() {
+        return getFullscreenHost() || getNormalMountHost();
+    }
+
+    function setElementClass(element, name, isEnabled) {
+        if (element && element.classList) {
+            element.classList.toggle(name, !!isEnabled);
+        }
+    }
+
+    function clearFullscreenHostClasses(element) {
+        if (!element || !element.classList) {
+            return;
+        }
+
+        element.classList.remove(
+            'jellychat-fullscreen-host',
+            'jellychat-fullscreen-docked',
+            'jellychat-drawer-open',
+            'jellychat-docked',
+            'jellychat-mobile'
+        );
+    }
+
+    function isJellyChatElement(element) {
+        if (!element || element.nodeType !== 1) {
+            return false;
+        }
+
+        return element.id === floatingHostId
+            || element.id === drawerId
+            || element.id === styleId
+            || element.hasAttribute('data-jellychat-host')
+            || element.hasAttribute('data-jellychat-root')
+            || element.hasAttribute('data-jellychat-button');
+    }
+
+    function isSkippableSurfaceElement(element) {
+        if (!element || element.nodeType !== 1 || isJellyChatElement(element)) {
+            return true;
+        }
+
+        const tagName = getElementTagName(element);
+        return tagName === 'script'
+            || tagName === 'style'
+            || tagName === 'link'
+            || tagName === 'button'
+            || tagName === 'input'
+            || tagName === 'textarea'
+            || tagName === 'select'
+            || tagName === 'svg';
+    }
+
+    function getDirectChildUnderHost(element, host) {
+        let current = element;
+        while (current && current.parentElement && current.parentElement !== host) {
+            current = current.parentElement;
+        }
+
+        return current && current.parentElement === host ? current : null;
+    }
+
+    function elementLooksLikePlayerSurface(element) {
+        if (!element || isSkippableSurfaceElement(element)) {
+            return false;
+        }
+
+        const className = getElementClassName(element);
+        if (/video|player|osd|fullscreen|htmlvideoplayer/i.test(className)) {
+            return true;
+        }
+
+        return !!(element.querySelector && (
+            element.querySelector('video')
+            || element.querySelector('.videoOsdBottom')
+            || element.querySelector('.osdControls')
+            || element.querySelector('[class*="videoOsd"]')
+            || element.querySelector('[class*="VideoOsd"]')
+            || element.querySelector('[class*="videoPlayer"]')
+            || element.querySelector('[class*="VideoPlayer"]')
+        ));
+    }
+
+    function describeElementSelector(element) {
+        if (!element) {
+            return '';
+        }
+
+        if (element.id) {
+            return '#' + element.id;
+        }
+
+        const className = getElementClassName(element).trim().split(/\s+/).filter(Boolean).slice(0, 3).join('.');
+        return getElementTagName(element) + (className ? '.' + className : '');
+    }
+
+    function markFullscreenSurface(element) {
+        if (!element || isJellyChatElement(element)) {
+            return;
+        }
+
+        element.setAttribute('data-jellychat-fullscreen-surface', 'true');
+        const position = window.getComputedStyle ? window.getComputedStyle(element).position : '';
+        element.classList.toggle('jellychat-positioned-surface', position === 'absolute' || position === 'fixed' || position === 'sticky');
+    }
+
+    function clearFullscreenDockedLayout() {
+        const knownSurfaces = fullscreenLayoutSurfaces.slice();
+        if (document.querySelectorAll) {
+            document.querySelectorAll('[data-jellychat-fullscreen-surface]').forEach(function (element) {
+                if (knownSurfaces.indexOf(element) === -1) {
+                    knownSurfaces.push(element);
+                }
+            });
+        }
+
+        knownSurfaces.forEach(function (element) {
+            if (!element || !element.removeAttribute) {
+                return;
+            }
+
+            element.removeAttribute('data-jellychat-fullscreen-surface');
+            if (element.classList) {
+                element.classList.remove('jellychat-positioned-surface');
+            }
+        });
+
+        fullscreenLayoutSurfaces = [];
+    }
+
+    function getFullscreenPlayerSurfaces(host) {
+        if (!host || !host.children) {
+            return [];
+        }
+
+        const directChildren = Array.prototype.slice.call(host.children).filter(function (element) {
+            return !isSkippableSurfaceElement(element);
+        });
+
+        const likelySurfaces = directChildren.filter(elementLooksLikePlayerSurface);
+        if (likelySurfaces.length > 0) {
+            return likelySurfaces;
+        }
+
+        const nestedSurface = host.querySelector && (
+            host.querySelector('video')
+            || host.querySelector('.videoOsdBottom')
+            || host.querySelector('.osdControls')
+            || host.querySelector('[class*="videoOsd"]')
+            || host.querySelector('[class*="VideoOsd"]')
+            || host.querySelector('[class*="videoPlayer"]')
+            || host.querySelector('[class*="VideoPlayer"]')
+        );
+        const directSurface = nestedSurface ? getDirectChildUnderHost(nestedSurface, host) : null;
+        if (directSurface && !isSkippableSurfaceElement(directSurface)) {
+            return [directSurface];
+        }
+
+        if (directChildren.length === 1) {
+            return directChildren;
+        }
+
+        return directChildren.filter(function (element) {
+            if (!element.getBoundingClientRect) {
+                return false;
+            }
+
+            const rect = element.getBoundingClientRect();
+            return rect.width > 160 && rect.height > 120;
+        });
+    }
+
+    function applyFullscreenDockedLayout(host, shouldDock) {
+        clearFullscreenDockedLayout();
+
+        if (!host || !shouldDock) {
+            debugState.fullscreenPlayerSurfaceSelector = '';
+            debugState.videoReservedWidth = 0;
+            return [];
+        }
+
+        const surfaces = getFullscreenPlayerSurfaces(host);
+        surfaces.forEach(markFullscreenSurface);
+        fullscreenLayoutSurfaces = surfaces;
+
+        debugState.fullscreenPlayerSurfaceSelector = surfaces.map(describeElementSelector).join(', ');
+        debugState.videoReservedWidth = surfaces.length > 0 ? drawerWidthPx : 0;
+        debugState.lastFullscreenLayoutAt = new Date().toISOString();
+        return surfaces;
+    }
+
+    function updateMountDebug(parent) {
+        debugState.rootParentTag = getElementTagName(parent);
+        debugState.rootParentClass = getElementClassName(parent);
+    }
+
+    function moveJellyChatRootToHost(host) {
+        if (!host) {
+            return;
+        }
+
+        const floatingHost = document.getElementById(floatingHostId);
+        const drawer = document.getElementById(drawerId);
+        let moved = false;
+
+        if (floatingHost && floatingHost.parentElement !== host) {
+            host.appendChild(floatingHost);
+            moved = true;
+        }
+
+        if (drawer && drawer.parentElement !== host) {
+            host.appendChild(drawer);
+            moved = true;
+        }
+
+        activeMountHost = host;
+        updateMountDebug(drawer ? drawer.parentElement : (floatingHost ? floatingHost.parentElement : host));
+
+        if (moved) {
+            debugState.rootMoveCount += 1;
+            logDebug('JellyChat mount moved', {
+                hostTag: getElementTagName(host),
+                hostClass: getElementClassName(host)
+            });
         }
     }
 
@@ -230,7 +527,9 @@
         closeButton.type = 'button';
         closeButton.setAttribute('aria-label', 'Close SyncPlay chat');
         closeButton.innerHTML = '&times;';
-        bindEvent(closeButton, 'click', closeDrawer);
+        bindEvent(closeButton, 'click', function () {
+            closeDrawer();
+        });
 
         header.appendChild(title);
         header.appendChild(closeButton);
@@ -317,7 +616,7 @@
         drawer.appendChild(status);
         drawer.appendChild(messages);
         drawer.appendChild(form);
-        document.body.appendChild(drawer);
+        getActiveMountHost().appendChild(drawer);
         debugState.mounted = true;
         debugState.mountCount += 1;
         debugState.composerMountCount += 1;
@@ -448,18 +747,20 @@
 
     function openDrawer() {
         const drawer = getOrCreateDrawer();
+        moveJellyChatRootToHost(getActiveMountHost());
         drawer.classList.add('is-open');
         drawer.setAttribute('aria-hidden', 'false');
         if ('inert' in drawer) {
             drawer.inert = false;
         }
         updateEntryButtonExpanded(true);
+        updateLayout('drawer-open');
         renderSyncPlayStatus();
         pollSyncPlayChat();
         focusComposer('drawer-open');
     }
 
-    function closeDrawer() {
+    function closeDrawer(skipLayoutUpdate) {
         const drawer = document.getElementById(drawerId);
         if (!drawer) {
             return;
@@ -471,6 +772,9 @@
             drawer.inert = true;
         }
         updateEntryButtonExpanded(false);
+        if (!skipLayoutUpdate) {
+            updateLayout('drawer-close');
+        }
     }
 
     function toggleDrawer() {
@@ -486,6 +790,181 @@
     function isDrawerOpen() {
         const drawer = document.getElementById(drawerId);
         return !!(drawer && drawer.classList.contains('is-open'));
+    }
+
+    function getFullscreenElementTag() {
+        return getElementTagName(getFullscreenHost());
+    }
+
+    function isFullscreen() {
+        return !!document.fullscreenElement;
+    }
+
+    function isMobileLayout() {
+        return window.innerWidth <= mobileLayoutMaxWidthPx;
+    }
+
+    function detectVideoRoute() {
+        const routeText = String(window.location.pathname || '') + ' ' + String(window.location.hash || '');
+        if (/video|playback|nowplaying|livetv/i.test(routeText)) {
+            return true;
+        }
+
+        return !!(document.querySelector('video')
+            || document.querySelector('.videoOsdBottom')
+            || document.querySelector('.osdControls')
+            || document.querySelector('[class*="videoOsd"]')
+            || document.querySelector('[class*="VideoOsd"]')
+            || document.querySelector('[class*="videoPlayer"]')
+            || document.querySelector('[class*="VideoPlayer"]'));
+    }
+
+    function setBodyClass(name, isEnabled) {
+        if (!document.body) {
+            return;
+        }
+
+        document.body.classList.toggle(name, !!isEnabled);
+    }
+
+    function resolveLayoutMode(isDrawerOpenValue, isMobile, fullscreenActive) {
+        if (fullscreenActive) {
+            return isDrawerOpenValue && !isMobile ? 'fullscreen-docked' : 'fullscreen-overlay';
+        }
+
+        if (isMobile) {
+            return 'mobile';
+        }
+
+        if (isDrawerOpenValue) {
+            return 'normal-docked';
+        }
+
+        return 'normal-docked';
+    }
+
+    function isDockedLayoutMode(layoutMode, drawerOpen) {
+        return !!drawerOpen && (layoutMode === 'normal-docked' || layoutMode === 'fullscreen-docked');
+    }
+
+    function updateFullscreenHostClasses(host, drawerOpen, layoutMode, isMobile) {
+        if (lastFullscreenHost && lastFullscreenHost !== host) {
+            clearFullscreenHostClasses(lastFullscreenHost);
+        }
+
+        lastFullscreenHost = host || null;
+
+        if (!host) {
+            return;
+        }
+
+        setElementClass(host, 'jellychat-fullscreen-host', true);
+        setElementClass(host, 'jellychat-drawer-open', drawerOpen);
+        setElementClass(host, 'jellychat-fullscreen-docked', layoutMode === 'fullscreen-docked' && drawerOpen);
+        setElementClass(host, 'jellychat-docked', isDockedLayoutMode(layoutMode, drawerOpen));
+        setElementClass(host, 'jellychat-mobile', isMobile);
+        host.style.setProperty('--jellychat-drawer-width', drawerWidthPx + 'px');
+    }
+
+    function updateLayout(reason) {
+        if (!document.body) {
+            return;
+        }
+
+        const fullscreenHost = getFullscreenHost();
+        const fullscreenActive = !!fullscreenHost;
+        const targetHost = fullscreenHost || getNormalMountHost();
+        moveJellyChatRootToHost(targetHost);
+
+        const drawerOpen = isDrawerOpen();
+        const videoRoute = detectVideoRoute();
+        const mobile = isMobileLayout();
+        const layoutMode = resolveLayoutMode(drawerOpen, mobile, fullscreenActive);
+        const dockedLayout = isDockedLayoutMode(layoutMode, drawerOpen);
+        const triggerPlacement = fullscreenActive ? 'fullscreen-safe' : (mobile ? 'mobile' : (videoRoute ? 'video-safe' : 'normal'));
+
+        document.body.style.setProperty('--jellychat-drawer-width', drawerWidthPx + 'px');
+        updateFullscreenHostClasses(fullscreenHost, drawerOpen, layoutMode, mobile);
+        const fullscreenSurfaces = applyFullscreenDockedLayout(fullscreenHost, layoutMode === 'fullscreen-docked' && drawerOpen);
+        setBodyClass('jellychat-drawer-open', drawerOpen);
+        setBodyClass('jellychat-video-route', videoRoute);
+        setBodyClass('jellychat-docked', dockedLayout);
+        setBodyClass('jellychat-mobile', layoutMode === 'mobile' || (fullscreenActive && mobile));
+        setBodyClass('jellychat-fullscreen', fullscreenActive);
+
+        if (reason === 'fullscreenchange') {
+            debugState.lastFullscreenChangeAt = new Date().toISOString();
+        }
+
+        debugState.layoutMode = layoutMode;
+        debugState.isVideoRoute = videoRoute;
+        debugState.isFullscreen = fullscreenActive;
+        debugState.drawerOpen = drawerOpen;
+        debugState.triggerPlacement = triggerPlacement;
+        debugState.drawerWidth = drawerWidthPx;
+        debugState.lastLayoutUpdateAt = new Date().toISOString();
+        debugState.fullscreenElementTag = getFullscreenElementTag();
+        debugState.fullscreenHostTag = getElementTagName(fullscreenHost);
+        debugState.fullscreenHostClass = getElementClassName(fullscreenHost);
+        debugState.controlsOverlapAvoided = !drawerOpen
+            || (layoutMode === 'fullscreen-docked' && fullscreenSurfaces.length > 0)
+            || (layoutMode === 'fullscreen-overlay' && mobile)
+            || (!fullscreenActive && dockedLayout)
+            || layoutMode === 'mobile'
+            || !videoRoute;
+        updateMountDebug(targetHost);
+
+        if (lastLayoutMode !== layoutMode) {
+            logDebug('Layout mode changed', {
+                mode: layoutMode,
+                reason: reason,
+                videoRoute: videoRoute,
+                drawerOpen: drawerOpen
+            });
+            lastLayoutMode = layoutMode;
+        }
+
+    }
+
+    function scheduleLayoutUpdate(reason) {
+        if (layoutResizeTimer) {
+            window.clearTimeout(layoutResizeTimer);
+        }
+
+        layoutResizeTimer = window.setTimeout(function () {
+            layoutResizeTimer = 0;
+            updateLayout(reason);
+        }, 80);
+    }
+
+    function installRouteWatcher() {
+        if (window.__JELLYCHAT_HISTORY_PATCHED__) {
+            return;
+        }
+
+        const originalPushState = window.history && window.history.pushState;
+        const originalReplaceState = window.history && window.history.replaceState;
+        const emitRouteChange = function () {
+            window.dispatchEvent(new Event('jellychat-routechange'));
+        };
+
+        if (typeof originalPushState === 'function') {
+            window.history.pushState = function () {
+                const result = originalPushState.apply(this, arguments);
+                emitRouteChange();
+                return result;
+            };
+        }
+
+        if (typeof originalReplaceState === 'function') {
+            window.history.replaceState = function () {
+                const result = originalReplaceState.apply(this, arguments);
+                emitRouteChange();
+                return result;
+            };
+        }
+
+        window.__JELLYCHAT_HISTORY_PATCHED__ = true;
     }
 
     function getCurrentGroupLabel() {
@@ -1943,7 +2422,9 @@
 
         window.__syncPlayChatLoaded = true;
 
+        installRouteWatcher();
         addButton();
+        updateLayout('start');
         pollSyncPlayChat();
 
         if (window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === undefined || window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === null) {
@@ -1959,6 +2440,24 @@
                 if (!document.hidden) {
                     pollSyncPlayChat();
                 }
+            });
+            bindEvent(window, 'resize', function () {
+                scheduleLayoutUpdate('resize');
+            });
+            bindEvent(document, 'fullscreenchange', function () {
+                updateLayout('fullscreenchange');
+                if (isDrawerOpen()) {
+                    focusComposer('fullscreenchange');
+                }
+            });
+            bindEvent(window, 'hashchange', function () {
+                scheduleLayoutUpdate('hashchange');
+            });
+            bindEvent(window, 'popstate', function () {
+                scheduleLayoutUpdate('popstate');
+            });
+            bindEvent(window, 'jellychat-routechange', function () {
+                scheduleLayoutUpdate('routechange');
             });
             window.__JELLYCHAT_LISTENERS_BOUND__ = true;
         }
