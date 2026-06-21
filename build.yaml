@@ -1,16 +1,17 @@
 ---
-name: "SyncPlay Chat"
+name: "JellyChat"
 guid: "a69744cc-2281-48bf-adef-8e451a16ff71"
-version: "1.0.0.0"
+version: "0.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
-overview: "Short description about your plugin"
+overview: "JellyChat drawer for Jellyfin SyncPlay sessions."
 description: >
-  This is a longer description that can span more than one
-  line and include details about your plugin.
+  Adds a JellyChat drawer to Jellyfin web clients for SyncPlay sessions using a
+  plugin-owned in-memory history API. It does not use Jellyfin toast chat
+  transport, an external WebSocket server, or additional network ports.
 category: "General"
-owner: "jellyfin"
+owner: "itsmeares"
 artifacts:
 - "Jellyfin.Plugin.SyncPlayChat.dll"
 changelog: >
-  changelog
+  Initial JellyChat MVP release.

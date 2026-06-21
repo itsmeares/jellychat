@@ -68,8 +68,8 @@ jobs:
 
       - name: Commit and push
         run: |
-          git config user.name "[Bot] Abhay V Ashokan"
-          git config user.email "abhayvashokan@gmail.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json Directory.Build.props
           git commit -m "release: update manifest and version to ${{ steps.version.outputs.version }}"
           git push

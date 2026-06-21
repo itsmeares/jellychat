@@ -23,7 +23,7 @@ public class Plugin : BasePlugin<PluginConfiguration>
     }
 
     /// <inheritdoc />
-    public override string Name => "SyncPlay Chat";
+    public override string Name => "JellyChat";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("a69744cc-2281-48bf-adef-8e451a16ff71");

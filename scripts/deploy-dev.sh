@@ -4,7 +4,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JELLYFIN_DATA_DIR="${JELLYFIN_DATA_DIR:-$HOME/Library/Application Support/jellyfin}"
-PLUGIN_DIR="${PLUGIN_DIR:-$JELLYFIN_DATA_DIR/plugins/SyncPlayChat}"
+PLUGIN_DIR="${PLUGIN_DIR:-$JELLYFIN_DATA_DIR/plugins/JellyChat}"
 
 mise exec dotnet@9.0 -- dotnet publish "$REPO_ROOT/Jellyfin.Plugin.SyncPlayChat.sln" -c Debug
 
