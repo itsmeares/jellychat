@@ -34,3 +34,7 @@ No plugin identity, GUID, package metadata, release manifest, or C# API contract
 - SyncPlay session and group payload shapes vary, so group detection is intentionally defensive and may still miss edge cases.
 - Script injection depends on the separate File Transformation plugin being installed, enabled, and compatible.
 - A fixed right-side drawer must coexist with Jellyfin Web overlays, video OSD controls, dialogs, and fullscreen behavior without blocking core playback controls.
+
+## Memory Leak Guard
+
+The injected client uses a hard `window.__JELLYCHAT_LOADED__` singleton guard before mounting UI. Drawer DOM, style injection, global event listeners, and the SyncPlay refresh interval are each registered at most once per browser page lifetime. Runtime state is exposed at `window.JellyChatDebug`, including mount, listener, interval, and last-error counters for quick browser-console checks.

@@ -1,6 +1,28 @@
 (function () {
     'use strict';
 
+    if (window.__JELLYCHAT_LOADED__ === true) {
+        if (window.console && typeof window.console.info === 'function') {
+            window.console.info('[JellyChat] duplicate script ignored');
+        }
+        return;
+    }
+
+    window.__JELLYCHAT_LOADED__ = true;
+    window.JellyChatDebug = {
+        loaded: true,
+        mounted: false,
+        mountCount: 0,
+        listenerCount: 0,
+        intervalCount: 0,
+        lastError: null
+    };
+
+    if (window.console && typeof window.console.info === 'function') {
+        window.console.info('[JellyChat] script loaded');
+    }
+
+    const debugState = window.JellyChatDebug;
     const buttonId = 'syncPlayChatButton';
     const markerClass = 'syncPlayChatButton';
     const floatingHostId = 'syncPlayChatFloatingHost';
@@ -24,6 +46,19 @@
         unavailable: true
     };
 
+    function bindEvent(target, type, handler, options) {
+        if (!target || typeof target.addEventListener !== 'function') {
+            return;
+        }
+
+        target.addEventListener(type, handler, options);
+        debugState.listenerCount += 1;
+    }
+
+    function recordError(error) {
+        debugState.lastError = summarizeError(error);
+    }
+
     function normalizeId(value) {
         if (value === null || value === undefined) {
             return '';
@@ -43,6 +78,11 @@
         }
 
         window.console.log('[SyncPlayChat]', message, details);
+        if (details instanceof Error) {
+            recordError(details);
+        } else if (details && details.error) {
+            recordError(details.error);
+        }
     }
 
     function ensureStyles() {
@@ -52,6 +92,7 @@
 
         const style = document.createElement('style');
         style.id = styleId;
+        style.setAttribute('data-jellychat-style', 'true');
         style.textContent = [
             '#' + floatingHostId + ' { position: fixed; right: 1rem; bottom: 1rem; z-index: 99999; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }',
             '.' + markerClass + ' { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; border-radius: 0.65rem; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(18, 20, 24, 0.86); color: #fff; cursor: pointer; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24); }',
@@ -96,6 +137,7 @@
 
         host = document.createElement('div');
         host.id = floatingHostId;
+        host.setAttribute('data-jellychat-host', 'true');
         document.body.appendChild(host);
         return host;
     }
@@ -111,12 +153,13 @@
         button.id = buttonId;
         button.type = 'button';
         button.className = 'emby-button ' + markerClass;
+        button.setAttribute('data-jellychat-button', 'true');
         button.setAttribute('aria-label', 'SyncPlay chat');
         button.setAttribute('aria-controls', drawerId);
         button.setAttribute('aria-expanded', 'false');
         button.title = 'SyncPlay chat';
         button.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 4h16v11H8l-4 4V4z"/></svg>';
-        button.addEventListener('click', function () {
+        bindEvent(button, 'click', function () {
             toggleDrawer();
         });
         return button;
@@ -125,13 +168,26 @@
     function getOrCreateDrawer() {
         ensureStyles();
 
-        let drawer = document.getElementById(drawerId);
+        const existingDrawers = document.querySelectorAll('[data-jellychat-root]');
+        if (existingDrawers.length > 1) {
+            for (let i = 1; i < existingDrawers.length; i += 1) {
+                existingDrawers[i].remove();
+            }
+        }
+
+        let drawer = existingDrawers[0] || document.getElementById(drawerId);
         if (drawer) {
+            drawer.setAttribute('data-jellychat-root', 'true');
+            debugState.mounted = true;
+            if (debugState.mountCount === 0) {
+                debugState.mountCount = 1;
+            }
             return drawer;
         }
 
         drawer = document.createElement('aside');
         drawer.id = drawerId;
+        drawer.setAttribute('data-jellychat-root', 'true');
         drawer.setAttribute('role', 'dialog');
         drawer.setAttribute('aria-modal', 'false');
         drawer.setAttribute('aria-labelledby', titleId);
@@ -152,7 +208,7 @@
         closeButton.type = 'button';
         closeButton.setAttribute('aria-label', 'Close SyncPlay chat');
         closeButton.innerHTML = '&times;';
-        closeButton.addEventListener('click', closeDrawer);
+        bindEvent(closeButton, 'click', closeDrawer);
 
         header.appendChild(title);
         header.appendChild(closeButton);
@@ -187,12 +243,12 @@
         sendButton.type = 'submit';
         sendButton.textContent = 'Send';
 
-        form.addEventListener('submit', function (event) {
+        bindEvent(form, 'submit', function (event) {
             event.preventDefault();
             sendComposerMessage();
         });
 
-        input.addEventListener('keydown', function (event) {
+        bindEvent(input, 'keydown', function (event) {
             event.stopPropagation();
 
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -207,11 +263,11 @@
             }
         });
 
-        input.addEventListener('keyup', function (event) {
+        bindEvent(input, 'keyup', function (event) {
             event.stopPropagation();
         });
 
-        input.addEventListener('input', function () {
+        bindEvent(input, 'input', function () {
             autoResizeComposerInput();
         });
 
@@ -223,6 +279,11 @@
         drawer.appendChild(messages);
         drawer.appendChild(form);
         document.body.appendChild(drawer);
+        debugState.mounted = true;
+        debugState.mountCount += 1;
+        if (window.console && typeof window.console.info === 'function') {
+            window.console.info('[JellyChat] drawer mounted');
+        }
 
         renderSyncPlayStatus();
         return drawer;
@@ -447,7 +508,11 @@
     }
 
     function removeExtraButtons() {
-        const existingButtons = document.querySelectorAll('.' + markerClass);
+        const existingButtons = document.querySelectorAll('[data-jellychat-button], .' + markerClass);
+        if (existingButtons.length > 0) {
+            existingButtons[0].setAttribute('data-jellychat-button', 'true');
+        }
+
         if (existingButtons.length > 1) {
             for (let i = 1; i < existingButtons.length; i += 1) {
                 existingButtons[i].remove();
@@ -1513,7 +1578,9 @@
 
         getOrCreateDrawer();
 
-        if (floatingHost.querySelector('.' + markerClass)) {
+        const existingButton = document.querySelector('[data-jellychat-button]');
+        if (existingButton) {
+            existingButton.setAttribute('data-jellychat-button', 'true');
             renderSyncPlayStatus();
             return;
         }
@@ -1529,22 +1596,29 @@
 
         window.__syncPlayChatLoaded = true;
 
-        const observer = new MutationObserver(addButton);
-        observer.observe(document.body, { childList: true, subtree: true });
-
         addButton();
         refreshSyncPlayState();
-        window.setInterval(refreshSyncPlayState, refreshIntervalMs);
-        window.addEventListener('focus', refreshSyncPlayState);
-        document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) {
-                refreshSyncPlayState();
-            }
-        });
+
+        if (window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === undefined || window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === null) {
+            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(refreshSyncPlayState, refreshIntervalMs);
+            debugState.intervalCount = 1;
+        } else {
+            debugState.intervalCount = 1;
+        }
+
+        if (!window.__JELLYCHAT_LISTENERS_BOUND__) {
+            bindEvent(window, 'focus', refreshSyncPlayState);
+            bindEvent(document, 'visibilitychange', function () {
+                if (!document.hidden) {
+                    refreshSyncPlayState();
+                }
+            });
+            window.__JELLYCHAT_LISTENERS_BOUND__ = true;
+        }
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start, { once: true });
+        bindEvent(document, 'DOMContentLoaded', start, { once: true });
     } else {
         start();
     }
