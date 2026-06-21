@@ -106,4 +106,6 @@ Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
 
 ## License
 
+originally forked from AbhayVAshokan/jellyfin-syncplay-chat
+
 See `LICENSE`.
