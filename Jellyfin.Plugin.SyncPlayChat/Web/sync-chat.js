@@ -76,36 +76,6 @@
     const fullscreenSurfaceAttribute = 'data-jellychat-fullscreen-surface';
     const fullscreenSurfaceClass = 'jellychat-fullscreen-player-surface';
     const positionedSurfaceClass = 'jellychat-positioned-surface';
-    const jellyfinDockTargetSelectors = [
-        '.skinHeader',
-        '.mainAnimatedPages',
-        '.backgroundContainer',
-        '.skinBody',
-        '.videoPlayerContainer',
-        '.htmlvideoplayer',
-        '.videoOsdBottom',
-        '.videoOsdBottom-maincontrols',
-        '.videoOsdBottomControls',
-        '.videoOsdControls',
-        '.osdHeader',
-        '.osdControls',
-        '.osdControlsBottom',
-        '.playbackControls',
-        '.playerControls',
-        '.nowPlayingBar',
-        '.progressContainer',
-        '.upNextContainer',
-        '[class*="videoOsdBottom"]',
-        '[class*="VideoOsdBottom"]',
-        '[class*="videoOsdControls"]',
-        '[class*="VideoOsdControls"]',
-        '[class*="osdControls"]',
-        '[class*="OsdControls"]',
-        '[class*="playbackControls"]',
-        '[class*="PlaybackControls"]',
-        '[class*="playerControls"]',
-        '[class*="PlayerControls"]'
-    ];
     const refreshIntervalMs = 2000;
     const groupingWindowMs = 5 * 60 * 1000;
     const drawerWidthPx = 340;
@@ -171,14 +141,6 @@
         }
     }
 
-    function buildJellyfinDockTargetRule(scopeSelector) {
-        const selectors = jellyfinDockTargetSelectors.map(function (selector) {
-            return scopeSelector + ' ' + selector;
-        }).join(', ');
-
-        return selectors + ' { width: calc(100% - var(--jellychat-drawer-width)) !important; max-width: calc(100% - var(--jellychat-drawer-width)) !important; right: auto !important; box-sizing: border-box !important; }';
-    }
-
     function ensureStyles() {
         if (document.getElementById(styleId)) {
             return;
@@ -191,12 +153,11 @@
             ':root { --jellychat-drawer-width: 340px; }',
             'body.jellychat-drawer-open.jellychat-docked:not(.jellychat-fullscreen):not(.jellychat-video-route) { padding-right: var(--jellychat-drawer-width); box-sizing: border-box; }',
             'body.jellychat-video-route.jellychat-drawer-open.jellychat-docked { overflow-x: hidden; }',
-            buildJellyfinDockTargetRule('html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen)'),
             'html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen) .' + fullscreenSurfaceClass + ' { width: calc(100% - var(--jellychat-drawer-width)) !important; max-width: calc(100% - var(--jellychat-drawer-width)) !important; min-width: 0 !important; box-sizing: border-box !important; }',
             'html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen) .' + fullscreenSurfaceClass + '.' + positionedSurfaceClass + ' { right: var(--jellychat-drawer-width) !important; width: auto !important; max-width: none !important; }',
+            'html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen) .' + fullscreenSurfaceClass + ' video { max-width: 100% !important; }',
             '.jellychat-fullscreen-host { --jellychat-drawer-width: 340px; box-sizing: border-box; }',
             '.jellychat-fullscreen-host.jellychat-fullscreen-docked { position: relative !important; overflow: hidden !important; }',
-            buildJellyfinDockTargetRule('.jellychat-fullscreen-host.jellychat-fullscreen-docked'),
             '.jellychat-fullscreen-host.jellychat-fullscreen-docked .' + fullscreenSurfaceClass + ' { width: calc(100% - var(--jellychat-drawer-width)) !important; max-width: calc(100% - var(--jellychat-drawer-width)) !important; min-width: 0 !important; box-sizing: border-box !important; }',
             '.jellychat-fullscreen-host.jellychat-fullscreen-docked .' + fullscreenSurfaceClass + '.' + positionedSurfaceClass + ' { right: var(--jellychat-drawer-width) !important; width: auto !important; max-width: none !important; }',
             '.jellychat-fullscreen-host.jellychat-fullscreen-docked .' + fullscreenSurfaceClass + ' video { max-width: 100% !important; }',
