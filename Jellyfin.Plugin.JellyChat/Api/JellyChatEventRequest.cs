@@ -1,4 +1,4 @@
-namespace Jellyfin.Plugin.SyncPlayChat.Api;
+namespace Jellyfin.Plugin.JellyChat.Api;
 
 /// <summary>
 /// Request payload for creating a JellyChat room event.

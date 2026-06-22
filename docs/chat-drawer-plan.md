@@ -4,11 +4,11 @@
 
 JellyChat is a Jellyfin server plugin with an authenticated room event API and an injected web client script.
 
-- `Jellyfin.Plugin.SyncPlayChat/Api/JellyChatController.cs` exposes `POST /JellyChat/Events` and `GET /JellyChat/Events`.
-- `Jellyfin.Plugin.SyncPlayChat/Infrastructure/JellyChatEventStore.cs` keeps a bounded in-memory event stream for each SyncPlay group.
-- `Jellyfin.Plugin.SyncPlayChat/Web/sync-chat.js` is embedded as a resource and injected into Jellyfin Web.
-- `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncChatWebInjectionStartupService.cs` registers a File Transformation callback.
-- `Jellyfin.Plugin.SyncPlayChat/Infrastructure/SyncChatWebTransformer.cs` injects the embedded script into `index.html`.
+- `Jellyfin.Plugin.JellyChat/Api/JellyChatController.cs` exposes `POST /JellyChat/Events` and `GET /JellyChat/Events`.
+- `Jellyfin.Plugin.JellyChat/Infrastructure/JellyChatEventStore.cs` keeps a bounded in-memory event stream for each SyncPlay group.
+- `Jellyfin.Plugin.JellyChat/Web/jellychat.js` is embedded as a resource and injected into Jellyfin Web.
+- `Jellyfin.Plugin.JellyChat/Infrastructure/JellyChatWebInjectionStartupService.cs` registers a File Transformation callback.
+- `Jellyfin.Plugin.JellyChat/Infrastructure/JellyChatWebTransformer.cs` injects the embedded script into `index.html`.
 
 ## Event Stream Direction
 

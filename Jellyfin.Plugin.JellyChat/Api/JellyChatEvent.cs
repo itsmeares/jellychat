@@ -1,6 +1,6 @@
 using System;
 
-namespace Jellyfin.Plugin.SyncPlayChat.Api;
+namespace Jellyfin.Plugin.JellyChat.Api;
 
 /// <summary>
 /// A stored JellyChat room event.

@@ -11,7 +11,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Does not use Jellyfin toast notifications as the chat transport.
 - Does not run a separate WebSocket service.
 - Does not require opening or configuring additional ports.
-- Depends on Jellyfin File Transformation to inject `sync-chat.js` into Jellyfin web.
+- Depends on Jellyfin File Transformation to inject `jellychat.js` into Jellyfin web.
 
 ## Current Limitations
 
@@ -27,7 +27,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Repo name: `JellyChat`
 - Install folder: `JellyChat`
 - Jellyfin display name: `JellyChat`
-- Internal project path: `Jellyfin.Plugin.SyncPlayChat`
+- Internal project path: `Jellyfin.Plugin.JellyChat`
 - Version: `0.1.0`
 - Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
 - Framework: `net9.0`
@@ -40,7 +40,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Target ABI: `10.11.0.0`.
 - .NET SDK 9.0 for building.
 - Jellyfin [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin installed and enabled.
-  - Without File Transformation, `sync-chat.js` will not be injected into the web client.
+  - Without File Transformation, `jellychat.js` will not be injected into the web client.
 
 ## Repository Install
 
@@ -64,7 +64,7 @@ Save the repository, install `JellyChat` from the plugin catalog, then restart J
 From the repository root, publish the plugin:
 
 ```powershell
-dotnet publish .\Jellyfin.Plugin.SyncPlayChat\Jellyfin.Plugin.SyncPlayChat.csproj -c Release
+dotnet publish .\Jellyfin.Plugin.JellyChat\Jellyfin.Plugin.JellyChat.csproj -c Release
 ```
 
 Copy the publish output into a Jellyfin plugin folder:
@@ -72,7 +72,7 @@ Copy the publish output into a Jellyfin plugin folder:
 ```powershell
 $pluginFolder = "C:\ProgramData\Jellyfin\Server\plugins\JellyChat"
 New-Item -ItemType Directory -Force -Path $pluginFolder
-Copy-Item -Recurse -Force .\Jellyfin.Plugin.SyncPlayChat\bin\Release\net9.0\publish\* $pluginFolder
+Copy-Item -Recurse -Force .\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish\* $pluginFolder
 ```
 
 Restart Jellyfin after copying the files.
@@ -82,7 +82,7 @@ For direct installs that use the local app data Jellyfin path instead:
 ```powershell
 $pluginFolder = "$env:LOCALAPPDATA\jellyfin\plugins\JellyChat"
 New-Item -ItemType Directory -Force -Path $pluginFolder
-Copy-Item -Recurse -Force .\Jellyfin.Plugin.SyncPlayChat\bin\Release\net9.0\publish\* $pluginFolder
+Copy-Item -Recurse -Force .\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish\* $pluginFolder
 ```
 
 Use the plugin directory for your Jellyfin server data path.
@@ -119,23 +119,23 @@ Notes:
 Publish the v0.1.0 release output:
 
 ```bash
-dotnet publish Jellyfin.Plugin.SyncPlayChat/Jellyfin.Plugin.SyncPlayChat.csproj -c Release
+dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
 ```
 
 The publish output is written to:
 
 ```text
-Jellyfin.Plugin.SyncPlayChat/bin/Release/net9.0/publish/
+Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
 ```
 
 Create the release zip from the contents of the publish directory:
 
 ```bash
-cd Jellyfin.Plugin.SyncPlayChat/bin/Release/net9.0/publish
-zip -r Jellyfin.Plugin.SyncPlayChat_0.1.0.zip .
+cd Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish
+zip -r Jellyfin.Plugin.JellyChat_0.1.0.zip .
 ```
 
-Create a GitHub release tagged `v0.1.0` and attach `Jellyfin.Plugin.SyncPlayChat_0.1.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
+Create a GitHub release tagged `v0.1.0` and attach `Jellyfin.Plugin.JellyChat_0.1.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
 
 ## Testing Checklist
 
@@ -156,7 +156,7 @@ Create a GitHub release tagged `v0.1.0` and attach `Jellyfin.Plugin.SyncPlayChat
 - Messages do not appear on another device:
   - Confirm both devices are in the same SyncPlay group.
   - Refresh or reopen the drawer to force an event poll.
-  - Check the browser console for `[SyncPlayChat]` or `[JellyChat]` logs.
+  - Check the browser console for `[JellyChat]` logs.
 
 ## License
 

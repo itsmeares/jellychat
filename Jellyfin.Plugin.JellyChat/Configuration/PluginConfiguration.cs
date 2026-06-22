@@ -1,6 +1,6 @@
 using MediaBrowser.Model.Plugins;
 
-namespace Jellyfin.Plugin.SyncPlayChat.Configuration;
+namespace Jellyfin.Plugin.JellyChat.Configuration;
 
 /// <summary>
 /// The configuration options.

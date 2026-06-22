@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Jellyfin.Plugin.SyncPlayChat.Api;
+using Jellyfin.Plugin.JellyChat.Api;
 
-namespace Jellyfin.Plugin.SyncPlayChat.Infrastructure;
+namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
 /// <summary>
 /// In-memory JellyChat room event store.

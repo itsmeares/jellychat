@@ -1,10 +1,10 @@
 using System;
-using Jellyfin.Plugin.SyncPlayChat.Configuration;
+using Jellyfin.Plugin.JellyChat.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Serialization;
 
-namespace Jellyfin.Plugin.SyncPlayChat;
+namespace Jellyfin.Plugin.JellyChat;
 
 /// <summary>
 /// The main plugin.

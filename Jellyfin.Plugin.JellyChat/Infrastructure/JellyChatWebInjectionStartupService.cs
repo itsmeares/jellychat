@@ -7,21 +7,21 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Jellyfin.Plugin.SyncPlayChat.Infrastructure;
+namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
 /// <summary>
-/// Registers SyncPlay Chat transformation after plugin startup.
+/// Registers JellyChat transformation after plugin startup.
 /// </summary>
-public class SyncChatWebInjectionStartupService : IHostedService
+public class JellyChatWebInjectionStartupService : IHostedService
 {
     private static readonly Guid TransformationId = Guid.Parse("5e2846e6-173f-45ff-9d16-f2f83cf64719");
-    private readonly ILogger<SyncChatWebInjectionStartupService> _logger;
+    private readonly ILogger<JellyChatWebInjectionStartupService> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SyncChatWebInjectionStartupService"/> class.
+    /// Initializes a new instance of the <see cref="JellyChatWebInjectionStartupService"/> class.
     /// </summary>
     /// <param name="logger">Logger instance.</param>
-    public SyncChatWebInjectionStartupService(ILogger<SyncChatWebInjectionStartupService> logger)
+    public JellyChatWebInjectionStartupService(ILogger<JellyChatWebInjectionStartupService> logger)
     {
         _logger = logger;
     }
@@ -49,7 +49,7 @@ public class SyncChatWebInjectionStartupService : IHostedService
 
             if (fileTransformationAssembly is null)
             {
-                _logger.LogWarning("File Transformation assembly not found; sync-chat.js will not be injected.");
+                _logger.LogWarning("File Transformation assembly not found; jellychat.js will not be injected.");
                 return;
             }
 
@@ -65,8 +65,8 @@ public class SyncChatWebInjectionStartupService : IHostedService
             string payloadJson = "{" +
                 $"\"id\":\"{TransformationId}\"," +
                 "\"fileNamePattern\":\"index.html\"," +
-                $"\"callbackAssembly\":\"{typeof(SyncChatWebTransformer).Assembly.FullName}\"," +
-                $"\"callbackClass\":\"{typeof(SyncChatWebTransformer).FullName}\"," +
+                $"\"callbackAssembly\":\"{typeof(JellyChatWebTransformer).Assembly.FullName}\"," +
+                $"\"callbackClass\":\"{typeof(JellyChatWebTransformer).FullName}\"," +
                 "\"callbackMethod\":\"TransformIndexHtml\"" +
                 "}";
 
@@ -95,11 +95,11 @@ public class SyncChatWebInjectionStartupService : IHostedService
             }
 
             registerTransformationMethod.Invoke(null, [payload]);
-            _logger.LogInformation("Registered File Transformation for sync-chat.js injection.");
+            _logger.LogInformation("Registered File Transformation for jellychat.js injection.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to register sync-chat.js transformation.");
+            _logger.LogError(ex, "Failed to register jellychat.js transformation.");
         }
     }
 }

@@ -3,7 +3,7 @@
         "name": "JellyChat",
         "guid": "a69744cc-2281-48bf-adef-8e451a16ff71",
         "overview": "JellyChat drawer for Jellyfin SyncPlay sessions.",
-        "description": "Adds a JellyChat drawer to Jellyfin web clients for SyncPlay sessions using plugin-owned in-memory history. It does not use Jellyfin toast chat transport, an external WebSocket server, or additional network ports.",
+        "description": "Adds a JellyChat drawer to Jellyfin web clients for SyncPlay sessions using a plugin-owned in-memory event stream. It does not use Jellyfin toast chat transport, an external WebSocket server, or additional network ports.",
         "owner": "itsmeares",
         "category": "General",
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",

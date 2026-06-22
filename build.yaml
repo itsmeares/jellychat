@@ -7,11 +7,11 @@ framework: "net9.0"
 overview: "JellyChat drawer for Jellyfin SyncPlay sessions."
 description: >
   Adds a JellyChat drawer to Jellyfin web clients for SyncPlay sessions using a
-  plugin-owned in-memory history API. It does not use Jellyfin toast chat
+  plugin-owned in-memory event stream. It does not use Jellyfin toast chat
   transport, an external WebSocket server, or additional network ports.
 category: "General"
 owner: "itsmeares"
 artifacts:
-- "Jellyfin.Plugin.SyncPlayChat.dll"
+- "Jellyfin.Plugin.JellyChat.dll"
 changelog: >
   Initial JellyChat MVP release.

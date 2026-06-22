@@ -72,19 +72,19 @@
     }
 
     const debugState = window.JellyChatDebug;
-    const buttonId = 'syncPlayChatButton';
-    const markerClass = 'syncPlayChatButton';
-    const floatingHostId = 'syncPlayChatFloatingHost';
-    const styleId = 'syncPlayChatStyle';
-    const drawerId = 'syncPlayChatDrawer';
-    const titleId = 'syncPlayChatTitle';
-    const closeButtonId = 'syncPlayChatCloseButton';
-    const statusId = 'syncPlayChatStatus';
-    const messagesId = 'syncPlayChatMessages';
-    const emptyStateId = 'syncPlayChatEmptyState';
-    const formId = 'syncPlayChatForm';
-    const inputId = 'syncPlayChatInput';
-    const sendButtonId = 'syncPlayChatSendButton';
+    const buttonId = 'jellyChatButton';
+    const markerClass = 'jellyChatButton';
+    const floatingHostId = 'jellyChatFloatingHost';
+    const styleId = 'jellyChatStyle';
+    const drawerId = 'jellyChatDrawer';
+    const titleId = 'jellyChatTitle';
+    const closeButtonId = 'jellyChatCloseButton';
+    const statusId = 'jellyChatStatus';
+    const messagesId = 'jellyChatMessages';
+    const emptyStateId = 'jellyChatEmptyState';
+    const formId = 'jellyChatForm';
+    const inputId = 'jellyChatInput';
+    const sendButtonId = 'jellyChatSendButton';
     const fullscreenSurfaceAttribute = 'data-jellychat-fullscreen-surface';
     const fullscreenSurfaceClass = 'jellychat-fullscreen-player-surface';
     const positionedSurfaceClass = 'jellychat-positioned-surface';
@@ -142,11 +142,11 @@
         }
 
         if (details === undefined) {
-            window.console.log('[SyncPlayChat]', message);
+            window.console.log('[JellyChat]', message);
             return;
         }
 
-        window.console.log('[SyncPlayChat]', message, details);
+        window.console.log('[JellyChat]', message, details);
         if (details instanceof Error) {
             recordError(details);
         } else if (details && details.error) {
@@ -189,20 +189,20 @@
             '.jellychat-fullscreen-host #' + drawerId + ' { z-index: 2147483601; }',
             '.jellychat-fullscreen-host.jellychat-fullscreen-docked #' + drawerId + ' { position: absolute; top: 0; right: 0; bottom: 0; width: var(--jellychat-drawer-width); }',
             '.jellychat-fullscreen-host.jellychat-mobile #' + drawerId + ' { top: 0; bottom: max(4.75rem, env(safe-area-inset-bottom)); width: min(22rem, calc(100vw - 0.75rem)); }',
-            '.syncPlayChatHeader { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }',
-            '.syncPlayChatHeader h2 { margin: 0; font-size: 1rem; line-height: 1.25rem; font-weight: 650; letter-spacing: 0; color: #fff; }',
+            '.jellyChatHeader { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }',
+            '.jellyChatHeader h2 { margin: 0; font-size: 1rem; line-height: 1.25rem; font-weight: 650; letter-spacing: 0; color: #fff; }',
             '#' + closeButtonId + ' { display: inline-flex; align-items: center; justify-content: center; width: 2.15rem; height: 2.15rem; padding: 0; border: 0; border-radius: 0.45rem; background: transparent; color: #d8dee8; cursor: pointer; font-size: 1.6rem; line-height: 1; }',
             '#' + closeButtonId + ':hover, #' + closeButtonId + ':focus-visible { background: rgba(255, 255, 255, 0.08); color: #fff; }',
             '#' + statusId + ' { margin: 0.8rem 1rem 0; padding: 0.6rem 0.7rem; border-radius: 0.5rem; background: rgba(255, 255, 255, 0.06); color: #cbd4df; font-size: 0.86rem; line-height: 1.25rem; }',
             '#' + statusId + '.is-active { background: rgba(0, 164, 220, 0.16); color: #d8f4ff; }',
             '#' + messagesId + ' { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 1rem; }',
-            '.syncPlayChatEmptyState { display: flex; min-height: 100%; align-items: center; justify-content: center; text-align: center; color: #aeb8c6; font-size: 0.92rem; line-height: 1.35rem; }',
-            '.syncPlayChatMessageGroup { margin: 0 0 0.85rem; }',
-            '.syncPlayChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.34rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
-            '.syncPlayChatMessageAuthor { color: #e8edf4; font-weight: 650; }',
-            '.syncPlayChatMessageStack { display: flex; flex-direction: column; gap: 0.28rem; }',
-            '.syncPlayChatMessage { padding: 0.52rem 0.65rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
-            '.syncPlayChatMessageBody { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.35rem; }',
+            '.jellyChatEmptyState { display: flex; min-height: 100%; align-items: center; justify-content: center; text-align: center; color: #aeb8c6; font-size: 0.92rem; line-height: 1.35rem; }',
+            '.jellyChatMessageGroup { margin: 0 0 0.85rem; }',
+            '.jellyChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.34rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
+            '.jellyChatMessageAuthor { color: #e8edf4; font-weight: 650; }',
+            '.jellyChatMessageStack { display: flex; flex-direction: column; gap: 0.28rem; }',
+            '.jellyChatMessage { padding: 0.52rem 0.65rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
+            '.jellyChatMessageBody { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.35rem; }',
             '#' + formId + ' { display: flex; gap: 0.55rem; padding: 0.8rem 1rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); background: #101317; }',
             '#' + inputId + ' { flex: 1 1 auto; min-width: 0; min-height: 2.35rem; max-height: 7.5rem; box-sizing: border-box; resize: none; overflow-x: hidden; overflow-y: auto; padding: 0.52rem 0.65rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.07); color: #fff; line-height: 1.25rem; font: inherit; font-size: 0.92rem; }',
             '#' + inputId + '::placeholder { color: #b5bfcc; opacity: 1; }',
@@ -950,11 +950,11 @@
         }
 
         const header = document.createElement('div');
-        header.className = 'syncPlayChatHeader';
+        header.className = 'jellyChatHeader';
 
         const title = document.createElement('h2');
         title.id = titleId;
-        title.textContent = 'SyncPlay Chat';
+        title.textContent = 'JellyChat';
 
         const closeButton = document.createElement('button');
         closeButton.id = closeButtonId;
@@ -979,7 +979,7 @@
 
         const emptyState = document.createElement('div');
         emptyState.id = emptyStateId;
-        emptyState.className = 'syncPlayChatEmptyState';
+        emptyState.className = 'jellyChatEmptyState';
         messages.appendChild(emptyState);
 
         const form = document.createElement('form');
@@ -1190,7 +1190,7 @@
         updateEntryButtonExpanded(true);
         updateLayout('drawer-open');
         renderSyncPlayStatus();
-        pollSyncPlayChat();
+        pollJellyChat();
         focusComposer('drawer-open');
     }
 
@@ -1437,7 +1437,7 @@
             return;
         }
 
-        const hasMessages = !!messages.querySelector('.syncPlayChatMessage');
+        const hasMessages = !!messages.querySelector('.jellyChatMessage');
         const emptyText = currentSyncPlayContext.inGroup ? 'No messages yet.' : 'Join or create a SyncPlay group to send chat messages.';
         setElementText(emptyState, emptyText);
         emptyState.style.display = hasMessages ? 'none' : 'flex';
@@ -1617,7 +1617,7 @@
         }
 
         const shouldStickToBottom = historyMessages.length === 0 || isMessagesNearBottom(messages);
-        const existing = messages.querySelectorAll('.syncPlayChatMessageGroup, .syncPlayChatMessage');
+        const existing = messages.querySelectorAll('.jellyChatMessageGroup, .jellyChatMessage');
         existing.forEach(function (message) {
             message.remove();
         });
@@ -1625,21 +1625,21 @@
         const groups = groupMessages(historyMessages, groupingWindowMs);
         groups.forEach(function (group) {
             const groupNode = document.createElement('div');
-            groupNode.className = 'syncPlayChatMessageGroup';
+            groupNode.className = 'jellyChatMessageGroup';
             groupNode.setAttribute('data-jellychat-group-key', group.key);
 
             const meta = document.createElement('div');
-            meta.className = 'syncPlayChatMessageMeta';
+            meta.className = 'jellyChatMessageMeta';
 
             const authorNode = document.createElement('span');
-            authorNode.className = 'syncPlayChatMessageAuthor';
+            authorNode.className = 'jellyChatMessageAuthor';
             authorNode.textContent = group.userName;
 
             const timeNode = document.createElement('span');
             timeNode.textContent = formatMessageTime(group);
 
             const stack = document.createElement('div');
-            stack.className = 'syncPlayChatMessageStack';
+            stack.className = 'jellyChatMessageStack';
 
             meta.appendChild(authorNode);
             meta.appendChild(timeNode);
@@ -1647,11 +1647,11 @@
 
             group.messages.forEach(function (chatMessage) {
                 const message = document.createElement('div');
-                message.className = 'syncPlayChatMessage';
+                message.className = 'jellyChatMessage';
                 message.setAttribute('data-jellychat-message-key', chatMessage.id);
 
                 const body = document.createElement('div');
-                body.className = 'syncPlayChatMessageBody';
+                body.className = 'jellyChatMessageBody';
                 body.textContent = chatMessage.text;
 
                 message.appendChild(body);
@@ -2887,7 +2887,7 @@
         }
     }
 
-    async function pollSyncPlayChat() {
+    async function pollJellyChat() {
         await refreshSyncPlayState();
         if (currentSyncPlayContext.inGroup && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
             await fetchChatEvents(false);
@@ -2920,25 +2920,25 @@
             return;
         }
 
-        window.__syncPlayChatLoaded = true;
+        window.__jellyChatLoaded = true;
 
         installRouteWatcher();
         addButton();
         updateLayout('start');
-        pollSyncPlayChat();
+        pollJellyChat();
 
         if (window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === undefined || window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === null) {
-            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(pollSyncPlayChat, refreshIntervalMs);
+            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(pollJellyChat, refreshIntervalMs);
             debugState.intervalCount = 1;
         } else {
             debugState.intervalCount = 1;
         }
 
         if (!window.__JELLYCHAT_LISTENERS_BOUND__) {
-            bindEvent(window, 'focus', pollSyncPlayChat);
+            bindEvent(window, 'focus', pollJellyChat);
             bindEvent(document, 'visibilitychange', function () {
                 if (!document.hidden) {
-                    pollSyncPlayChat();
+                    pollJellyChat();
                 }
             });
             bindEvent(window, 'resize', function () {

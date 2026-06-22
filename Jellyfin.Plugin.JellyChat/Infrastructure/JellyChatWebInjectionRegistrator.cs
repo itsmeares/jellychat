@@ -4,17 +4,17 @@ using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace Jellyfin.Plugin.SyncPlayChat.Infrastructure;
+namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
 /// <summary>
-/// Registers SyncPlay Chat web transformations.
+/// Registers JellyChat web transformations.
 /// </summary>
-public class SyncChatWebInjectionRegistrator : IPluginServiceRegistrator
+public class JellyChatWebInjectionRegistrator : IPluginServiceRegistrator
 {
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         serviceCollection.AddSingleton<JellyChatEventStore>();
-        serviceCollection.AddHostedService<SyncChatWebInjectionStartupService>();
+        serviceCollection.AddHostedService<JellyChatWebInjectionStartupService>();
     }
 }
