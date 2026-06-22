@@ -1,12 +1,13 @@
 # JellyChat
 
-JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin web clients. It is currently implemented with the existing Jellyfin plugin architecture and injected browser script; it does not introduce React, a separate frontend app, an external WebSocket server, or any new network ports.
+JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin web clients. It uses a plugin-owned room event stream and injected browser script; it does not introduce React, a separate frontend app, an external WebSocket server, or any new network ports.
 
 ## Current MVP
 
 - Adds a chat drawer for active SyncPlay sessions in the Jellyfin web client.
-- Stores recent chat messages in plugin-owned in-memory history, grouped by SyncPlay group.
-- Refreshes history through the plugin API.
+- Stores recent room events in plugin-owned in-memory history, grouped by SyncPlay group.
+- Sends chat messages as `chat.message` events.
+- Refreshes recent events through the plugin API.
 - Does not use Jellyfin toast notifications as the chat transport.
 - Does not run a separate WebSocket service.
 - Does not require opening or configuring additional ports.
@@ -14,8 +15,8 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 
 ## Current Limitations
 
-- Chat history is in memory only and is lost when Jellyfin or the plugin restarts.
-- History is bounded to recent messages per SyncPlay group.
+- Event history is in memory only and is lost when Jellyfin or the plugin restarts.
+- History is bounded to recent events per SyncPlay group.
 - The drawer is designed for Jellyfin web clients; native client support is not part of this MVP.
 - SyncPlay group detection depends on the session and group data exposed by the running Jellyfin server/client combination.
 - The drawer is injected into Jellyfin web and may need follow-up adjustments if Jellyfin changes its web client markup.
@@ -30,7 +31,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Version: `0.1.0`
 - Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
 - Framework: `net9.0`
-- Description: JellyChat drawer backed by plugin-owned in-memory history, with no toast chat transport, external WebSocket server, or new ports.
+- Description: JellyChat drawer backed by a plugin-owned in-memory event stream, with no toast chat transport, external WebSocket server, or new ports.
 
 ## Prerequisites
 
@@ -154,11 +155,9 @@ Create a GitHub release tagged `v0.1.0` and attach `Jellyfin.Plugin.SyncPlayChat
   - Restart Jellyfin after plugin deploy/update.
 - Messages do not appear on another device:
   - Confirm both devices are in the same SyncPlay group.
-  - Refresh or reopen the drawer to force a history poll.
+  - Refresh or reopen the drawer to force an event poll.
   - Check the browser console for `[SyncPlayChat]` or `[JellyChat]` logs.
 
-## Upstream Attribution and License
+## License
 
-JellyChat was originally based on [AbhayVAshokan/jellyfin-syncplay-chat](https://github.com/AbhayVAshokan/jellyfin-syncplay-chat).
-
-This repository includes a GPL-3.0 license file. If the upstream GPL-3.0 terms apply to your distribution, distribute JellyChat under GPL-3.0 and preserve the required notices.
+This repository includes a GPL-3.0 license file. If GPL-3.0 terms apply to your distribution, distribute JellyChat under GPL-3.0 and preserve the required notices.

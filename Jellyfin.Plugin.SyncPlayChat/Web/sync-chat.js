@@ -16,7 +16,19 @@
         listenerCount: 0,
         intervalCount: 0,
         currentGroupId: '',
-        lastHistoryFetchAt: null,
+        apiMode: 'events',
+        lastSequence: 0,
+        eventCount: 0,
+        supportedEventTypes: [
+            'chat.message',
+            'reaction.emoji',
+            'playback.play',
+            'playback.pause',
+            'playback.seek',
+            'system.notice'
+        ],
+        lastEventPollAt: null,
+        lastEventPostAt: null,
         inputFocused: false,
         submitCount: 0,
         keydownListenerCount: 0,
@@ -80,12 +92,13 @@
     const groupingWindowMs = 5 * 60 * 1000;
     const drawerWidthPx = 340;
     const mobileLayoutMaxWidthPx = 899;
+    const supportedEventTypes = debugState.supportedEventTypes.slice();
     let refreshInProgress = false;
     let sendInProgress = false;
-    let historyFetchInProgress = false;
+    let eventFetchInProgress = false;
     let historyMessages = [];
-    let lastHistoryGroupId = '';
-    let lastHistoryMessageId = '';
+    let lastEventGroupId = '';
+    let lastSequence = 0;
     let lastLayoutMode = '';
     let lastFullscreenHost = null;
     let lastFullscreenLayoutSignature = '';
@@ -1457,34 +1470,69 @@
         return '';
     }
 
-    function normalizeChatMessage(message) {
-        const userName = getMessageValue(message, 'UserName', 'userName');
+    function normalizeRoomEvent(roomEvent) {
+        const type = String(getMessageValue(roomEvent, 'Type', 'type') || '');
+        const sequence = Number(getMessageValue(roomEvent, 'Sequence', 'sequence') || 0);
         return {
-            id: String(getMessageValue(message, 'Id', 'id') || ''),
-            groupId: String(getMessageValue(message, 'GroupId', 'groupId') || ''),
-            userId: String(getMessageValue(message, 'UserId', 'userId') || ''),
-            userName: isUsableDisplayName(userName) ? String(userName).trim() : 'Someone',
-            text: String(getMessageValue(message, 'Text', 'text') || ''),
-            createdAtUtc: String(getMessageValue(message, 'CreatedAtUtc', 'createdAtUtc') || '')
+            id: String(getMessageValue(roomEvent, 'Id', 'id') || ''),
+            sequence: Number.isFinite(sequence) ? sequence : 0,
+            groupId: String(getMessageValue(roomEvent, 'GroupId', 'groupId') || ''),
+            type: type,
+            userId: String(getMessageValue(roomEvent, 'UserId', 'userId') || ''),
+            userName: String(getMessageValue(roomEvent, 'UserName', 'userName') || ''),
+            sessionId: String(getMessageValue(roomEvent, 'SessionId', 'sessionId') || ''),
+            createdAtUtc: String(getMessageValue(roomEvent, 'CreatedAtUtc', 'createdAtUtc') || ''),
+            text: String(getMessageValue(roomEvent, 'Text', 'text') || ''),
+            emoji: String(getMessageValue(roomEvent, 'Emoji', 'emoji') || ''),
+            playbackAction: String(getMessageValue(roomEvent, 'PlaybackAction', 'playbackAction') || ''),
+            fromPositionTicks: getMessageValue(roomEvent, 'FromPositionTicks', 'fromPositionTicks'),
+            toPositionTicks: getMessageValue(roomEvent, 'ToPositionTicks', 'toPositionTicks'),
+            itemId: String(getMessageValue(roomEvent, 'ItemId', 'itemId') || ''),
+            itemName: String(getMessageValue(roomEvent, 'ItemName', 'itemName') || ''),
+            clientEventId: String(getMessageValue(roomEvent, 'ClientEventId', 'clientEventId') || '')
         };
     }
 
-    function normalizeHistoryResponse(response) {
+    function normalizeChatMessage(roomEvent) {
+        const event = normalizeRoomEvent(roomEvent);
+        if (event.type !== 'chat.message') {
+            return null;
+        }
+
+        const userName = event.userName;
+        return {
+            id: event.id,
+            sequence: event.sequence,
+            groupId: event.groupId,
+            userId: event.userId,
+            userName: isUsableDisplayName(userName) ? String(userName).trim() : 'Someone',
+            text: event.text,
+            createdAtUtc: event.createdAtUtc
+        };
+    }
+
+    function normalizeEventsResponse(response) {
         if (Array.isArray(response)) {
-            return response.map(normalizeChatMessage).filter(function (message) {
-                return message.id && message.text;
+            return response.map(normalizeRoomEvent).filter(function (roomEvent) {
+                return roomEvent.id && roomEvent.sequence > 0 && supportedEventTypes.indexOf(roomEvent.type) !== -1;
             });
         }
 
         if (response && Array.isArray(response.Items)) {
-            return normalizeHistoryResponse(response.Items);
+            return normalizeEventsResponse(response.Items);
         }
 
         if (response && Array.isArray(response.items)) {
-            return normalizeHistoryResponse(response.items);
+            return normalizeEventsResponse(response.items);
         }
 
         return [];
+    }
+
+    function getChatMessagesFromEvents(events) {
+        return events.map(normalizeChatMessage).filter(function (message) {
+            return message && message.id && message.text;
+        });
     }
 
     function formatMessageTime(message) {
@@ -1637,6 +1685,12 @@
         historyMessages = Object.keys(byId)
             .map(function (id) { return byId[id]; })
             .sort(function (left, right) {
+                const leftSequence = Number(left.sequence || 0);
+                const rightSequence = Number(right.sequence || 0);
+                if (leftSequence !== rightSequence) {
+                    return leftSequence - rightSequence;
+                }
+
                 return String(left.createdAtUtc).localeCompare(String(right.createdAtUtc));
             });
 
@@ -1644,34 +1698,48 @@
             historyMessages = historyMessages.slice(historyMessages.length - 100);
         }
 
-        lastHistoryMessageId = historyMessages.length > 0 ? historyMessages[historyMessages.length - 1].id : '';
+        lastSequence = historyMessages.reduce(function (maxSequence, message) {
+            return Math.max(maxSequence, Number(message.sequence || 0));
+        }, lastSequence);
+        debugState.lastSequence = lastSequence;
         renderHistoryMessages();
     }
 
-    async function fetchChatHistory(forceFull) {
-        if (historyFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+    function updateLastSequenceFromEvents(events) {
+        events.forEach(function (roomEvent) {
+            lastSequence = Math.max(lastSequence, Number(roomEvent.sequence || 0));
+        });
+        debugState.lastSequence = lastSequence;
+        debugState.eventCount += events.length;
+    }
+
+    async function fetchChatEvents(forceFull) {
+        if (eventFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
             return;
         }
 
         let shouldFetchFull = !!forceFull;
-        if (lastHistoryGroupId !== currentSyncPlayContext.groupId) {
-            lastHistoryGroupId = currentSyncPlayContext.groupId;
-            lastHistoryMessageId = '';
+        if (lastEventGroupId !== currentSyncPlayContext.groupId) {
+            lastEventGroupId = currentSyncPlayContext.groupId;
+            lastSequence = 0;
+            debugState.lastSequence = 0;
             historyMessages = [];
             shouldFetchFull = true;
         }
 
-        historyFetchInProgress = true;
+        eventFetchInProgress = true;
 
         try {
-            let path = 'SyncPlayChat/History?groupId=' + encodeURIComponent(currentSyncPlayContext.groupId) + '&limit=100';
-            if (!shouldFetchFull && lastHistoryMessageId) {
-                path += '&after=' + encodeURIComponent(lastHistoryMessageId);
+            let path = 'JellyChat/Events?groupId=' + encodeURIComponent(currentSyncPlayContext.groupId) + '&limit=100';
+            if (!shouldFetchFull && lastSequence > 0) {
+                path += '&afterSequence=' + encodeURIComponent(String(lastSequence));
             }
 
             const response = await fetchJson(path);
-            debugState.lastHistoryFetchAt = new Date().toISOString();
-            const messages = normalizeHistoryResponse(response);
+            debugState.lastEventPollAt = new Date().toISOString();
+            const events = normalizeEventsResponse(response);
+            updateLastSequenceFromEvents(events);
+            const messages = getChatMessagesFromEvents(events);
             if (shouldFetchFull) {
                 historyMessages = [];
             }
@@ -1682,9 +1750,9 @@
                 renderEmptyState();
             }
         } catch (err) {
-            logDebug('Failed to fetch SyncPlay chat history', err);
+            logDebug('Failed to fetch JellyChat events', err);
         } finally {
-            historyFetchInProgress = false;
+            eventFetchInProgress = false;
         }
     }
 
@@ -1718,8 +1786,9 @@
         debugState.currentGroupId = currentSyncPlayContext.groupId;
         if (!currentSyncPlayContext.inGroup || groupChanged) {
             historyMessages = [];
-            lastHistoryMessageId = '';
-            lastHistoryGroupId = currentSyncPlayContext.groupId;
+            lastSequence = 0;
+            lastEventGroupId = currentSyncPlayContext.groupId;
+            debugState.lastSequence = 0;
             renderHistoryMessages();
         }
 
@@ -2526,23 +2595,6 @@
         return matchedIdentityInDetails;
     }
 
-    function showLocalToast(text, title) {
-        if (window.toastr && typeof window.toastr.info === 'function') {
-            window.toastr.info(text, title || 'SyncPlay Chat');
-            return;
-        }
-
-        if (window.Dashboard && typeof window.Dashboard.alert === 'function') {
-            window.Dashboard.alert({
-                title: title || 'SyncPlay Chat',
-                message: text
-            });
-            return;
-        }
-
-        logDebug('Toast fallback', { title: title || 'SyncPlay Chat', text: text });
-    }
-
     function extractParticipantsFromGroups(groups) {
         const participants = [];
 
@@ -2576,22 +2628,31 @@
         return participants;
     }
 
+    function createClientEventId() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+
+        return String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+    }
+
     async function sendMessageViaServer(text, senderSessionId, groupId, participants) {
-        const response = await postJson('SyncPlayChat/Send', {
+        const response = await postJson('JellyChat/Events', {
             GroupId: groupId || '',
             SenderSessionId: senderSessionId || '',
-            Header: 'SyncPlay Chat',
+            Type: 'chat.message',
             Text: text,
-            TimeoutMs: 4000,
+            ClientEventId: createClientEventId(),
             ParticipantsCsv: (participants || []).join(',')
         }, true);
+        debugState.lastEventPostAt = new Date().toISOString();
 
         let normalized = response;
         if (typeof normalized === 'string') {
             try {
                 normalized = JSON.parse(normalized);
             } catch (parseError) {
-                logDebug('Failed to parse server chat send response JSON', {
+                logDebug('Failed to parse JellyChat event response JSON', {
                     response: response,
                     error: parseError
                 });
@@ -2604,10 +2665,12 @@
         }
 
         if (!normalized || typeof normalized !== 'object') {
-            logDebug('Unexpected server chat send response shape', { response: response, normalized: normalized });
+            logDebug('Unexpected JellyChat event response shape', { response: response, normalized: normalized });
             return null;
         }
 
+        const event = normalizeRoomEvent(normalized);
+        updateLastSequenceFromEvents([event]);
         return normalizeChatMessage(normalized);
     }
 
@@ -2662,11 +2725,10 @@
                 clearComposerInput();
                 shouldFocusAfterSend = true;
             } else {
-                showLocalToast('Failed to send SyncPlay chat message.');
+                logDebug('Failed to send SyncPlay chat message.');
             }
         } catch (err) {
             logDebug('Failed to send SyncPlay chat message', err);
-            showLocalToast('Failed to send SyncPlay chat message.');
         } finally {
             sendInProgress = false;
             setComposerBusy(false);
@@ -2828,7 +2890,7 @@
     async function pollSyncPlayChat() {
         await refreshSyncPlayState();
         if (currentSyncPlayContext.inGroup && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
-            await fetchChatHistory(false);
+            await fetchChatEvents(false);
         }
     }
 
