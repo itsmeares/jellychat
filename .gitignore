@@ -5,3 +5,5 @@ obj/
 artifacts
 web-src/node_modules/
 web-src/*.tsbuildinfo
+.vscode/
+web-src/dist/
