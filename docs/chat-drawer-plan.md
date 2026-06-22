@@ -6,7 +6,7 @@ JellyChat is a Jellyfin server plugin with an authenticated room event API and a
 
 - `Jellyfin.Plugin.JellyChat/Api/JellyChatController.cs` exposes `POST /JellyChat/Events` and `GET /JellyChat/Events`.
 - `Jellyfin.Plugin.JellyChat/Infrastructure/JellyChatEventStore.cs` keeps a bounded in-memory event stream for each SyncPlay group.
-- `Jellyfin.Plugin.JellyChat/Web/jellychat.js` is embedded as a resource and injected into Jellyfin Web.
+- `Jellyfin.Plugin.JellyChat/Web/jellychat.js` and `Jellyfin.Plugin.JellyChat/Web/jellychat.css` are embedded as resources and injected into Jellyfin Web.
 - `Jellyfin.Plugin.JellyChat/Infrastructure/JellyChatWebInjectionStartupService.cs` registers a File Transformation callback.
 - `Jellyfin.Plugin.JellyChat/Infrastructure/JellyChatWebTransformer.cs` injects the embedded script into `index.html`.
 
@@ -18,8 +18,8 @@ The drawer now uses one room event stream for chat messages and future room acti
 - JellyChat uses SyncPlay group/session data only to find the current room context.
 - Chat messages are stored as `chat.message` events and rendered by the injected drawer.
 - Reaction and playback action events are accepted by the backend for early v0.2 compatibility, but the drawer does not yet render overlay reactions or playback timelines.
-- No external WebSocket server, new port, React app, persistent storage, or new realtime channel is added.
+- No external WebSocket server, new port, persistent storage, or new realtime channel is added.
 
 ## Memory Leak Guard
 
-The injected client uses a hard `window.__JELLYCHAT_LOADED__` singleton guard before mounting UI. Drawer DOM, style injection, global event listeners, and the SyncPlay refresh interval are each registered at most once per browser page lifetime. Runtime state is exposed at `window.JellyChatDebug`, including mount, listener, interval, event cursor, and last-error fields for quick browser-console checks.
+The injected React client uses a hard `window.__JELLYCHAT_LOADED__` singleton guard before mounting UI. The React root, chat button, global event listeners, and the SyncPlay refresh interval are each registered at most once per browser page lifetime. Runtime state is exposed at `window.JellyChatDebug`, including mount, listener, interval, event cursor, and last-error fields for quick browser-console checks.

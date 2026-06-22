@@ -28,7 +28,15 @@
 
   <ItemGroup>
     <None Remove="Web\jellychat.js" />
+    <None Remove="Web\jellychat.css" />
     <EmbeddedResource Include="Web\jellychat.js" />
+    <EmbeddedResource Include="Web\jellychat.css" />
+    <Content Include="Web\jellychat.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Web\jellychat.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="BuildJellyChatFrontend" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true' And Exists('..\web-src\package.json') And Exists('..\web-src\node_modules')">
+    <Exec Command="npm run build" WorkingDirectory="..\web-src" />
+  </Target>
 
 </Project>

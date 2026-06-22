@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using Jellyfin.Plugin.JellyChat.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
 namespace Jellyfin.Plugin.JellyChat;
@@ -9,7 +12,7 @@ namespace Jellyfin.Plugin.JellyChat;
 /// <summary>
 /// The main plugin.
 /// </summary>
-public class Plugin : BasePlugin<PluginConfiguration>
+public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="Plugin"/> class.
@@ -32,4 +35,23 @@ public class Plugin : BasePlugin<PluginConfiguration>
     /// Gets the current plugin instance.
     /// </summary>
     public static Plugin? Instance { get; private set; }
+
+    /// <inheritdoc />
+    public IEnumerable<PluginPageInfo> GetPages()
+    {
+        string ns = GetType().Namespace ?? "Jellyfin.Plugin.JellyChat";
+        return
+        [
+            new PluginPageInfo
+            {
+                Name = "jellychat.js",
+                EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Web.jellychat.js", ns)
+            },
+            new PluginPageInfo
+            {
+                Name = "jellychat.css",
+                EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Web.jellychat.css", ns)
+            }
+        ];
+    }
 }
