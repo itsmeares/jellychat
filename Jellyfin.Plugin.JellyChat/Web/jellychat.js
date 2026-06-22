@@ -16,7 +16,19 @@
         listenerCount: 0,
         intervalCount: 0,
         currentGroupId: '',
-        lastHistoryFetchAt: null,
+        apiMode: 'events',
+        lastSequence: 0,
+        eventCount: 0,
+        supportedEventTypes: [
+            'chat.message',
+            'reaction.emoji',
+            'playback.play',
+            'playback.pause',
+            'playback.seek',
+            'system.notice'
+        ],
+        lastEventPollAt: null,
+        lastEventPostAt: null,
         inputFocused: false,
         submitCount: 0,
         keydownListenerCount: 0,
@@ -60,19 +72,19 @@
     }
 
     const debugState = window.JellyChatDebug;
-    const buttonId = 'syncPlayChatButton';
-    const markerClass = 'syncPlayChatButton';
-    const floatingHostId = 'syncPlayChatFloatingHost';
-    const styleId = 'syncPlayChatStyle';
-    const drawerId = 'syncPlayChatDrawer';
-    const titleId = 'syncPlayChatTitle';
-    const closeButtonId = 'syncPlayChatCloseButton';
-    const statusId = 'syncPlayChatStatus';
-    const messagesId = 'syncPlayChatMessages';
-    const emptyStateId = 'syncPlayChatEmptyState';
-    const formId = 'syncPlayChatForm';
-    const inputId = 'syncPlayChatInput';
-    const sendButtonId = 'syncPlayChatSendButton';
+    const buttonId = 'jellyChatButton';
+    const markerClass = 'jellyChatButton';
+    const floatingHostId = 'jellyChatFloatingHost';
+    const styleId = 'jellyChatStyle';
+    const drawerId = 'jellyChatDrawer';
+    const titleId = 'jellyChatTitle';
+    const closeButtonId = 'jellyChatCloseButton';
+    const statusId = 'jellyChatStatus';
+    const messagesId = 'jellyChatMessages';
+    const emptyStateId = 'jellyChatEmptyState';
+    const formId = 'jellyChatForm';
+    const inputId = 'jellyChatInput';
+    const sendButtonId = 'jellyChatSendButton';
     const fullscreenSurfaceAttribute = 'data-jellychat-fullscreen-surface';
     const fullscreenSurfaceClass = 'jellychat-fullscreen-player-surface';
     const positionedSurfaceClass = 'jellychat-positioned-surface';
@@ -80,12 +92,13 @@
     const groupingWindowMs = 5 * 60 * 1000;
     const drawerWidthPx = 340;
     const mobileLayoutMaxWidthPx = 899;
+    const supportedEventTypes = debugState.supportedEventTypes.slice();
     let refreshInProgress = false;
     let sendInProgress = false;
-    let historyFetchInProgress = false;
+    let eventFetchInProgress = false;
     let historyMessages = [];
-    let lastHistoryGroupId = '';
-    let lastHistoryMessageId = '';
+    let lastEventGroupId = '';
+    let lastSequence = 0;
     let lastLayoutMode = '';
     let lastFullscreenHost = null;
     let lastFullscreenLayoutSignature = '';
@@ -129,11 +142,11 @@
         }
 
         if (details === undefined) {
-            window.console.log('[SyncPlayChat]', message);
+            window.console.log('[JellyChat]', message);
             return;
         }
 
-        window.console.log('[SyncPlayChat]', message, details);
+        window.console.log('[JellyChat]', message, details);
         if (details instanceof Error) {
             recordError(details);
         } else if (details && details.error) {
@@ -176,20 +189,20 @@
             '.jellychat-fullscreen-host #' + drawerId + ' { z-index: 2147483601; }',
             '.jellychat-fullscreen-host.jellychat-fullscreen-docked #' + drawerId + ' { position: absolute; top: 0; right: 0; bottom: 0; width: var(--jellychat-drawer-width); }',
             '.jellychat-fullscreen-host.jellychat-mobile #' + drawerId + ' { top: 0; bottom: max(4.75rem, env(safe-area-inset-bottom)); width: min(22rem, calc(100vw - 0.75rem)); }',
-            '.syncPlayChatHeader { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }',
-            '.syncPlayChatHeader h2 { margin: 0; font-size: 1rem; line-height: 1.25rem; font-weight: 650; letter-spacing: 0; color: #fff; }',
+            '.jellyChatHeader { display: flex; align-items: center; justify-content: space-between; min-height: 3.5rem; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }',
+            '.jellyChatHeader h2 { margin: 0; font-size: 1rem; line-height: 1.25rem; font-weight: 650; letter-spacing: 0; color: #fff; }',
             '#' + closeButtonId + ' { display: inline-flex; align-items: center; justify-content: center; width: 2.15rem; height: 2.15rem; padding: 0; border: 0; border-radius: 0.45rem; background: transparent; color: #d8dee8; cursor: pointer; font-size: 1.6rem; line-height: 1; }',
             '#' + closeButtonId + ':hover, #' + closeButtonId + ':focus-visible { background: rgba(255, 255, 255, 0.08); color: #fff; }',
             '#' + statusId + ' { margin: 0.8rem 1rem 0; padding: 0.6rem 0.7rem; border-radius: 0.5rem; background: rgba(255, 255, 255, 0.06); color: #cbd4df; font-size: 0.86rem; line-height: 1.25rem; }',
             '#' + statusId + '.is-active { background: rgba(0, 164, 220, 0.16); color: #d8f4ff; }',
             '#' + messagesId + ' { flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 1rem; }',
-            '.syncPlayChatEmptyState { display: flex; min-height: 100%; align-items: center; justify-content: center; text-align: center; color: #aeb8c6; font-size: 0.92rem; line-height: 1.35rem; }',
-            '.syncPlayChatMessageGroup { margin: 0 0 0.85rem; }',
-            '.syncPlayChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.34rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
-            '.syncPlayChatMessageAuthor { color: #e8edf4; font-weight: 650; }',
-            '.syncPlayChatMessageStack { display: flex; flex-direction: column; gap: 0.28rem; }',
-            '.syncPlayChatMessage { padding: 0.52rem 0.65rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
-            '.syncPlayChatMessageBody { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.35rem; }',
+            '.jellyChatEmptyState { display: flex; min-height: 100%; align-items: center; justify-content: center; text-align: center; color: #aeb8c6; font-size: 0.92rem; line-height: 1.35rem; }',
+            '.jellyChatMessageGroup { margin: 0 0 0.85rem; }',
+            '.jellyChatMessageMeta { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.34rem; color: #b9c4d2; font-size: 0.76rem; line-height: 1rem; }',
+            '.jellyChatMessageAuthor { color: #e8edf4; font-weight: 650; }',
+            '.jellyChatMessageStack { display: flex; flex-direction: column; gap: 0.28rem; }',
+            '.jellyChatMessage { padding: 0.52rem 0.65rem; border-radius: 0.55rem; background: rgba(255, 255, 255, 0.07); color: #f6f8fb; overflow-wrap: anywhere; }',
+            '.jellyChatMessageBody { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.35rem; }',
             '#' + formId + ' { display: flex; gap: 0.55rem; padding: 0.8rem 1rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.1); background: #101317; }',
             '#' + inputId + ' { flex: 1 1 auto; min-width: 0; min-height: 2.35rem; max-height: 7.5rem; box-sizing: border-box; resize: none; overflow-x: hidden; overflow-y: auto; padding: 0.52rem 0.65rem; border-radius: 0.5rem; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.07); color: #fff; line-height: 1.25rem; font: inherit; font-size: 0.92rem; }',
             '#' + inputId + '::placeholder { color: #b5bfcc; opacity: 1; }',
@@ -937,11 +950,11 @@
         }
 
         const header = document.createElement('div');
-        header.className = 'syncPlayChatHeader';
+        header.className = 'jellyChatHeader';
 
         const title = document.createElement('h2');
         title.id = titleId;
-        title.textContent = 'SyncPlay Chat';
+        title.textContent = 'JellyChat';
 
         const closeButton = document.createElement('button');
         closeButton.id = closeButtonId;
@@ -966,7 +979,7 @@
 
         const emptyState = document.createElement('div');
         emptyState.id = emptyStateId;
-        emptyState.className = 'syncPlayChatEmptyState';
+        emptyState.className = 'jellyChatEmptyState';
         messages.appendChild(emptyState);
 
         const form = document.createElement('form');
@@ -1177,7 +1190,7 @@
         updateEntryButtonExpanded(true);
         updateLayout('drawer-open');
         renderSyncPlayStatus();
-        pollSyncPlayChat();
+        pollJellyChat();
         focusComposer('drawer-open');
     }
 
@@ -1424,7 +1437,7 @@
             return;
         }
 
-        const hasMessages = !!messages.querySelector('.syncPlayChatMessage');
+        const hasMessages = !!messages.querySelector('.jellyChatMessage');
         const emptyText = currentSyncPlayContext.inGroup ? 'No messages yet.' : 'Join or create a SyncPlay group to send chat messages.';
         setElementText(emptyState, emptyText);
         emptyState.style.display = hasMessages ? 'none' : 'flex';
@@ -1457,34 +1470,69 @@
         return '';
     }
 
-    function normalizeChatMessage(message) {
-        const userName = getMessageValue(message, 'UserName', 'userName');
+    function normalizeRoomEvent(roomEvent) {
+        const type = String(getMessageValue(roomEvent, 'Type', 'type') || '');
+        const sequence = Number(getMessageValue(roomEvent, 'Sequence', 'sequence') || 0);
         return {
-            id: String(getMessageValue(message, 'Id', 'id') || ''),
-            groupId: String(getMessageValue(message, 'GroupId', 'groupId') || ''),
-            userId: String(getMessageValue(message, 'UserId', 'userId') || ''),
-            userName: isUsableDisplayName(userName) ? String(userName).trim() : 'Someone',
-            text: String(getMessageValue(message, 'Text', 'text') || ''),
-            createdAtUtc: String(getMessageValue(message, 'CreatedAtUtc', 'createdAtUtc') || '')
+            id: String(getMessageValue(roomEvent, 'Id', 'id') || ''),
+            sequence: Number.isFinite(sequence) ? sequence : 0,
+            groupId: String(getMessageValue(roomEvent, 'GroupId', 'groupId') || ''),
+            type: type,
+            userId: String(getMessageValue(roomEvent, 'UserId', 'userId') || ''),
+            userName: String(getMessageValue(roomEvent, 'UserName', 'userName') || ''),
+            sessionId: String(getMessageValue(roomEvent, 'SessionId', 'sessionId') || ''),
+            createdAtUtc: String(getMessageValue(roomEvent, 'CreatedAtUtc', 'createdAtUtc') || ''),
+            text: String(getMessageValue(roomEvent, 'Text', 'text') || ''),
+            emoji: String(getMessageValue(roomEvent, 'Emoji', 'emoji') || ''),
+            playbackAction: String(getMessageValue(roomEvent, 'PlaybackAction', 'playbackAction') || ''),
+            fromPositionTicks: getMessageValue(roomEvent, 'FromPositionTicks', 'fromPositionTicks'),
+            toPositionTicks: getMessageValue(roomEvent, 'ToPositionTicks', 'toPositionTicks'),
+            itemId: String(getMessageValue(roomEvent, 'ItemId', 'itemId') || ''),
+            itemName: String(getMessageValue(roomEvent, 'ItemName', 'itemName') || ''),
+            clientEventId: String(getMessageValue(roomEvent, 'ClientEventId', 'clientEventId') || '')
         };
     }
 
-    function normalizeHistoryResponse(response) {
+    function normalizeChatMessage(roomEvent) {
+        const event = normalizeRoomEvent(roomEvent);
+        if (event.type !== 'chat.message') {
+            return null;
+        }
+
+        const userName = event.userName;
+        return {
+            id: event.id,
+            sequence: event.sequence,
+            groupId: event.groupId,
+            userId: event.userId,
+            userName: isUsableDisplayName(userName) ? String(userName).trim() : 'Someone',
+            text: event.text,
+            createdAtUtc: event.createdAtUtc
+        };
+    }
+
+    function normalizeEventsResponse(response) {
         if (Array.isArray(response)) {
-            return response.map(normalizeChatMessage).filter(function (message) {
-                return message.id && message.text;
+            return response.map(normalizeRoomEvent).filter(function (roomEvent) {
+                return roomEvent.id && roomEvent.sequence > 0 && supportedEventTypes.indexOf(roomEvent.type) !== -1;
             });
         }
 
         if (response && Array.isArray(response.Items)) {
-            return normalizeHistoryResponse(response.Items);
+            return normalizeEventsResponse(response.Items);
         }
 
         if (response && Array.isArray(response.items)) {
-            return normalizeHistoryResponse(response.items);
+            return normalizeEventsResponse(response.items);
         }
 
         return [];
+    }
+
+    function getChatMessagesFromEvents(events) {
+        return events.map(normalizeChatMessage).filter(function (message) {
+            return message && message.id && message.text;
+        });
     }
 
     function formatMessageTime(message) {
@@ -1569,7 +1617,7 @@
         }
 
         const shouldStickToBottom = historyMessages.length === 0 || isMessagesNearBottom(messages);
-        const existing = messages.querySelectorAll('.syncPlayChatMessageGroup, .syncPlayChatMessage');
+        const existing = messages.querySelectorAll('.jellyChatMessageGroup, .jellyChatMessage');
         existing.forEach(function (message) {
             message.remove();
         });
@@ -1577,21 +1625,21 @@
         const groups = groupMessages(historyMessages, groupingWindowMs);
         groups.forEach(function (group) {
             const groupNode = document.createElement('div');
-            groupNode.className = 'syncPlayChatMessageGroup';
+            groupNode.className = 'jellyChatMessageGroup';
             groupNode.setAttribute('data-jellychat-group-key', group.key);
 
             const meta = document.createElement('div');
-            meta.className = 'syncPlayChatMessageMeta';
+            meta.className = 'jellyChatMessageMeta';
 
             const authorNode = document.createElement('span');
-            authorNode.className = 'syncPlayChatMessageAuthor';
+            authorNode.className = 'jellyChatMessageAuthor';
             authorNode.textContent = group.userName;
 
             const timeNode = document.createElement('span');
             timeNode.textContent = formatMessageTime(group);
 
             const stack = document.createElement('div');
-            stack.className = 'syncPlayChatMessageStack';
+            stack.className = 'jellyChatMessageStack';
 
             meta.appendChild(authorNode);
             meta.appendChild(timeNode);
@@ -1599,11 +1647,11 @@
 
             group.messages.forEach(function (chatMessage) {
                 const message = document.createElement('div');
-                message.className = 'syncPlayChatMessage';
+                message.className = 'jellyChatMessage';
                 message.setAttribute('data-jellychat-message-key', chatMessage.id);
 
                 const body = document.createElement('div');
-                body.className = 'syncPlayChatMessageBody';
+                body.className = 'jellyChatMessageBody';
                 body.textContent = chatMessage.text;
 
                 message.appendChild(body);
@@ -1637,6 +1685,12 @@
         historyMessages = Object.keys(byId)
             .map(function (id) { return byId[id]; })
             .sort(function (left, right) {
+                const leftSequence = Number(left.sequence || 0);
+                const rightSequence = Number(right.sequence || 0);
+                if (leftSequence !== rightSequence) {
+                    return leftSequence - rightSequence;
+                }
+
                 return String(left.createdAtUtc).localeCompare(String(right.createdAtUtc));
             });
 
@@ -1644,34 +1698,48 @@
             historyMessages = historyMessages.slice(historyMessages.length - 100);
         }
 
-        lastHistoryMessageId = historyMessages.length > 0 ? historyMessages[historyMessages.length - 1].id : '';
+        lastSequence = historyMessages.reduce(function (maxSequence, message) {
+            return Math.max(maxSequence, Number(message.sequence || 0));
+        }, lastSequence);
+        debugState.lastSequence = lastSequence;
         renderHistoryMessages();
     }
 
-    async function fetchChatHistory(forceFull) {
-        if (historyFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+    function updateLastSequenceFromEvents(events) {
+        events.forEach(function (roomEvent) {
+            lastSequence = Math.max(lastSequence, Number(roomEvent.sequence || 0));
+        });
+        debugState.lastSequence = lastSequence;
+        debugState.eventCount += events.length;
+    }
+
+    async function fetchChatEvents(forceFull) {
+        if (eventFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
             return;
         }
 
         let shouldFetchFull = !!forceFull;
-        if (lastHistoryGroupId !== currentSyncPlayContext.groupId) {
-            lastHistoryGroupId = currentSyncPlayContext.groupId;
-            lastHistoryMessageId = '';
+        if (lastEventGroupId !== currentSyncPlayContext.groupId) {
+            lastEventGroupId = currentSyncPlayContext.groupId;
+            lastSequence = 0;
+            debugState.lastSequence = 0;
             historyMessages = [];
             shouldFetchFull = true;
         }
 
-        historyFetchInProgress = true;
+        eventFetchInProgress = true;
 
         try {
-            let path = 'SyncPlayChat/History?groupId=' + encodeURIComponent(currentSyncPlayContext.groupId) + '&limit=100';
-            if (!shouldFetchFull && lastHistoryMessageId) {
-                path += '&after=' + encodeURIComponent(lastHistoryMessageId);
+            let path = 'JellyChat/Events?groupId=' + encodeURIComponent(currentSyncPlayContext.groupId) + '&limit=100';
+            if (!shouldFetchFull && lastSequence > 0) {
+                path += '&afterSequence=' + encodeURIComponent(String(lastSequence));
             }
 
             const response = await fetchJson(path);
-            debugState.lastHistoryFetchAt = new Date().toISOString();
-            const messages = normalizeHistoryResponse(response);
+            debugState.lastEventPollAt = new Date().toISOString();
+            const events = normalizeEventsResponse(response);
+            updateLastSequenceFromEvents(events);
+            const messages = getChatMessagesFromEvents(events);
             if (shouldFetchFull) {
                 historyMessages = [];
             }
@@ -1682,9 +1750,9 @@
                 renderEmptyState();
             }
         } catch (err) {
-            logDebug('Failed to fetch SyncPlay chat history', err);
+            logDebug('Failed to fetch JellyChat events', err);
         } finally {
-            historyFetchInProgress = false;
+            eventFetchInProgress = false;
         }
     }
 
@@ -1718,8 +1786,9 @@
         debugState.currentGroupId = currentSyncPlayContext.groupId;
         if (!currentSyncPlayContext.inGroup || groupChanged) {
             historyMessages = [];
-            lastHistoryMessageId = '';
-            lastHistoryGroupId = currentSyncPlayContext.groupId;
+            lastSequence = 0;
+            lastEventGroupId = currentSyncPlayContext.groupId;
+            debugState.lastSequence = 0;
             renderHistoryMessages();
         }
 
@@ -2526,23 +2595,6 @@
         return matchedIdentityInDetails;
     }
 
-    function showLocalToast(text, title) {
-        if (window.toastr && typeof window.toastr.info === 'function') {
-            window.toastr.info(text, title || 'SyncPlay Chat');
-            return;
-        }
-
-        if (window.Dashboard && typeof window.Dashboard.alert === 'function') {
-            window.Dashboard.alert({
-                title: title || 'SyncPlay Chat',
-                message: text
-            });
-            return;
-        }
-
-        logDebug('Toast fallback', { title: title || 'SyncPlay Chat', text: text });
-    }
-
     function extractParticipantsFromGroups(groups) {
         const participants = [];
 
@@ -2576,22 +2628,31 @@
         return participants;
     }
 
+    function createClientEventId() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+
+        return String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+    }
+
     async function sendMessageViaServer(text, senderSessionId, groupId, participants) {
-        const response = await postJson('SyncPlayChat/Send', {
+        const response = await postJson('JellyChat/Events', {
             GroupId: groupId || '',
             SenderSessionId: senderSessionId || '',
-            Header: 'SyncPlay Chat',
+            Type: 'chat.message',
             Text: text,
-            TimeoutMs: 4000,
+            ClientEventId: createClientEventId(),
             ParticipantsCsv: (participants || []).join(',')
         }, true);
+        debugState.lastEventPostAt = new Date().toISOString();
 
         let normalized = response;
         if (typeof normalized === 'string') {
             try {
                 normalized = JSON.parse(normalized);
             } catch (parseError) {
-                logDebug('Failed to parse server chat send response JSON', {
+                logDebug('Failed to parse JellyChat event response JSON', {
                     response: response,
                     error: parseError
                 });
@@ -2604,10 +2665,12 @@
         }
 
         if (!normalized || typeof normalized !== 'object') {
-            logDebug('Unexpected server chat send response shape', { response: response, normalized: normalized });
+            logDebug('Unexpected JellyChat event response shape', { response: response, normalized: normalized });
             return null;
         }
 
+        const event = normalizeRoomEvent(normalized);
+        updateLastSequenceFromEvents([event]);
         return normalizeChatMessage(normalized);
     }
 
@@ -2662,11 +2725,10 @@
                 clearComposerInput();
                 shouldFocusAfterSend = true;
             } else {
-                showLocalToast('Failed to send SyncPlay chat message.');
+                logDebug('Failed to send SyncPlay chat message.');
             }
         } catch (err) {
             logDebug('Failed to send SyncPlay chat message', err);
-            showLocalToast('Failed to send SyncPlay chat message.');
         } finally {
             sendInProgress = false;
             setComposerBusy(false);
@@ -2825,10 +2887,10 @@
         }
     }
 
-    async function pollSyncPlayChat() {
+    async function pollJellyChat() {
         await refreshSyncPlayState();
         if (currentSyncPlayContext.inGroup && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
-            await fetchChatHistory(false);
+            await fetchChatEvents(false);
         }
     }
 
@@ -2858,25 +2920,25 @@
             return;
         }
 
-        window.__syncPlayChatLoaded = true;
+        window.__jellyChatLoaded = true;
 
         installRouteWatcher();
         addButton();
         updateLayout('start');
-        pollSyncPlayChat();
+        pollJellyChat();
 
         if (window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === undefined || window.__JELLYCHAT_REFRESH_INTERVAL_ID__ === null) {
-            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(pollSyncPlayChat, refreshIntervalMs);
+            window.__JELLYCHAT_REFRESH_INTERVAL_ID__ = window.setInterval(pollJellyChat, refreshIntervalMs);
             debugState.intervalCount = 1;
         } else {
             debugState.intervalCount = 1;
         }
 
         if (!window.__JELLYCHAT_LISTENERS_BOUND__) {
-            bindEvent(window, 'focus', pollSyncPlayChat);
+            bindEvent(window, 'focus', pollJellyChat);
             bindEvent(document, 'visibilitychange', function () {
                 if (!document.hidden) {
-                    pollSyncPlayChat();
+                    pollJellyChat();
                 }
             });
             bindEvent(window, 'resize', function () {

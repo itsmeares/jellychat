@@ -25,7 +25,7 @@ jobs:
 
       - name: Download release asset and compute checksum
         run: |
-          ASSET_NAME="Jellyfin.Plugin.SyncPlayChat_${{ steps.version.outputs.version }}.zip"
+          ASSET_NAME="Jellyfin.Plugin.JellyChat_${{ steps.version.outputs.version }}.zip"
           gh release download "${{ github.event.release.tag_name }}" \
             --pattern "${ASSET_NAME}" \
             --dir /tmp
@@ -45,7 +45,7 @@ jobs:
             const body = context.payload.release.body || '';
             const changelog = body.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, '');
-            const sourceUrl = `https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/Jellyfin.Plugin.SyncPlayChat_${version}.zip`;
+            const sourceUrl = `https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/Jellyfin.Plugin.JellyChat_${version}.zip`;
 
             const newEntry = {
               changelog,
