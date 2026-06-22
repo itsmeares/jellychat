@@ -14,5 +14,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web-src/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: web-src
+        run: npm ci
+
+      - name: Build Frontend Assets
+        working-directory: web-src
+        run: npm run build
+
+      - name: Verify Frontend Assets
+        run: git diff --exit-code -- Jellyfin.Plugin.JellyChat/Web/jellychat.js Jellyfin.Plugin.JellyChat/Web/jellychat.css
+
   call:
+    needs: frontend
     uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master

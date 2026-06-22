@@ -35,7 +35,7 @@
     <Content Include="Web\jellychat.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <Target Name="BuildJellyChatFrontend" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true' And Exists('..\web-src\package.json')">
+  <Target Name="BuildJellyChatFrontend" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true' And Exists('..\web-src\package.json') And Exists('..\web-src\node_modules')">
     <Exec Command="npm run build" WorkingDirectory="..\web-src" />
   </Target>
 
