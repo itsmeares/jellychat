@@ -1,6 +1,6 @@
 # JellyChat
 
-JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin web clients. It uses a plugin-owned room event stream and injected browser script; it does not introduce React, a separate frontend app, an external WebSocket server, or any new network ports.
+JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin web clients. It uses a plugin-owned room event stream and an injected React frontend; it does not use an external WebSocket server or any new network ports.
 
 ## Current MVP
 
@@ -11,7 +11,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Does not use Jellyfin toast notifications as the chat transport.
 - Does not run a separate WebSocket service.
 - Does not require opening or configuring additional ports.
-- Depends on Jellyfin File Transformation to inject `jellychat.js` into Jellyfin web.
+- Depends on Jellyfin File Transformation to inject `jellychat.css` and `jellychat.js` into Jellyfin web.
 
 ## Current Limitations
 
@@ -39,8 +39,27 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Built against `Jellyfin.Controller` / `Jellyfin.Model` `10.11.8`.
 - Target ABI: `10.11.0.0`.
 - .NET SDK 9.0 for building.
-- Jellyfin [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin installed and enabled.
-  - Without File Transformation, `jellychat.js` will not be injected into the web client.
+- Jellyfin File Transformation plugin installed and enabled.
+  - Without File Transformation, JellyChat frontend assets will not be injected into the web client.
+
+## Frontend Build
+
+JellyChat's injected frontend lives in `web-src` and builds stable asset names into `Jellyfin.Plugin.JellyChat/Web`:
+
+```bash
+cd web-src
+npm install
+npm run build
+```
+
+The build emits:
+
+```text
+Jellyfin.Plugin.JellyChat/Web/jellychat.css
+Jellyfin.Plugin.JellyChat/Web/jellychat.js
+```
+
+`dotnet publish` runs `npm run build` only. Run `npm install` or `npm ci` as a separate setup step before publishing.
 
 ## Repository Install
 

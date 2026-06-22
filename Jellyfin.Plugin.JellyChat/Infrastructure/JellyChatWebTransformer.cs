@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.IO;
 
 namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
@@ -9,45 +8,35 @@ namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 /// </summary>
 public static class JellyChatWebTransformer
 {
-    private const string JellyChatScriptMarker = "<!-- JellyChat jellychat.js -->";
+    private const string JellyChatAssetMarker = "<!-- JellyChat React assets -->";
 
     /// <summary>
-    /// Injects JellyChat script into jellyfin-web index page.
+    /// Injects JellyChat assets into jellyfin-web index page.
     /// </summary>
     /// <param name="payload">The transformation payload.</param>
     /// <returns>The transformed index.html content.</returns>
     public static string TransformIndexHtml(WebContentTransformPayload payload)
     {
-        if (payload.Contents.Contains(JellyChatScriptMarker, StringComparison.Ordinal))
+        if (payload.Contents.Contains(JellyChatAssetMarker, StringComparison.Ordinal))
         {
             return payload.Contents;
         }
 
-        string scriptContent = GetJellyChatScript();
-        if (string.IsNullOrEmpty(scriptContent))
+        string version = typeof(JellyChatWebTransformer).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+        string cssHref = string.Format(CultureInfo.InvariantCulture, "/web/ConfigurationPage?name=jellychat.css&v={0}", Uri.EscapeDataString(version));
+        string scriptSrc = string.Format(CultureInfo.InvariantCulture, "/web/ConfigurationPage?name=jellychat.js&v={0}", Uri.EscapeDataString(version));
+        string assets = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}<link rel=\"stylesheet\" data-jellychat-style=\"true\" href=\"{1}\"><script defer data-jellychat-script=\"true\" data-jellychat-api=\"JellyChat/Events\" src=\"{2}\"></script>",
+            JellyChatAssetMarker,
+            cssHref,
+            scriptSrc);
+
+        if (payload.Contents.Contains("</head>", StringComparison.OrdinalIgnoreCase))
         {
-            return payload.Contents;
+            return payload.Contents.Replace("</head>", string.Format(CultureInfo.InvariantCulture, "{0}</head>", assets), StringComparison.OrdinalIgnoreCase);
         }
 
-        string injectedScript = string.Format(CultureInfo.InvariantCulture, "{0}<script>{1}</script>", JellyChatScriptMarker, scriptContent);
-
-        return payload.Contents.Replace("</body>", string.Format(CultureInfo.InvariantCulture, "{0}</body>", injectedScript), StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Returns embedded jellychat.js content for plugin web path.
-    /// </summary>
-    /// <returns>Script content.</returns>
-    public static string GetJellyChatScript()
-    {
-        const string resourcePath = "Jellyfin.Plugin.JellyChat.Web.jellychat.js";
-        using Stream? stream = typeof(JellyChatWebTransformer).Assembly.GetManifestResourceStream(resourcePath);
-        if (stream is null)
-        {
-            return string.Empty;
-        }
-
-        using StreamReader reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        return payload.Contents.Replace("</body>", string.Format(CultureInfo.InvariantCulture, "{0}</body>", assets), StringComparison.OrdinalIgnoreCase);
     }
 }
