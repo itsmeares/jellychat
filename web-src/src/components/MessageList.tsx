@@ -1,16 +1,23 @@
 import { useEffect, useRef } from "react";
-import type { MessageGroupModel, SyncPlayContext } from "../types";
+import type { SyncPlayContext, TimelineItem } from "../types";
 import { emptyStateId, messagesId } from "../runtime/util";
 import { MessageGroup } from "./MessageGroup";
+import { PlaybackTimelineRow } from "./PlaybackTimelineRow";
 
 type Props = {
-  groups: MessageGroupModel[];
+  timelineItems: TimelineItem[];
   syncPlay: SyncPlayContext;
 };
 
-export function MessageList({ groups, syncPlay }: Props) {
+export function MessageList({ timelineItems, syncPlay }: Props) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottom = useRef(true);
+
+  useEffect(() => {
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.timelineContainerRemountCount = Number(window.JellyChatDebug.timelineContainerRemountCount || 0) + 1;
+    }
+  }, []);
 
   useEffect(() => {
     const node = messagesRef.current;
@@ -20,8 +27,13 @@ export function MessageList({ groups, syncPlay }: Props) {
 
     if (shouldStickToBottom.current) {
       node.scrollTop = node.scrollHeight;
+      if (window.JellyChatDebug) {
+        window.JellyChatDebug.timelinePinnedToBottom = true;
+        window.JellyChatDebug.lastScrollPreservedAt = new Date().toISOString();
+        window.JellyChatDebug.lastAutoScrollReason = "pinned-to-bottom";
+      }
     }
-  }, [groups]);
+  }, [timelineItems]);
 
   return (
     <div
@@ -33,17 +45,22 @@ export function MessageList({ groups, syncPlay }: Props) {
       onScroll={(event) => {
         const node = event.currentTarget;
         shouldStickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+        if (window.JellyChatDebug) {
+          window.JellyChatDebug.timelinePinnedToBottom = shouldStickToBottom.current;
+        }
       }}
     >
       <div
         id={emptyStateId}
         className="jellyChatEmptyState"
-        style={{ display: groups.length > 0 ? "none" : "flex" }}
+        style={{ display: timelineItems.length > 0 ? "none" : "flex" }}
       >
         {syncPlay.inGroup ? "No messages yet." : "Join or create a SyncPlay group to send chat messages."}
       </div>
-      {groups.map((group) => (
-        <MessageGroup key={group.key} group={group} />
+      {timelineItems.map((item) => (
+        item.kind === "messageGroup"
+          ? <MessageGroup key={item.key} group={item.group} />
+          : <PlaybackTimelineRow key={item.key} item={item} />
       ))}
     </div>
   );

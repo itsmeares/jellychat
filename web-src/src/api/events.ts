@@ -1,13 +1,15 @@
-import type { ChatMessage, RoomEvent } from "../types";
+import type { ChatMessage, PlaybackEventType, RoomEvent } from "../types";
 import { fetchJson, postJson } from "./jellyfin";
 import { createClientEventId, getValue, isUsableDisplayName } from "../runtime/util";
 
 export function normalizeRoomEvent(roomEvent: unknown): RoomEvent {
   const type = String(getValue(roomEvent, "Type", "type") || "");
   const sequence = Number(getValue(roomEvent, "Sequence", "sequence") || 0);
+  const id = String(getValue(roomEvent, "Id", "id") || "");
+  const clientEventId = String(getValue(roomEvent, "ClientEventId", "clientEventId") || "");
 
   return {
-    id: String(getValue(roomEvent, "Id", "id") || ""),
+    id,
     sequence: Number.isFinite(sequence) ? sequence : 0,
     groupId: String(getValue(roomEvent, "GroupId", "groupId") || ""),
     type,
@@ -22,7 +24,8 @@ export function normalizeRoomEvent(roomEvent: unknown): RoomEvent {
     toPositionTicks: getValue(roomEvent, "ToPositionTicks", "toPositionTicks"),
     itemId: String(getValue(roomEvent, "ItemId", "itemId") || ""),
     itemName: String(getValue(roomEvent, "ItemName", "itemName") || ""),
-    clientEventId: String(getValue(roomEvent, "ClientEventId", "clientEventId") || "")
+    clientEventId,
+    eventKey: clientEventId ? "client:" + clientEventId : (sequence > 0 ? "sequence:" + sequence : "id:" + id)
   };
 }
 
@@ -57,7 +60,8 @@ export function normalizeChatMessage(roomEvent: unknown): ChatMessage | null {
     userId: event.userId,
     userName: isUsableDisplayName(event.userName) ? event.userName.trim() : "Someone",
     text: event.text,
-    createdAtUtc: event.createdAtUtc
+    createdAtUtc: event.createdAtUtc,
+    eventKey: event.eventKey
   };
 }
 
@@ -70,21 +74,7 @@ export async function getEvents(groupId: string, afterSequence: number, limit: n
   return normalizeEventsResponse(await fetchJson(path));
 }
 
-export async function postChatMessage(args: {
-  groupId: string;
-  senderSessionId: string;
-  text: string;
-  participants: string[];
-}): Promise<ChatMessage | null> {
-  const response = await postJson("JellyChat/Events", {
-    GroupId: args.groupId || "",
-    SenderSessionId: args.senderSessionId || "",
-    Type: "chat.message",
-    Text: args.text,
-    ClientEventId: createClientEventId(),
-    ParticipantsCsv: args.participants.join(",")
-  }, true);
-
+function normalizePostResponse(response: unknown): unknown {
   let normalized = response;
   if (typeof normalized === "string") {
     try {
@@ -98,5 +88,65 @@ export async function postChatMessage(args: {
     normalized = (normalized as { responseJSON?: unknown }).responseJSON;
   }
 
+  return normalized;
+}
+
+export async function postChatMessage(args: {
+  groupId: string;
+  senderSessionId: string;
+  text: string;
+  participants: string[];
+  clientEventId?: string;
+}): Promise<ChatMessage | null> {
+  const response = await postJson("JellyChat/Events", {
+    GroupId: args.groupId || "",
+    SenderSessionId: args.senderSessionId || "",
+    Type: "chat.message",
+    Text: args.text,
+    ClientEventId: args.clientEventId || createClientEventId(),
+    ParticipantsCsv: args.participants.join(",")
+  }, true);
+
+  const normalized = normalizePostResponse(response);
   return normalized ? normalizeChatMessage(normalized) : null;
+}
+
+export async function postPlaybackEvent(args: {
+  groupId: string;
+  senderSessionId: string;
+  type: PlaybackEventType;
+  participants: string[];
+  fromPositionTicks?: number;
+  toPositionTicks?: number;
+  itemId?: string;
+  itemName?: string;
+  clientEventId?: string;
+}): Promise<RoomEvent | null> {
+  const payload: Record<string, unknown> = {
+    GroupId: args.groupId || "",
+    SenderSessionId: args.senderSessionId || "",
+    Type: args.type,
+    PlaybackAction: args.type.replace("playback.", ""),
+    ClientEventId: args.clientEventId || createClientEventId(),
+    ParticipantsCsv: args.participants.join(",")
+  };
+
+  if (typeof args.fromPositionTicks === "number") {
+    payload.FromPositionTicks = args.fromPositionTicks;
+  }
+
+  if (args.type === "playback.seek" && typeof args.toPositionTicks === "number") {
+    payload.ToPositionTicks = args.toPositionTicks;
+  }
+
+  if (args.itemId) {
+    payload.ItemId = args.itemId;
+  }
+
+  if (args.itemName) {
+    payload.ItemName = args.itemName;
+  }
+
+  const normalized = normalizePostResponse(await postJson("JellyChat/Events", payload, true));
+  return normalized ? normalizeRoomEvent(normalized) : null;
 }

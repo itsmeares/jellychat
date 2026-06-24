@@ -54,7 +54,7 @@ export function ChatDrawer({ state, actions }: Props) {
       <div id={statusId} className={state.syncPlay.inGroup ? "is-active" : ""}>
         {statusText}
       </div>
-      <MessageList groups={state.groups} syncPlay={state.syncPlay} />
+      <MessageList timelineItems={state.timelineItems} syncPlay={state.syncPlay} />
       <Composer actions={actions} sending={state.sending} syncPlay={state.syncPlay} />
     </aside>
   );

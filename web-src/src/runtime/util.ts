@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageGroupModel } from "../types";
+import type { ChatMessage, MessageGroupModel, PlaybackEventType, PlaybackTimelineItem, RoomEvent, TimelineItem } from "../types";
 
 export const rootId = "jellyChatRoot";
 export const buttonId = "jellyChatButton";
@@ -14,7 +14,7 @@ export const emptyStateId = "jellyChatEmptyState";
 export const formId = "jellyChatForm";
 export const inputId = "jellyChatInput";
 export const sendButtonId = "jellyChatSendButton";
-export const refreshIntervalMs = 2000;
+export const refreshIntervalMs = 850;
 export const groupingWindowMs = 5 * 60 * 1000;
 export const drawerWidthPx = 340;
 export const mobileLayoutMaxWidthPx = 899;
@@ -135,6 +135,62 @@ export function formatMessageTime(message: { createdAtUtc: string }): string {
   });
 }
 
+function coerceTicks(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+export function formatPlaybackPosition(ticks: number | null): string {
+  if (ticks === null || !Number.isFinite(ticks) || ticks < 0) {
+    return "0:00";
+  }
+
+  const totalSeconds = Math.max(0, Math.round(ticks / 10000000));
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  const paddedSeconds = String(seconds).padStart(2, "0");
+
+  if (hours > 0) {
+    return hours + ":" + String(minutes).padStart(2, "0") + ":" + paddedSeconds;
+  }
+
+  return totalMinutes + ":" + paddedSeconds;
+}
+
+export function getPlaybackMessage(item: PlaybackTimelineItem): string {
+  const userName = isUsableDisplayName(item.userName) ? item.userName.trim() : "Someone";
+  if (item.type === "playback.start") {
+    return item.itemName
+      ? userName + " started playing " + item.itemName
+      : userName + " started playback";
+  }
+
+  if (item.type === "playback.pause") {
+    return userName + " paused";
+  }
+
+  if (item.type === "playback.play") {
+    return userName + " resumed";
+  }
+
+  const verb = item.fromPositionTicks !== null
+    && item.toPositionTicks !== null
+    && item.toPositionTicks < item.fromPositionTicks
+    ? " jumped back to "
+    : " jumped to ";
+  return userName + verb + formatPlaybackPosition(item.toPositionTicks);
+}
+
 function getMessageTime(message: ChatMessage): number {
   const createdAt = new Date(message.createdAtUtc);
   const ticks = createdAt.getTime();
@@ -143,6 +199,48 @@ function getMessageTime(message: ChatMessage): number {
 
 function getMessageSenderKey(message: ChatMessage): string {
   return message.userId ? "id:" + message.userId : "name:" + message.userName;
+}
+
+function createChatMessage(event: RoomEvent): ChatMessage | null {
+  if (event.type !== "chat.message" || !event.id || !event.text) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    sequence: event.sequence,
+    groupId: event.groupId,
+    userId: event.userId,
+    userName: isUsableDisplayName(event.userName) ? event.userName.trim() : "Someone",
+    text: event.text,
+    createdAtUtc: event.createdAtUtc,
+    eventKey: event.eventKey
+  };
+}
+
+function isPlaybackEventType(value: string): value is PlaybackEventType {
+  return value === "playback.start" || value === "playback.play" || value === "playback.pause" || value === "playback.seek";
+}
+
+function createPlaybackTimelineItem(event: RoomEvent): PlaybackTimelineItem | null {
+  if (!isPlaybackEventType(event.type) || !event.id) {
+    return null;
+  }
+
+  return {
+    kind: "playback",
+    key: event.eventKey,
+    id: event.id,
+    sequence: event.sequence,
+    type: event.type,
+    userName: isUsableDisplayName(event.userName) ? event.userName.trim() : "Someone",
+    createdAtUtc: event.createdAtUtc,
+    fromPositionTicks: coerceTicks(event.fromPositionTicks),
+    toPositionTicks: coerceTicks(event.toPositionTicks),
+    itemId: event.itemId,
+    itemName: event.itemName,
+    eventKey: event.eventKey
+  };
 }
 
 export function groupMessages(messages: ChatMessage[], windowMs: number): MessageGroupModel[] {
@@ -163,7 +261,7 @@ export function groupMessages(messages: ChatMessage[], windowMs: number): Messag
 
     if (shouldStartGroup) {
       groups.push({
-        key: message.id,
+        key: message.eventKey,
         senderKey,
         userName: message.userName,
         createdAtUtc: message.createdAtUtc,
@@ -176,6 +274,70 @@ export function groupMessages(messages: ChatMessage[], windowMs: number): Messag
   });
 
   return groups;
+}
+
+export function buildTimelineItems(events: RoomEvent[], windowMs: number): TimelineItem[] {
+  const items: TimelineItem[] = [];
+  let currentGroup: MessageGroupModel | null = null;
+
+  const pushGroup = (): void => {
+    if (currentGroup) {
+      items.push({
+        kind: "messageGroup",
+        key: currentGroup.key,
+        group: currentGroup
+      });
+      currentGroup = null;
+    }
+  };
+
+  events
+    .slice()
+    .sort((left, right) => {
+      const leftSequence = Number(left.sequence || 0);
+      const rightSequence = Number(right.sequence || 0);
+      return leftSequence !== rightSequence
+        ? leftSequence - rightSequence
+        : String(left.createdAtUtc).localeCompare(String(right.createdAtUtc));
+    })
+    .forEach((event) => {
+      const message = createChatMessage(event);
+      if (message) {
+        const previousMessage = currentGroup && currentGroup.messages.length > 0
+          ? currentGroup.messages[currentGroup.messages.length - 1]
+          : null;
+        const senderKey = getMessageSenderKey(message);
+        const shouldStartGroup = !previousMessage
+          || currentGroup?.senderKey !== senderKey
+          || Math.abs(getMessageTime(message) - getMessageTime(previousMessage)) > windowMs;
+
+        if (shouldStartGroup) {
+          pushGroup();
+          currentGroup = {
+            key: message.eventKey,
+            senderKey,
+            userName: message.userName,
+            createdAtUtc: message.createdAtUtc,
+            messages: [message]
+          };
+          return;
+        }
+
+        if (currentGroup) {
+          currentGroup.messages.push(message);
+        }
+        return;
+      }
+
+      const playbackItem = createPlaybackTimelineItem(event);
+      if (playbackItem) {
+        pushGroup();
+        items.push(playbackItem);
+      }
+    });
+
+  pushGroup();
+  return items;
 }
 
 export function countDebugNodes(): void {

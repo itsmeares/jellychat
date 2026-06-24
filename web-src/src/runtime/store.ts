@@ -1,18 +1,33 @@
-import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, RoomEvent, SyncPlayContext } from "../types";
-import { getEvents, normalizeChatMessage, postChatMessage } from "../api/events";
+import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, PlaybackEventType, RoomEvent, SyncPlayContext, TimelineItem } from "../types";
+import { getEvents, normalizeChatMessage, postChatMessage, postPlaybackEvent } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
-import { countDebugNodes, formId, groupingWindowMs, groupMessages, inputId, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
+import { buildTimelineItems, countDebugNodes, createClientEventId, formId, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
 import { getActiveMountHost, getDrawerSide, handleFloatingButtonFocusChange, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, showFloatingButton, updateLayout } from "./layout";
+import { installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
 
 type Subscriber = (state: ChatState) => void;
+type PlaybackPostRequest = {
+  type: PlaybackEventType;
+  positionSeconds?: number;
+  fromSeconds?: number;
+  itemId?: string;
+  itemName?: string;
+};
 
 let refreshInProgress = false;
 let sendInProgress = false;
 let eventFetchInProgress = false;
+let lastPollStartedAt = 0;
+let historyEvents: RoomEvent[] = [];
 let historyMessages: ChatMessage[] = [];
 let groupedMessages: MessageGroupModel[] = [];
+let timelineItems: TimelineItem[] = [];
 let lastEventGroupId = "";
 let lastSequence = 0;
+let optimisticSequence = 0;
+let cachedLocalActorName = "";
+let cachedCurrentSessionIds: string[] = [];
+const localClientEventIds = new Set<string>();
 let currentSyncPlayContext: SyncPlayContext = {
   inGroup: false,
   groupId: "",
@@ -25,10 +40,26 @@ let state: ChatState = {
   syncPlay: currentSyncPlayContext,
   messages: [],
   groups: [],
+  timelineItems: [],
   sending: false
 };
 
 const subscribers = new Set<Subscriber>();
+const slowPollIntervalMs = 2000;
+
+function getNextOptimisticSequence(): number {
+  optimisticSequence = Math.max(optimisticSequence + 1, lastSequence + 1);
+  return optimisticSequence;
+}
+
+function setActorDebug(actorName: string, fallbackReason: string): void {
+  if (!window.JellyChatDebug) {
+    return;
+  }
+
+  window.JellyChatDebug.lastResolvedActorName = actorName || null;
+  window.JellyChatDebug.lastActorFallbackReason = fallbackReason || null;
+}
 
 function emit(): void {
   state = {
@@ -37,12 +68,14 @@ function emit(): void {
     syncPlay: currentSyncPlayContext,
     messages: historyMessages.slice(),
     groups: groupedMessages.slice(),
+    timelineItems: timelineItems.slice(),
     sending: sendInProgress
   };
 
   if (window.JellyChatDebug) {
     window.JellyChatDebug.messageCount = historyMessages.length;
     window.JellyChatDebug.groupCount = groupedMessages.length;
+    window.JellyChatDebug.timelineCount = timelineItems.length;
     window.JellyChatDebug.currentGroupId = currentSyncPlayContext.groupId;
     window.JellyChatDebug.lastSequence = lastSequence;
     countDebugNodes();
@@ -61,18 +94,200 @@ export function subscribe(subscriber: Subscriber): () => void {
   return () => subscribers.delete(subscriber);
 }
 
-function mergeHistoryMessages(messages: ChatMessage[]): void {
-  const byId: Record<string, ChatMessage> = {};
-  historyMessages.forEach((message) => {
-    if (message.id) byId[message.id] = message;
+function createRoomEvent(args: {
+  id: string;
+  type: string;
+  groupId: string;
+  userName: string;
+  clientEventId: string;
+  text?: string;
+  fromPositionTicks?: number;
+  toPositionTicks?: number;
+  itemId?: string;
+  itemName?: string;
+  optimistic?: boolean;
+}): RoomEvent {
+  const actorName = resolveEventActorName({
+    userId: getCurrentUserId(),
+    userName: args.userName,
+    sessionId: "",
+    clientEventId: args.clientEventId,
+    optimistic: args.optimistic
   });
-  messages.forEach((message) => {
-    if (message.id) byId[message.id] = message;
+  return {
+    id: args.id,
+    sequence: args.optimistic ? getNextOptimisticSequence() : lastSequence,
+    groupId: args.groupId,
+    type: args.type,
+    userId: getCurrentUserId(),
+    userName: actorName,
+    sessionId: "",
+    createdAtUtc: new Date().toISOString(),
+    text: args.text || "",
+    emoji: "",
+    playbackAction: args.type.replace("playback.", ""),
+    fromPositionTicks: args.fromPositionTicks ?? null,
+    toPositionTicks: args.toPositionTicks ?? null,
+    itemId: args.itemId || "",
+    itemName: args.itemName || "",
+    clientEventId: args.clientEventId,
+    eventKey: args.clientEventId ? "client:" + args.clientEventId : "id:" + args.id,
+    optimistic: args.optimistic
+  };
+}
+
+function isCurrentUserEvent(event: Pick<RoomEvent, "userId" | "sessionId" | "clientEventId">): boolean {
+  const currentUserId = normalizeId(getCurrentUserId());
+  const eventUserId = normalizeId(event.userId);
+  if (currentUserId && eventUserId && currentUserId === eventUserId) {
+    return true;
+  }
+
+  const eventSessionId = normalizeId(event.sessionId);
+  return !!(eventSessionId && cachedCurrentSessionIds.map(normalizeId).includes(eventSessionId));
+}
+
+function resolveEventActorName(event: Pick<RoomEvent, "userId" | "userName" | "sessionId" | "clientEventId"> & { optimistic?: boolean }, existing?: RoomEvent): string {
+  if (existing && isUsableDisplayName(existing.userName)) {
+    setActorDebug(existing.userName.trim(), "existing-event");
+    return existing.userName.trim();
+  }
+
+  if (isUsableDisplayName(event.userName)) {
+    setActorDebug(event.userName.trim(), "event-payload");
+    return event.userName.trim();
+  }
+
+  if (event.optimistic || localClientEventIds.has(event.clientEventId) || isCurrentUserEvent(event)) {
+    const local = resolveLocalActorName();
+    return local.actorName;
+  }
+
+  setActorDebug("Someone", "anonymous-remote-event");
+  return "Someone";
+}
+
+function getStableEventKey(event: RoomEvent): string {
+  return event.eventKey
+    || (event.clientEventId ? "client:" + event.clientEventId : "")
+    || (event.sequence > 0 ? "sequence:" + event.sequence : "")
+    || (event.id ? "id:" + event.id : "")
+    || "fallback:" + event.type + ":" + event.createdAtUtc;
+}
+
+function mergeConfirmedEvent(existing: RoomEvent, incoming: RoomEvent): RoomEvent {
+  const userName = resolveEventActorName(incoming, existing);
+  return {
+    ...existing,
+    ...incoming,
+    id: incoming.id || existing.id,
+    sequence: incoming.sequence || existing.sequence,
+    createdAtUtc: incoming.createdAtUtc || existing.createdAtUtc,
+    text: incoming.text || existing.text,
+    fromPositionTicks: incoming.fromPositionTicks ?? existing.fromPositionTicks,
+    toPositionTicks: incoming.toPositionTicks ?? existing.toPositionTicks,
+    itemId: incoming.itemId || existing.itemId,
+    itemName: incoming.itemName || existing.itemName,
+    userName,
+    clientEventId: incoming.clientEventId || existing.clientEventId,
+    eventKey: existing.eventKey || getStableEventKey(existing),
+    optimistic: false
+  };
+}
+
+function getPendingOptimisticCount(): number {
+  return historyEvents.filter((event) => event.optimistic).length;
+}
+
+function deriveTimelineFromHistory(): void {
+  historyMessages = historyEvents
+    .map(normalizeChatMessage)
+    .filter((message): message is ChatMessage => !!(message && message.id && message.text));
+  groupedMessages = groupMessages(historyMessages, groupingWindowMs);
+  timelineItems = buildTimelineItems(historyEvents, groupingWindowMs);
+  lastSequence = historyEvents.reduce((maxSequence, event) => event.optimistic ? maxSequence : Math.max(maxSequence, Number(event.sequence || 0)), lastSequence);
+  optimisticSequence = Math.max(optimisticSequence, lastSequence);
+
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.lastSequence = lastSequence;
+    window.JellyChatDebug.groupingWindowMs = groupingWindowMs;
+    window.JellyChatDebug.lastGroupedAt = new Date().toISOString();
+  }
+}
+
+function mergeHistoryEvents(events: RoomEvent[]): void {
+  const byKey: Record<string, RoomEvent> = {};
+  const clientIdToKey: Record<string, string> = {};
+  const sequenceToKey: Record<string, string> = {};
+  let addedCount = 0;
+  let updatedCount = 0;
+  let preservedCount = 0;
+  let replacedCount = 0;
+  let confirmedCount = Number(window.JellyChatDebug?.confirmedOptimisticEventCount || 0);
+  let lastConfirmedClientEventId = "";
+  historyEvents.forEach((event) => {
+    event.eventKey = getStableEventKey(event);
+    const key = event.eventKey;
+    byKey[key] = event;
+    if (event.clientEventId) clientIdToKey[event.clientEventId] = key;
+    if (event.sequence > 0) sequenceToKey[String(event.sequence)] = key;
+  });
+  events.forEach((event) => {
+    event.eventKey = getStableEventKey(event);
+    const sequenceKey = event.sequence > 0 ? sequenceToKey[String(event.sequence)] : "";
+    if (event.clientEventId && clientIdToKey[event.clientEventId]) {
+      const key = clientIdToKey[event.clientEventId];
+      const existing = byKey[key];
+      byKey[key] = mergeConfirmedEvent(existing, event);
+      if (existing.optimistic && !event.optimistic) {
+        confirmedCount += 1;
+        lastConfirmedClientEventId = event.clientEventId;
+      }
+      updatedCount += 1;
+      preservedCount += 1;
+      return;
+    }
+
+    if (sequenceKey && byKey[sequenceKey]) {
+      const existing = byKey[sequenceKey];
+      byKey[sequenceKey] = {
+        ...existing,
+        ...event,
+        userName: resolveEventActorName(event, existing),
+        eventKey: existing.eventKey || event.eventKey,
+        optimistic: existing.optimistic && event.optimistic
+      };
+      updatedCount += 1;
+      preservedCount += 1;
+      return;
+    }
+
+    const key = event.eventKey;
+    if (byKey[key]) {
+      byKey[key] = {
+        ...byKey[key],
+        ...event,
+        userName: resolveEventActorName(event, byKey[key]),
+        eventKey: byKey[key].eventKey || event.eventKey
+      };
+      updatedCount += 1;
+      preservedCount += 1;
+    } else {
+      event.userName = resolveEventActorName(event);
+      byKey[key] = event;
+      addedCount += 1;
+    }
+    if (event.clientEventId) clientIdToKey[event.clientEventId] = key;
+    if (event.sequence > 0) sequenceToKey[String(event.sequence)] = key;
   });
 
-  historyMessages = Object.keys(byId)
-    .map((id) => byId[id])
+  historyEvents = Object.keys(byKey)
+    .map((id) => byKey[id])
     .sort((left, right) => {
+      if (left.optimistic !== right.optimistic) {
+        return left.optimistic ? 1 : -1;
+      }
+
       const leftSequence = Number(left.sequence || 0);
       const rightSequence = Number(right.sequence || 0);
       return leftSequence !== rightSequence
@@ -80,16 +295,22 @@ function mergeHistoryMessages(messages: ChatMessage[]): void {
         : String(left.createdAtUtc).localeCompare(String(right.createdAtUtc));
     });
 
-  if (historyMessages.length > 100) {
-    historyMessages = historyMessages.slice(historyMessages.length - 100);
+  if (historyEvents.length > 100) {
+    historyEvents = historyEvents.slice(historyEvents.length - 100);
   }
 
-  lastSequence = historyMessages.reduce((maxSequence, message) => Math.max(maxSequence, Number(message.sequence || 0)), lastSequence);
-  groupedMessages = groupMessages(historyMessages, groupingWindowMs);
+  deriveTimelineFromHistory();
   if (window.JellyChatDebug) {
-    window.JellyChatDebug.lastSequence = lastSequence;
-    window.JellyChatDebug.groupingWindowMs = groupingWindowMs;
-    window.JellyChatDebug.lastGroupedAt = new Date().toISOString();
+    window.JellyChatDebug.lastEventMergeCount = events.length;
+    window.JellyChatDebug.optimisticEventCount = getPendingOptimisticCount();
+    window.JellyChatDebug.pendingOptimisticEventCount = getPendingOptimisticCount();
+    window.JellyChatDebug.confirmedOptimisticEventCount = confirmedCount;
+    window.JellyChatDebug.lastConfirmedClientEventId = lastConfirmedClientEventId || window.JellyChatDebug.lastConfirmedClientEventId || null;
+    window.JellyChatDebug.lastTimelineMergeStrategy = "stable-event-key";
+    window.JellyChatDebug.lastTimelinePreservedCount = preservedCount;
+    window.JellyChatDebug.lastTimelineReplacedCount = replacedCount;
+    window.JellyChatDebug.lastTimelineAddedCount = addedCount;
+    window.JellyChatDebug.lastTimelineUpdatedCount = updatedCount;
   }
   emit();
 }
@@ -98,6 +319,7 @@ function updateLastSequenceFromEvents(events: RoomEvent[]): void {
   events.forEach((roomEvent) => {
     lastSequence = Math.max(lastSequence, Number(roomEvent.sequence || 0));
   });
+  optimisticSequence = Math.max(optimisticSequence, lastSequence);
 
   if (window.JellyChatDebug) {
     window.JellyChatDebug.lastSequence = lastSequence;
@@ -114,26 +336,21 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
   if (lastEventGroupId !== currentSyncPlayContext.groupId) {
     lastEventGroupId = currentSyncPlayContext.groupId;
     lastSequence = 0;
-    historyMessages = [];
-    groupedMessages = [];
+    optimisticSequence = 0;
     shouldFetchFull = true;
   }
 
   eventFetchInProgress = true;
   try {
+    const startedAt = Date.now();
     const events = await getEvents(currentSyncPlayContext.groupId, lastSequence, 100, shouldFetchFull);
     if (window.JellyChatDebug) {
       window.JellyChatDebug.lastEventPollAt = new Date().toISOString();
+      window.JellyChatDebug.lastEventRoundTripMs = Date.now() - startedAt;
     }
     updateLastSequenceFromEvents(events);
-    const messages = events.map(normalizeChatMessage).filter((message): message is ChatMessage => !!(message && message.id && message.text));
-    if (shouldFetchFull) {
-      historyMessages = [];
-      groupedMessages = [];
-    }
-
-    if (messages.length > 0 || shouldFetchFull) {
-      mergeHistoryMessages(messages);
+    if (events.length > 0 || shouldFetchFull) {
+      mergeHistoryEvents(events);
     } else {
       emit();
     }
@@ -155,10 +372,21 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
   };
 
   if (!currentSyncPlayContext.inGroup || groupChanged) {
+    const hadTimeline = historyEvents.length > 0 || timelineItems.length > 0;
+    historyEvents = [];
     historyMessages = [];
     groupedMessages = [];
+    timelineItems = [];
     lastSequence = 0;
+    optimisticSequence = 0;
     lastEventGroupId = currentSyncPlayContext.groupId;
+    if (window.JellyChatDebug) {
+      if (hadTimeline) {
+        window.JellyChatDebug.lastTimelineClearedAt = new Date().toISOString();
+      }
+      window.JellyChatDebug.optimisticEventCount = 0;
+      window.JellyChatDebug.pendingOptimisticEventCount = 0;
+    }
   }
 
   emit();
@@ -193,6 +421,48 @@ function getCurrentUserName(): string {
     if (currentUser && typeof currentUser.Name === "string" && currentUser.Name.length > 0) return currentUser.Name;
   }
   return "";
+}
+
+function getSessionUserName(session: any): string {
+  const value = (session && session.UserName)
+    || (session && session.User && session.User.Name)
+    || (session && session.User && session.User.Username)
+    || "";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function resolveLocalActorName(sessions: any[] = [], currentSession: any | null = null): { actorName: string; fallbackReason: string } {
+  const apiUserName = getCurrentUserName();
+  if (isUsableDisplayName(apiUserName)) {
+    cachedLocalActorName = apiUserName.trim();
+    setActorDebug(cachedLocalActorName, "api-current-user");
+    return { actorName: cachedLocalActorName, fallbackReason: "api-current-user" };
+  }
+
+  const currentSessionName = getSessionUserName(currentSession);
+  if (isUsableDisplayName(currentSessionName)) {
+    cachedLocalActorName = currentSessionName;
+    setActorDebug(cachedLocalActorName, "current-session");
+    return { actorName: cachedLocalActorName, fallbackReason: "current-session" };
+  }
+
+  const matchingSessionName = sessions
+    .filter(matchesCurrentUser)
+    .map(getSessionUserName)
+    .find(isUsableDisplayName);
+  if (matchingSessionName) {
+    cachedLocalActorName = matchingSessionName;
+    setActorDebug(cachedLocalActorName, "matching-session");
+    return { actorName: cachedLocalActorName, fallbackReason: "matching-session" };
+  }
+
+  if (isUsableDisplayName(cachedLocalActorName)) {
+    setActorDebug(cachedLocalActorName, "cached-local-user");
+    return { actorName: cachedLocalActorName, fallbackReason: "cached-local-user" };
+  }
+
+  setActorDebug("Someone", "missing-local-user");
+  return { actorName: "Someone", fallbackReason: "missing-local-user" };
 }
 
 function getCurrentDeviceId(): string {
@@ -399,12 +669,63 @@ function extractParticipantsFromGroups(groups: any[]): string[] {
   return participants;
 }
 
+function getEventPollIntervalMs(): number {
+  return isDrawerOpen() && currentSyncPlayContext.inGroup && currentSyncPlayContext.groupId
+    ? refreshIntervalMs
+    : slowPollIntervalMs;
+}
+
+async function refreshEventsImmediately(): Promise<void> {
+  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+    return;
+  }
+
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.lastImmediateRefreshAt = new Date().toISOString();
+  }
+  await fetchChatEvents(false);
+}
+
+async function resolveEventPostContext(): Promise<{ senderSessionId: string; groupId: string; participants: string[]; userName: string } | null> {
+  const sessions = await fetchSessions();
+  const groups = normalizeGroupsResponse(await fetchJson("SyncPlay/List"));
+  const currentSession = getCurrentSession(sessions);
+  cachedCurrentSessionIds = getCurrentSessionIds(sessions);
+  const groupIds = getGroupIdsForCurrentUserSessions(sessions);
+  const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
+  const relevantGroups = groups.filter((group) => groupsContainCurrentUser([group], sessions));
+  const groupsForSend = groupsBySessionGroupIds.length > 0 ? groupsBySessionGroupIds : (relevantGroups.length > 0 ? relevantGroups : (groups.length === 1 ? [groups[0]] : []));
+  const participants = extractParticipantsFromGroups(groupsForSend.length > 0 ? groupsForSend : groups);
+  const preferredGroupId = groupIds.length > 0 ? groupIds[0] : resolveSyncPlayGroupId(groupsForSend[0] || groups[0]);
+
+  if (!preferredGroupId) {
+    return null;
+  }
+
+  const actor = resolveLocalActorName(sessions, currentSession);
+  return {
+    senderSessionId: currentSession && currentSession.Id,
+    groupId: preferredGroupId,
+    participants,
+    userName: actor.actorName
+  };
+}
+
+function secondsToTicks(positionSeconds: number | undefined): number | undefined {
+  if (positionSeconds === undefined || !Number.isFinite(positionSeconds)) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.round(positionSeconds * 10000000));
+}
+
 async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
   if (!window.ApiClient) {
     return { inGroup: false, groupId: "", groupName: "", unavailable: true };
   }
 
   const sessions = await fetchSessions();
+  cachedCurrentSessionIds = getCurrentSessionIds(sessions);
   const matchingUserSessions = sessions.filter(matchesCurrentUser);
   if (matchingUserSessions.length === 0) {
     return { inGroup: false, groupId: "", groupName: "", unavailable: false };
@@ -460,7 +781,19 @@ async function refreshSyncPlayState(): Promise<void> {
 }
 
 export async function pollJellyChat(): Promise<void> {
+  const now = Date.now();
+  const pollIntervalMs = getEventPollIntervalMs();
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.eventPollIntervalMs = pollIntervalMs;
+  }
+
+  if (lastPollStartedAt > 0 && now - lastPollStartedAt < pollIntervalMs) {
+    return;
+  }
+
+  lastPollStartedAt = now;
   await refreshSyncPlayState();
+  scanPlaybackTarget();
   if (currentSyncPlayContext.inGroup && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
     await fetchChatEvents(false);
   }
@@ -558,20 +891,35 @@ export const actions: ChatActions = {
     sendInProgress = true;
     emit();
     try {
-      const sessions = await fetchSessions();
-      const groups = normalizeGroupsResponse(await fetchJson("SyncPlay/List"));
-      const currentSession = getCurrentSession(sessions);
-      const groupIds = getGroupIdsForCurrentUserSessions(sessions);
-      const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
-      const relevantGroups = groups.filter((group) => groupsContainCurrentUser([group], sessions));
-      const groupsForSend = groupsBySessionGroupIds.length > 0 ? groupsBySessionGroupIds : (relevantGroups.length > 0 ? relevantGroups : (groups.length === 1 ? [groups[0]] : []));
-      const participants = extractParticipantsFromGroups(groupsForSend.length > 0 ? groupsForSend : groups);
-      const preferredGroupId = groupIds.length > 0 ? groupIds[0] : resolveSyncPlayGroupId(groupsForSend[0] || groups[0]);
+      const postContext = await resolveEventPostContext();
+      if (!postContext) {
+        logDebug("Send blocked because no active SyncPlay group could be resolved.");
+        return false;
+      }
+
+      const clientEventId = createClientEventId();
+      localClientEventIds.add(clientEventId);
+      const optimisticEvent = createRoomEvent({
+        id: "optimistic-" + clientEventId,
+        type: "chat.message",
+        groupId: postContext.groupId,
+        userName: postContext.userName,
+        clientEventId,
+        text: trimmedText,
+        optimistic: true
+      });
+      mergeHistoryEvents([optimisticEvent]);
+      if (window.JellyChatDebug) {
+        window.JellyChatDebug.lastOptimisticClientEventId = clientEventId;
+        window.JellyChatDebug.lastOptimisticActorName = optimisticEvent.userName;
+      }
+
       const result = await postChatMessage({
         text: trimmedText,
-        senderSessionId: currentSession && currentSession.Id,
-        groupId: preferredGroupId,
-        participants
+        senderSessionId: postContext.senderSessionId,
+        groupId: postContext.groupId,
+        participants: postContext.participants,
+        clientEventId
       });
 
       if (window.JellyChatDebug) {
@@ -579,7 +927,21 @@ export const actions: ChatActions = {
       }
 
       if (result && result.id) {
-        mergeHistoryMessages([result]);
+        mergeHistoryEvents([{
+          ...createRoomEvent({
+            id: result.id,
+            type: "chat.message",
+            groupId: result.groupId,
+            userName: result.userName,
+            clientEventId,
+            text: result.text
+          }),
+          sequence: result.sequence,
+          userId: result.userId,
+          createdAtUtc: result.createdAtUtc,
+          optimistic: false
+        }]);
+        void refreshEventsImmediately();
         clearComposerInput();
         focusComposer("send-success");
         return true;
@@ -602,6 +964,72 @@ export const actions: ChatActions = {
     }
   }
 };
+
+export async function postLocalPlaybackEvent(request: PlaybackPostRequest): Promise<boolean> {
+  if (!currentSyncPlayContext.inGroup) {
+    return false;
+  }
+
+  try {
+    const postContext = await resolveEventPostContext();
+    if (!postContext) {
+      logDebug("Playback event blocked because no active SyncPlay group could be resolved.");
+      return false;
+    }
+
+    const clientEventId = createClientEventId();
+    localClientEventIds.add(clientEventId);
+    const fromPositionTicks = secondsToTicks(request.fromSeconds);
+    const toPositionTicks = secondsToTicks(request.positionSeconds);
+    const optimisticEvent = createRoomEvent({
+      id: "optimistic-" + clientEventId,
+      type: request.type,
+      groupId: postContext.groupId,
+      userName: postContext.userName,
+      clientEventId,
+      fromPositionTicks,
+      toPositionTicks,
+      itemId: request.itemId,
+      itemName: request.itemName,
+      optimistic: true
+    });
+    mergeHistoryEvents([optimisticEvent]);
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.lastOptimisticClientEventId = clientEventId;
+      window.JellyChatDebug.lastOptimisticActorName = optimisticEvent.userName;
+    }
+
+    const result = await postPlaybackEvent({
+      type: request.type,
+      senderSessionId: postContext.senderSessionId,
+      groupId: postContext.groupId,
+      participants: postContext.participants,
+      fromPositionTicks,
+      toPositionTicks,
+      itemId: request.itemId,
+      itemName: request.itemName,
+      clientEventId
+    });
+
+    if (result && result.id) {
+      if (window.JellyChatDebug) {
+        const now = new Date().toISOString();
+        window.JellyChatDebug.lastEventPostAt = now;
+        window.JellyChatDebug.lastPlaybackEventPostAt = now;
+        window.JellyChatDebug.lastPlaybackEventType = request.type;
+        window.JellyChatDebug.playbackEventCount = Number(window.JellyChatDebug.playbackEventCount || 0) + 1;
+      }
+      mergeHistoryEvents([result]);
+      void refreshEventsImmediately();
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    logDebug("Failed to send playback event", err);
+    return false;
+  }
+}
 
 export function installRouteWatcher(): void {
   if (window.__JELLYCHAT_HISTORY_PATCHED__) return;
@@ -639,6 +1067,7 @@ function bindEvent(target: EventTarget | null, type: string, handler: EventListe
 export function startRuntime(): void {
   window.__jellyChatLoaded = true;
   installRouteWatcher();
+  installPlaybackActionLogging(postLocalPlaybackEvent);
   updateLayout("start");
   pollJellyChat();
 
@@ -662,19 +1091,23 @@ export function startRuntime(): void {
     bindEvent(window, "resize", () => scheduleLayoutUpdate("resize"));
     bindEvent(document, "fullscreenchange", () => {
       showFloatingButton("fullscreenchange");
+      scanPlaybackTarget();
       updateLayout("fullscreenchange");
       if (isDrawerOpen()) focusComposer("fullscreenchange");
     });
     bindEvent(window, "hashchange", () => {
       showFloatingButton("hashchange");
+      scanPlaybackTarget();
       scheduleLayoutUpdate("hashchange");
     });
     bindEvent(window, "popstate", () => {
       showFloatingButton("popstate");
+      scanPlaybackTarget();
       scheduleLayoutUpdate("popstate");
     });
     bindEvent(window, "jellychat-routechange", () => {
       showFloatingButton("routechange");
+      scanPlaybackTarget();
       scheduleLayoutUpdate("routechange");
     });
     window.__JELLYCHAT_LISTENERS_BOUND__ = true;

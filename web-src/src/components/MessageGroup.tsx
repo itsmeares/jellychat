@@ -14,7 +14,7 @@ export function MessageGroup({ group }: Props) {
       </div>
       <div className="jellyChatMessageStack">
         {group.messages.map((message) => (
-          <div key={message.id} className="jellyChatMessage" data-jellychat-message-key={message.id}>
+          <div key={message.eventKey} className="jellyChatMessage" data-jellychat-message-key={message.eventKey}>
             <div className="jellyChatMessageBody">{message.text}</div>
           </div>
         ))}
