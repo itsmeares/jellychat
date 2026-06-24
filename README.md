@@ -86,12 +86,15 @@ From the repository root, publish the plugin:
 dotnet publish .\Jellyfin.Plugin.JellyChat\Jellyfin.Plugin.JellyChat.csproj -c Release
 ```
 
-Copy the publish output into a Jellyfin plugin folder:
+Clean the old plugin and copy the publish output into a Jellyfin plugin folder:
 
 ```powershell
 $pluginFolder = "C:\ProgramData\Jellyfin\Server\plugins\JellyChat"
-New-Item -ItemType Directory -Force -Path $pluginFolder
-Copy-Item -Recurse -Force .\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish\* $pluginFolder
+$publishFolder = ".\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish"
+
+Remove-Item $pluginFolder -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $pluginFolder | Out-Null
+Copy-Item "$publishFolder\*" $pluginFolder -Recurse -Force
 ```
 
 Restart Jellyfin after copying the files.
@@ -100,8 +103,11 @@ For direct installs that use the local app data Jellyfin path instead:
 
 ```powershell
 $pluginFolder = "$env:LOCALAPPDATA\jellyfin\plugins\JellyChat"
-New-Item -ItemType Directory -Force -Path $pluginFolder
-Copy-Item -Recurse -Force .\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish\* $pluginFolder
+$publishFolder = ".\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish"
+
+Remove-Item $pluginFolder -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $pluginFolder | Out-Null
+Copy-Item "$publishFolder\*" $pluginFolder -Recurse -Force
 ```
 
 Use the plugin directory for your Jellyfin server data path.
