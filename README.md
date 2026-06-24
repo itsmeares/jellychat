@@ -183,6 +183,14 @@ Create a GitHub release tagged `v0.2.0` and attach `Jellyfin.Plugin.JellyChat_0.
   - Refresh or reopen the drawer to force an event poll.
   - Check the browser console for `[JellyChat]` logs.
 
+## Acknowledgements
+
+JellyChat started as a fork of [AbhayVAshokan/jellyfin-syncplay-chat](https://github.com/AbhayVAshokan/jellyfin-syncplay-chat), the original Syncplay Chat plugin for Jellyfin.
+
+This project has since been renamed, refactored, and extended with a plugin-owned room event backend, a React/Vite injected frontend, JellyChat internal plugin identity, and additional Jellyfin web layout work.
+
+Thanks to the original Syncplay Chat project for providing the starting point.
+
 ## License
 
 This repository includes a GPL-3.0 license file. If GPL-3.0 terms apply to your distribution, distribute JellyChat under GPL-3.0 and preserve the required notices.
