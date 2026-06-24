@@ -393,6 +393,28 @@ body.jellychat-mobile #jellyChatDrawer {
   line-height: 1.35rem;
 }
 
+.jellyChatPlaybackEvent {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0.7rem 0;
+  color: #aeb8c6;
+  font-size: 0.78rem;
+  line-height: 1.15rem;
+  text-align: center;
+}
+
+.jellyChatPlaybackEventText {
+  overflow-wrap: anywhere;
+}
+
+.jellyChatPlaybackEventTime {
+  flex: 0 0 auto;
+  color: #7f8a98;
+  font-size: 0.72rem;
+}
+
 #jellyChatForm {
   display: flex;
   gap: 0.55rem;

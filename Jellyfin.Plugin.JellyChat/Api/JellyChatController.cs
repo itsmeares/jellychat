@@ -24,6 +24,7 @@ public class JellyChatController : ControllerBase
 {
     private const string ChatMessageEventType = "chat.message";
     private const string ReactionEmojiEventType = "reaction.emoji";
+    private const string PlaybackStartEventType = "playback.start";
     private const string PlaybackPlayEventType = "playback.play";
     private const string PlaybackPauseEventType = "playback.pause";
     private const string PlaybackSeekEventType = "playback.seek";
@@ -192,6 +193,9 @@ public class JellyChatController : ControllerBase
                 return TryApplyTextEvent(request, roomEvent, "Text is required.", out error);
             case ReactionEmojiEventType:
                 return TryApplyReactionEvent(request, roomEvent, out error);
+            case PlaybackStartEventType:
+                ApplyPlaybackEvent(request, roomEvent, "start", includeSeekTarget: false);
+                return true;
             case PlaybackPlayEventType:
                 ApplyPlaybackEvent(request, roomEvent, "play", includeSeekTarget: false);
                 return true;
