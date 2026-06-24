@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { ChatApp } from "./components/ChatApp";
-import { getActiveMountHost, updateLayout } from "./runtime/layout";
+import { getActiveMountHost, getDrawerSide, updateLayout } from "./runtime/layout";
 import { cleanupDuplicateRoots, countDebugNodes, recordError, rootId, waitForStylesheet } from "./runtime/util";
 import { startRuntime } from "./runtime/store";
 import "./styles.css";
@@ -35,14 +35,46 @@ function initializeDebug(): void {
     lastGroupedAt: null,
     layoutMode: "normal-docked",
     isVideoRoute: false,
+    videoRoute: false,
     isFullscreen: false,
     drawerOpen: false,
+    drawerSide: getDrawerSide(),
     triggerPlacement: "normal",
     drawerWidth: 340,
+    leftInset: 0,
+    rightInset: 0,
+    layoutTargetsFound: false,
+    contentInsetApplied: false,
+    headerControlsInsetApplied: false,
+    playerInsetApplied: false,
+    playerSurfaceInsetApplied: false,
+    playerControlsInsetApplied: false,
+    playerProgressInsetApplied: false,
+    playerSubtitlesInsetApplied: false,
+    subtitleElementFound: false,
+    controlsVisibilitySource: "fallback-timer",
+    lastControlsVisibleAt: null,
+    lastControlsHiddenAt: null,
     fullscreenPlayerSurfaceSelector: "",
     fullscreenPlayerSurfaceTag: "",
     fullscreenPlayerSurfaceId: "",
     fullscreenPlayerSurfaceClass: "",
+    headerControlsTargetSelector: "",
+    headerControlsTargetTag: "",
+    headerControlsTargetId: "",
+    headerControlsTargetClass: "",
+    playerControlsTargetSelector: "",
+    playerControlsTargetTag: "",
+    playerControlsTargetId: "",
+    playerControlsTargetClass: "",
+    playerProgressTargetSelector: "",
+    playerProgressTargetTag: "",
+    playerProgressTargetId: "",
+    playerProgressTargetClass: "",
+    playerSubtitlesTargetSelector: "",
+    playerSubtitlesTargetTag: "",
+    playerSubtitlesTargetId: "",
+    playerSubtitlesTargetClass: "",
     videoReservedWidth: 0,
     videoElementFound: false,
     controlsElementFound: false,
@@ -59,6 +91,8 @@ function initializeDebug(): void {
     rootMoveCount: 0,
     lastFullscreenChangeAt: null,
     controlsOverlapAvoided: false,
+    controlsInsetApplied: false,
+    floatingButtonAutoHidden: false,
     lastError: null
   };
 }

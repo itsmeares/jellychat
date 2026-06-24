@@ -42,8 +42,11 @@ export type MessageGroupModel = {
   messages: ChatMessage[];
 };
 
+export type DrawerSide = "right" | "left";
+
 export type ChatState = {
   drawerOpen: boolean;
+  drawerSide: DrawerSide;
   syncPlay: SyncPlayContext;
   messages: ChatMessage[];
   groups: MessageGroupModel[];
@@ -54,6 +57,7 @@ export type ChatActions = {
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleDrawer: () => void;
+  toggleDrawerSide: () => void;
   sendMessage: (text: string) => Promise<boolean>;
   setInputFocused: (focused: boolean) => void;
 };

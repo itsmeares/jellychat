@@ -7,6 +7,7 @@ export const floatingHostId = "jellyChatFloatingHost";
 export const drawerId = "jellyChatDrawer";
 export const titleId = "jellyChatTitle";
 export const closeButtonId = "jellyChatCloseButton";
+export const sideToggleButtonId = "jellyChatSideToggleButton";
 export const statusId = "jellyChatStatus";
 export const messagesId = "jellyChatMessages";
 export const emptyStateId = "jellyChatEmptyState";

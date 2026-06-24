@@ -2,7 +2,7 @@ import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, RoomEvent,
 import { getEvents, normalizeChatMessage, postChatMessage } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
 import { countDebugNodes, formId, groupingWindowMs, groupMessages, inputId, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
-import { getActiveMountHost, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, updateLayout } from "./layout";
+import { getActiveMountHost, getDrawerSide, handleFloatingButtonFocusChange, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, showFloatingButton, updateLayout } from "./layout";
 
 type Subscriber = (state: ChatState) => void;
 
@@ -21,6 +21,7 @@ let currentSyncPlayContext: SyncPlayContext = {
 };
 let state: ChatState = {
   drawerOpen: false,
+  drawerSide: getDrawerSide(),
   syncPlay: currentSyncPlayContext,
   messages: [],
   groups: [],
@@ -32,6 +33,7 @@ const subscribers = new Set<Subscriber>();
 function emit(): void {
   state = {
     drawerOpen: isDrawerOpen(),
+    drawerSide: getDrawerSide(),
     syncPlay: currentSyncPlayContext,
     messages: historyMessages.slice(),
     groups: groupedMessages.slice(),
@@ -538,6 +540,12 @@ export const actions: ChatActions = {
       actions.openDrawer();
     }
   },
+  toggleDrawerSide: () => {
+    const nextSide = getDrawerSide() === "right" ? "left" : "right";
+    setDrawerSide(nextSide);
+    emit();
+    updateLayout("drawer-side");
+  },
   sendMessage: async (text: string) => {
     const trimmedText = text.trim();
     if (!trimmedText || sendInProgress) return false;
@@ -646,14 +654,29 @@ export function startRuntime(): void {
     bindEvent(document, "visibilitychange", () => {
       if (!document.hidden) pollJellyChat();
     });
+    bindEvent(document, "mousemove", () => showFloatingButton("mousemove"), { passive: true });
+    bindEvent(document, "pointermove", () => showFloatingButton("pointermove"), { passive: true });
+    bindEvent(document, "touchstart", () => showFloatingButton("touchstart"), { passive: true });
+    bindEvent(document, "focusin", () => handleFloatingButtonFocusChange("focusin"));
+    bindEvent(document, "focusout", () => handleFloatingButtonFocusChange("focusout"));
     bindEvent(window, "resize", () => scheduleLayoutUpdate("resize"));
     bindEvent(document, "fullscreenchange", () => {
+      showFloatingButton("fullscreenchange");
       updateLayout("fullscreenchange");
       if (isDrawerOpen()) focusComposer("fullscreenchange");
     });
-    bindEvent(window, "hashchange", () => scheduleLayoutUpdate("hashchange"));
-    bindEvent(window, "popstate", () => scheduleLayoutUpdate("popstate"));
-    bindEvent(window, "jellychat-routechange", () => scheduleLayoutUpdate("routechange"));
+    bindEvent(window, "hashchange", () => {
+      showFloatingButton("hashchange");
+      scheduleLayoutUpdate("hashchange");
+    });
+    bindEvent(window, "popstate", () => {
+      showFloatingButton("popstate");
+      scheduleLayoutUpdate("popstate");
+    });
+    bindEvent(window, "jellychat-routechange", () => {
+      showFloatingButton("routechange");
+      scheduleLayoutUpdate("routechange");
+    });
     window.__JELLYCHAT_LISTENERS_BOUND__ = true;
   }
 }
