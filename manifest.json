@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "JellyChat v0.3.0 release. Highlights: - Adds timeline logging for playback actions so SyncPlay-related activity can appear alongside chat events. - Adds playback event parsing and grouping support in the React frontend runtime. - Preserves the existing JellyChat drawer and plugin-owned event stream release flow. Validation: - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check",
+                "targetAbi": "10.11.0.0",
+                "version": "0.3.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.3.0/Jellyfin.Plugin.JellyChat_0.3.0.zip",
+                "checksum": "d0e9cc16a211f3096a8a0ea8c0ef62b6",
+                "timestamp": "2026-06-24T23:41:24"
+            },
+            {
                 "changelog": "JellyChat v0.2.1 release. Highlights: - Polishes the drawer layout and player/fullscreen docking behavior. - Improves injected frontend layout handling around Jellyfin web containers. - Updates README install guidance and project acknowledgements. Validation: - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - GitHub Actions build workflow passed for the release-prep commit.",
                 "targetAbi": "10.11.0.0",
                 "version": "0.2.1",
