@@ -1,31 +1,27 @@
 :root {
   --jellychat-drawer-width: 340px;
+  --jellychat-content-left-inset: 0px;
+  --jellychat-content-right-inset: 0px;
+  --jellychat-content-width: calc(100% - var(--jellychat-content-left-inset) - var(--jellychat-content-right-inset));
 }
 
-body.jellychat-drawer-open.jellychat-docked:not(.jellychat-fullscreen):not(.jellychat-video-route) {
-  padding-right: var(--jellychat-drawer-width);
-  box-sizing: border-box;
-}
-
-body.jellychat-video-route.jellychat-drawer-open.jellychat-docked {
-  overflow-x: hidden;
-}
-
-html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen) .jellychat-fullscreen-player-surface {
-  width: calc(100% - var(--jellychat-drawer-width)) !important;
-  max-width: calc(100% - var(--jellychat-drawer-width)) !important;
-  min-width: 0 !important;
+.jellychat-inset-target {
   box-sizing: border-box !important;
+  min-width: 0 !important;
 }
 
-html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen) .jellychat-fullscreen-player-surface.jellychat-positioned-surface {
-  right: var(--jellychat-drawer-width) !important;
+.jellychat-inset-target.jellychat-inset-block {
+  margin-left: var(--jellychat-content-left-inset) !important;
+  margin-right: var(--jellychat-content-right-inset) !important;
+  width: var(--jellychat-content-width) !important;
+  max-width: var(--jellychat-content-width) !important;
+}
+
+.jellychat-inset-target.jellychat-inset-positioned {
+  left: var(--jellychat-content-left-inset) !important;
+  right: var(--jellychat-content-right-inset) !important;
   width: auto !important;
   max-width: none !important;
-}
-
-html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat-mobile):not(.jellychat-fullscreen) .jellychat-fullscreen-player-surface video {
-  max-width: 100% !important;
 }
 
 .jellychat-fullscreen-host {
@@ -33,26 +29,20 @@ html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat
   box-sizing: border-box;
 }
 
-.jellychat-fullscreen-host.jellychat-fullscreen-docked {
-  position: relative !important;
+.jellychat-fullscreen-player-surface {
+  background: #000 !important;
   overflow: hidden !important;
 }
 
-.jellychat-fullscreen-host.jellychat-fullscreen-docked .jellychat-fullscreen-player-surface {
-  width: calc(100% - var(--jellychat-drawer-width)) !important;
-  max-width: calc(100% - var(--jellychat-drawer-width)) !important;
-  min-width: 0 !important;
-  box-sizing: border-box !important;
-}
-
-.jellychat-fullscreen-host.jellychat-fullscreen-docked .jellychat-fullscreen-player-surface.jellychat-positioned-surface {
-  right: var(--jellychat-drawer-width) !important;
-  width: auto !important;
-  max-width: none !important;
-}
-
-.jellychat-fullscreen-host.jellychat-fullscreen-docked .jellychat-fullscreen-player-surface video {
+.jellychat-fullscreen-player-surface video {
   max-width: 100% !important;
+}
+
+.jellychat-player-controls-inset-surface,
+.jellychat-player-progress-inset-surface,
+.jellychat-player-subtitles-inset-surface,
+.jellychat-header-controls-inset-surface {
+  box-sizing: border-box !important;
 }
 
 #jellyChatRoot {
@@ -70,10 +60,40 @@ html.jellychat-drawer-open.jellychat-docked.jellychat-video-route:not(.jellychat
   pointer-events: none;
 }
 
+html.jellychat-drawer-left #jellyChatFloatingHost {
+  left: 1rem;
+  right: auto;
+}
+
+html.jellychat-drawer-open.jellychat-drawer-left:not(.jellychat-mobile) #jellyChatFloatingHost {
+  left: calc(var(--jellychat-drawer-width) + 0.75rem);
+  right: auto;
+}
+
+html.jellychat-drawer-open.jellychat-drawer-right:not(.jellychat-mobile) #jellyChatFloatingHost {
+  left: auto;
+  right: calc(var(--jellychat-drawer-width) + 0.75rem);
+}
+
 body.jellychat-video-route #jellyChatFloatingHost {
   top: 4.5rem;
   right: 0.75rem;
   bottom: auto;
+}
+
+html.jellychat-drawer-left body.jellychat-video-route #jellyChatFloatingHost {
+  left: 0.75rem;
+  right: auto;
+}
+
+html.jellychat-drawer-open.jellychat-drawer-left:not(.jellychat-mobile) body.jellychat-video-route #jellyChatFloatingHost {
+  left: calc(var(--jellychat-drawer-width) + 0.75rem);
+  right: auto;
+}
+
+html.jellychat-drawer-open.jellychat-drawer-right:not(.jellychat-mobile) body.jellychat-video-route #jellyChatFloatingHost {
+  left: auto;
+  right: calc(var(--jellychat-drawer-width) + 0.75rem);
 }
 
 .jellychat-fullscreen-host #jellyChatFloatingHost {
@@ -83,16 +103,47 @@ body.jellychat-video-route #jellyChatFloatingHost {
   z-index: 2147483600;
 }
 
+.jellychat-fullscreen-host.jellychat-drawer-left #jellyChatFloatingHost {
+  left: max(0.75rem, env(safe-area-inset-left)) !important;
+  right: auto !important;
+}
+
+.jellychat-fullscreen-host.jellychat-drawer-open.jellychat-drawer-left #jellyChatFloatingHost {
+  left: calc(var(--jellychat-drawer-width) + 0.75rem) !important;
+  right: auto !important;
+}
+
+.jellychat-fullscreen-host.jellychat-drawer-open.jellychat-drawer-right #jellyChatFloatingHost {
+  left: auto !important;
+  right: calc(var(--jellychat-drawer-width) + 0.75rem) !important;
+}
+
 body.jellychat-mobile #jellyChatFloatingHost {
   right: 0.75rem;
   bottom: 0.75rem;
   top: auto;
 }
 
+html.jellychat-drawer-left body.jellychat-mobile #jellyChatFloatingHost {
+  left: 0.75rem;
+  right: auto;
+}
+
 .jellychat-fullscreen-host.jellychat-mobile #jellyChatFloatingHost {
   top: max(1rem, env(safe-area-inset-top)) !important;
   right: max(0.75rem, env(safe-area-inset-right)) !important;
   bottom: auto !important;
+}
+
+.jellychat-fullscreen-host.jellychat-mobile.jellychat-drawer-left #jellyChatFloatingHost {
+  left: max(0.75rem, env(safe-area-inset-left)) !important;
+  right: auto !important;
+}
+
+html.jellychat-floating-hidden.jellychat-video-route:not(.jellychat-drawer-open) #jellyChatFloatingHost {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .jellyChatButton {
@@ -114,6 +165,11 @@ body.jellychat-mobile #jellyChatFloatingHost {
 body.jellychat-video-route .jellyChatButton,
 .jellychat-fullscreen-host .jellyChatButton {
   border-radius: 0.65rem 0 0 0.65rem;
+}
+
+html.jellychat-drawer-left body.jellychat-video-route .jellyChatButton,
+.jellychat-fullscreen-host.jellychat-drawer-left .jellyChatButton {
+  border-radius: 0 0.65rem 0.65rem 0;
 }
 
 .jellyChatButton:hover,
@@ -143,11 +199,30 @@ body.jellychat-video-route .jellyChatButton,
   border-left: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: -16px 0 28px rgba(0, 0, 0, 0.38);
   transform: translateX(105%);
+  visibility: hidden;
   transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+html.jellychat-drawer-left #jellyChatDrawer {
+  left: 0;
+  right: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 0;
+  box-shadow: 16px 0 28px rgba(0, 0, 0, 0.38);
+  transform: translateX(-105%);
+}
+
+html.jellychat-drawer-right #jellyChatDrawer {
+  left: auto;
+  right: 0;
+}
+
+html.jellychat-drawer-open #jellyChatDrawer,
+html.jellychat-drawer-left #jellyChatDrawer.is-open,
+html.jellychat-drawer-right #jellyChatDrawer.is-open,
 #jellyChatDrawer.is-open {
   transform: translateX(0);
+  visibility: visible;
 }
 
 body.jellychat-mobile #jellyChatDrawer {
@@ -166,6 +241,16 @@ body.jellychat-mobile #jellyChatDrawer {
   width: var(--jellychat-drawer-width);
 }
 
+.jellychat-fullscreen-host.jellychat-fullscreen-docked.jellychat-drawer-left #jellyChatDrawer {
+  left: 0;
+  right: auto;
+}
+
+.jellychat-fullscreen-host.jellychat-fullscreen-docked.jellychat-drawer-right #jellyChatDrawer {
+  left: auto;
+  right: 0;
+}
+
 .jellychat-fullscreen-host.jellychat-mobile #jellyChatDrawer {
   top: 0;
   bottom: max(4.75rem, env(safe-area-inset-bottom));
@@ -176,13 +261,29 @@ body.jellychat-mobile #jellyChatDrawer {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
   min-height: 3.5rem;
   padding: 0.85rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.jellyChatHeader.is-right {
+  flex-direction: row;
+}
+
+.jellyChatHeader.is-left {
+  flex-direction: row;
+}
+
+.jellyChatHeaderControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 .jellyChatHeader h2 {
   margin: 0;
+  flex: 1 1 auto;
   font-size: 1rem;
   line-height: 1.25rem;
   font-weight: 650;
@@ -190,7 +291,8 @@ body.jellychat-mobile #jellyChatDrawer {
   color: #fff;
 }
 
-#jellyChatCloseButton {
+#jellyChatCloseButton,
+#jellyChatSideToggleButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -207,9 +309,16 @@ body.jellychat-mobile #jellyChatDrawer {
 }
 
 #jellyChatCloseButton:hover,
-#jellyChatCloseButton:focus-visible {
+#jellyChatCloseButton:focus-visible,
+#jellyChatSideToggleButton:hover,
+#jellyChatSideToggleButton:focus-visible {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+}
+
+#jellyChatSideToggleButton {
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 #jellyChatStatus {
@@ -355,10 +464,6 @@ body.jellychat-mobile #jellyChatDrawer {
 }
 
 @media (max-width: 56.1875rem) {
-  body.jellychat-drawer-open.jellychat-docked {
-    padding-right: 0;
-  }
-
   #jellyChatDrawer {
     width: min(100vw, 24rem);
   }

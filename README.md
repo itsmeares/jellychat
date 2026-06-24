@@ -86,12 +86,15 @@ From the repository root, publish the plugin:
 dotnet publish .\Jellyfin.Plugin.JellyChat\Jellyfin.Plugin.JellyChat.csproj -c Release
 ```
 
-Copy the publish output into a Jellyfin plugin folder:
+Clean the old plugin and copy the publish output into a Jellyfin plugin folder:
 
 ```powershell
 $pluginFolder = "C:\ProgramData\Jellyfin\Server\plugins\JellyChat"
-New-Item -ItemType Directory -Force -Path $pluginFolder
-Copy-Item -Recurse -Force .\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish\* $pluginFolder
+$publishFolder = ".\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish"
+
+Remove-Item $pluginFolder -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $pluginFolder | Out-Null
+Copy-Item "$publishFolder\*" $pluginFolder -Recurse -Force
 ```
 
 Restart Jellyfin after copying the files.
@@ -100,8 +103,11 @@ For direct installs that use the local app data Jellyfin path instead:
 
 ```powershell
 $pluginFolder = "$env:LOCALAPPDATA\jellyfin\plugins\JellyChat"
-New-Item -ItemType Directory -Force -Path $pluginFolder
-Copy-Item -Recurse -Force .\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish\* $pluginFolder
+$publishFolder = ".\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish"
+
+Remove-Item $pluginFolder -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $pluginFolder | Out-Null
+Copy-Item "$publishFolder\*" $pluginFolder -Recurse -Force
 ```
 
 Use the plugin directory for your Jellyfin server data path.
@@ -176,6 +182,14 @@ Create a GitHub release tagged `v0.2.0` and attach `Jellyfin.Plugin.JellyChat_0.
   - Confirm both devices are in the same SyncPlay group.
   - Refresh or reopen the drawer to force an event poll.
   - Check the browser console for `[JellyChat]` logs.
+
+## Acknowledgements
+
+JellyChat started as a fork of [AbhayVAshokan/jellyfin-syncplay-chat](https://github.com/AbhayVAshokan/jellyfin-syncplay-chat), the original Syncplay Chat plugin for Jellyfin.
+
+This project has since been renamed, refactored, and extended with a plugin-owned room event backend, a React/Vite injected frontend, JellyChat internal plugin identity, and additional Jellyfin web layout work.
+
+Thanks to the original Syncplay Chat project for providing the starting point.
 
 ## License
 

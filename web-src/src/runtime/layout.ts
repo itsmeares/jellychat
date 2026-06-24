@@ -1,19 +1,91 @@
+import type { DrawerSide } from "../types";
 import { drawerId, drawerWidthPx, floatingHostId, markerClass, mobileLayoutMaxWidthPx, rootId } from "./util";
 import { countDebugNodes, logDebug } from "./util";
 
 const fullscreenSurfaceAttribute = "data-jellychat-fullscreen-surface";
 const fullscreenSurfaceClass = "jellychat-fullscreen-player-surface";
 const positionedSurfaceClass = "jellychat-positioned-surface";
+const normalContentInsetClass = "jellychat-content-inset-surface";
+const headerControlsInsetClass = "jellychat-header-controls-inset-surface";
+const playerControlsInsetClass = "jellychat-player-controls-inset-surface";
+const playerProgressInsetClass = "jellychat-player-progress-inset-surface";
+const playerSubtitlesInsetClass = "jellychat-player-subtitles-inset-surface";
+const insetTargetClass = "jellychat-inset-target";
+const blockInsetClass = "jellychat-inset-block";
+const fixedInsetClass = "jellychat-inset-positioned";
+const drawerSideStorageKey = "jellychat.drawerSide";
+const floatingHiddenClass = "jellychat-floating-hidden";
+const floatingIdleDelayMs = 1200;
+const emptyInsetValue = "0px";
 
 let normalMountHost: HTMLElement | null = null;
 let lastFullscreenHost: HTMLElement | null = null;
 let lastLayoutMode = "";
 let layoutResizeTimer = 0;
+let floatingButtonTimer = 0;
 let fullscreenLayoutSurfaces: Element[] = [];
+let normalContentInsetSurfaces: Element[] = [];
+let headerControlsInsetSurfaces: Element[] = [];
+let playerControlsInsetSurfaces: Element[] = [];
+let playerProgressInsetSurfaces: Element[] = [];
+let playerSubtitlesInsetSurfaces: Element[] = [];
 let lastFullscreenLayoutSignature = "";
+const styleSnapshots = new WeakMap<HTMLElement, string>();
+let controlsVisibilityObserver: MutationObserver | null = null;
+let observedControlsElement: Element | null = null;
+let observedControlsTargets: Element[] = [];
+let floatingPointerInside = false;
+
+type JellyChatLayoutRect = {
+  leftInset: number;
+  rightInset: number;
+  drawerWidth: number;
+  drawerSide: DrawerSide;
+  drawerOpen: boolean;
+  isVideoRoute: boolean;
+  isFullscreen: boolean;
+};
+
+type JellyChatVisibleRect = {
+  left: string;
+  right: string;
+  width: string;
+};
 
 function debug(): Record<string, unknown> {
   return window.JellyChatDebug || {};
+}
+
+export function getDrawerSide(): DrawerSide {
+  try {
+    const stored = window.localStorage?.getItem(drawerSideStorageKey);
+    return stored === "left" ? "left" : "right";
+  } catch {
+    return "right";
+  }
+}
+
+export function setDrawerSide(side: DrawerSide): void {
+  try {
+    window.localStorage?.setItem(drawerSideStorageKey, side);
+  } catch {
+    // Storage can be unavailable in locked-down WebViews.
+  }
+}
+
+export function getJellyChatLayoutRect(): JellyChatLayoutRect {
+  const drawerOpen = isDrawerOpen();
+  const drawerSide = getDrawerSide();
+  const drawerWidth = drawerOpen ? drawerWidthPx : 0;
+  return {
+    leftInset: drawerOpen && drawerSide === "left" ? drawerWidth : 0,
+    rightInset: drawerOpen && drawerSide === "right" ? drawerWidth : 0,
+    drawerWidth,
+    drawerSide,
+    drawerOpen,
+    isVideoRoute: detectVideoRoute(),
+    isFullscreen: !!getFullscreenHost()
+  };
 }
 
 function tag(element: Element | null): string {
@@ -31,6 +103,18 @@ function elementId(element: Element | null): string {
 function setElementClass(element: Element | null, name: string, isEnabled: boolean): void {
   if (element && element.classList) {
     element.classList.toggle(name, isEnabled);
+  }
+}
+
+function setDebugError(message: string): void {
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.lastError = message;
+  }
+}
+
+function clearDebugError(prefix: string): void {
+  if (window.JellyChatDebug && typeof window.JellyChatDebug.lastError === "string" && window.JellyChatDebug.lastError.indexOf(prefix) === 0) {
+    window.JellyChatDebug.lastError = null;
   }
 }
 
@@ -60,7 +144,9 @@ function clearFullscreenHostClasses(element: Element | null): void {
     "jellychat-fullscreen-docked",
     "jellychat-drawer-open",
     "jellychat-docked",
-    "jellychat-mobile"
+    "jellychat-mobile",
+    "jellychat-drawer-left",
+    "jellychat-drawer-right"
   );
   (element as HTMLElement).style.removeProperty("--jellychat-drawer-width");
 }
@@ -97,6 +183,14 @@ function isSkippableSurfaceElement(element: Element | null): boolean {
   return ["script", "style", "link", "button", "input", "textarea", "select", "svg"].includes(name);
 }
 
+function elementLooksLikeAppShellRoot(element: Element | null): boolean {
+  if (!element) return false;
+  const id = elementId(element);
+  const label = (className(element) + " " + id).toLowerCase();
+  return id === "reactRoot"
+    || /\blibrarydocument\b|\bskinbody\b|\bmainanimatedpages\b|\bdashboarddocument\b/.test(label);
+}
+
 function elementMatches(element: Element | null, selector: string): boolean {
   if (!element || typeof element.matches !== "function") {
     return false;
@@ -121,7 +215,7 @@ function elementLooksLikeTopControllerOnly(element: Element | null): boolean {
 }
 
 function elementLooksLikePlayerSurface(element: Element | null): boolean {
-  if (!element || isSkippableSurfaceElement(element) || elementLooksLikeTopControllerOnly(element)) {
+  if (!element || isSkippableSurfaceElement(element) || elementLooksLikeAppShellRoot(element) || elementLooksLikeTopControllerOnly(element)) {
     return false;
   }
 
@@ -325,72 +419,426 @@ function directChildUnderHost(element: Element | null, host: Element): Element |
   return current && current.parentElement === host ? current : null;
 }
 
-function usableSurface(element: Element | null, host: Element, video: Element | null, controls: Element | null): boolean {
+function usableSurface(element: Element | null, host: Element, video: Element | null, controls: Element | null, subtitles: Element | null): boolean {
   if (!element || element === host || isSkippableSurfaceElement(element) || tag(element) === "video") return false;
+  if (elementLooksLikeAppShellRoot(element)) return false;
   if (elementLooksLikeTopControllerOnly(element)) return false;
   if (video && !element.contains(video)) return false;
   if (controls && !element.contains(controls)) return false;
+  if (subtitles && !element.contains(subtitles)) return false;
   return true;
 }
 
-function fallbackSurfaces(host: Element, video: Element | null, controls: Element | null): Element[] {
-  const direct = uniqueElements([directChildUnderHost(video, host), directChildUnderHost(controls, host)])
-    .filter((element) => !isSkippableSurfaceElement(element) && !elementLooksLikeTopControllerOnly(element));
-  if (direct.length > 0) return direct;
-
-  const children = Array.from(host.children).filter((element) => !isSkippableSurfaceElement(element) && !elementLooksLikeTopControllerOnly(element));
-  const likely = children.filter(elementLooksLikePlayerSurface);
-  if (likely.length > 0) return likely;
-  if (children.length === 1) return children;
-  return children.filter((element) => {
-    const elementRect = rect(element);
-    return !!(elementRect && elementRect.width > 160 && elementRect.height > 120);
-  });
+function playerRootSelectors(): string[] {
+  return [
+    ".videoPlayerPage",
+    ".htmlVideoPlayer",
+    ".videoPlayer",
+    ".videoPlayerContainer",
+    ".videoOsd",
+    ".videoOsdContainer",
+    ".videoOsdBottom",
+    ".subtitleSync",
+    ".itemVideo",
+    ".nowPlayingPage",
+    ".nowPlayingBar",
+    '[class*="videoPlayerPage"]',
+    '[class*="VideoPlayerPage"]',
+    '[class*="htmlVideoPlayer"]',
+    '[class*="videoPlayer"]',
+    '[class*="VideoPlayer"]',
+    '[class*="videoOsd"]',
+    '[class*="VideoOsd"]',
+    '[class*="subtitle"]',
+    '[class*="Subtitle"]',
+    '[class*="caption"]',
+    '[class*="Caption"]',
+    '[class*="nowPlaying"]',
+    '[class*="NowPlaying"]'
+  ];
 }
 
-function inspectPlayerSurface(host: Element): { video: Element | null; controls: Element | null; surface: Element | null; fallback: Element[] } {
+function subtitleSelectors(): string[] {
+  return [
+    ".subtitleSync",
+    ".subtitleContainer",
+    ".videoSubtitles",
+    ".captionContainer",
+    '[class*="subtitle"]',
+    '[class*="Subtitle"]',
+    '[class*="caption"]',
+    '[class*="Caption"]',
+    '[class*="subtitles"]',
+    '[class*="Subtitles"]',
+    "track"
+  ];
+}
+
+function findSubtitleElement(host: Element): Element | null {
+  const candidates = querySelectorList(host, subtitleSelectors()).filter((element) => {
+    if (tag(element) === "track") return false;
+    if (!isVisibleLayoutElement(element)) return false;
+    const elementRect = rect(element);
+    const hostRect = rect(host);
+    return !!(elementRect && hostRect
+      && elementRect.width > 80
+      && elementRect.height > 8
+      && elementRect.top >= hostRect.top + hostRect.height * 0.35);
+  });
+
+  return candidates.sort((first, second) => elementArea(second) - elementArea(first))[0] || null;
+}
+
+function elementArea(element: Element | null): number {
+  const elementRect = rect(element);
+  return elementRect ? elementRect.width * elementRect.height : 0;
+}
+
+function playerRootScore(element: Element, host: Element, video: Element | null, controls: Element | null, subtitles: Element | null): number {
+  if (element === host || element === document.body || tag(element) === "html" || tag(element) === "body") {
+    return -1000;
+  }
+
+  const label = (className(element) + " " + elementId(element)).toLowerCase();
+  let score = 0;
+  if (/htmlvideoplayer|video-player|videoplayer|video/.test(label)) score += 40;
+  if (/player|nowplaying/.test(label)) score += 24;
+  if (/osd/.test(label)) score += 16;
+  if (/page|view|container|content/.test(label)) score += 8;
+  if (/button|progress|slider|volume|favorite|settings|fullscreen/.test(label)) score -= 30;
+  if (/caption|subtitle/.test(label)) score -= 18;
+
+  const elementRect = rect(element);
+  const hostRect = rect(host);
+  const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+  if (elementRect) {
+    if (elementRect.width > window.innerWidth * 0.55) score += 12;
+    if (elementRect.height > window.innerHeight * 0.55) score += 12;
+    if (elementArea(element) > viewportArea * 0.45) score += 10;
+  }
+  if (elementRect && hostRect) {
+    const nearFullWidth = elementRect.width >= hostRect.width * 0.72;
+    const nearFullHeight = elementRect.height >= hostRect.height * 0.82;
+    const reachesTop = elementRect.top <= hostRect.top + Math.max(12, hostRect.height * 0.03);
+    const reachesBottom = elementRect.bottom >= hostRect.bottom - Math.max(16, hostRect.height * 0.05);
+    if (nearFullWidth) score += 20;
+    if (nearFullHeight) score += 34;
+    if (reachesTop && reachesBottom) score += 30;
+    if (nearFullWidth && nearFullHeight && reachesTop && reachesBottom) score += 42;
+  }
+
+  if (video && element.contains(video)) score += 14;
+  if (controls && element.contains(controls)) score += 34;
+  if (subtitles && element.contains(subtitles)) score += 28;
+  if (element.querySelector(".videoOsdBottom,[class*=\"videoOsdBottom\"],[class*=\"VideoOsdBottom\"]")) score += 24;
+  if (element.querySelector(".subtitleSync,.subtitleContainer,.captionContainer,[class*=\"subtitle\"],[class*=\"Subtitle\"],[class*=\"caption\"],[class*=\"Caption\"]")) score += 18;
+
+  return score;
+}
+
+function ancestorsUntilHost(element: Element | null, host: Element): Element[] {
+  const ancestors: Element[] = [];
+  let current = element?.parentElement || null;
+  while (current && current.nodeType === 1) {
+    if (current === host) break;
+    ancestors.push(current);
+    current = current.parentElement;
+  }
+  return ancestors;
+}
+
+function commonAncestor(elements: Array<Element | null>, host: Element): Element | null {
+  const anchors = uniqueElements(elements).filter((element) => host.contains(element));
+  if (anchors.length === 0) return null;
+
+  let current: Element | null = anchors[0];
+  while (current && current !== host) {
+    if (anchors.every((element) => current?.contains(element))) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function findPlayerRootSurface(host: Element, video: Element | null, controls: Element | null, subtitles: Element | null): Element | null {
+  if (!video) return null;
+  const playerAnchors = uniqueElements([video, controls, subtitles]);
+  const candidates = uniqueElements([
+    commonAncestor(playerAnchors, host),
+    lowestCommonAncestor(video, controls, host),
+    lowestCommonAncestor(video, subtitles, host),
+    ...playerAnchors.map((anchor) => directChildUnderHost(anchor, host)),
+    ...ancestorsUntilHost(video, host),
+    ...ancestorsUntilHost(controls, host),
+    ...ancestorsUntilHost(subtitles, host),
+    ...querySelectorList(host, playerRootSelectors())
+  ]).filter((element) => {
+    if (!usableSurface(element, host, video, controls, subtitles)) return false;
+    if (!isVisibleLayoutElement(element)) return false;
+    const score = playerRootScore(element, host, video, controls, subtitles);
+    return score > -100;
+  });
+
+  return candidates.sort((first, second) => {
+    const scoreDelta = playerRootScore(second, host, video, controls, subtitles) - playerRootScore(first, host, video, controls, subtitles);
+    return scoreDelta !== 0 ? scoreDelta : elementArea(second) - elementArea(first);
+  })[0] || null;
+}
+
+function fallbackSurfaces(host: Element, video: Element | null, controls: Element | null, subtitles: Element | null): Element[] {
+  const playerRoot = findPlayerRootSurface(host, video, controls, subtitles);
+  if (playerRoot) return [playerRoot];
+
+  const direct = uniqueElements([directChildUnderHost(video, host), directChildUnderHost(controls, host), directChildUnderHost(subtitles, host)])
+    .filter((element) => !isSkippableSurfaceElement(element) && !elementLooksLikeAppShellRoot(element) && !elementLooksLikeTopControllerOnly(element));
+  if (direct.length > 0) return filterTopLevelTargets(direct);
+
+  return filterTopLevelTargets(querySelectorList(host, playerRootSelectors())
+    .filter((element) => !elementLooksLikeAppShellRoot(element) && !elementLooksLikeTopControllerOnly(element) && isVisibleLayoutElement(element)));
+}
+
+function inspectPlayerSurface(host: Element): { video: Element | null; controls: Element | null; subtitles: Element | null; surface: Element | null; fallback: Element[] } {
   const video = findVideoElement(host);
   const controls = findControlsElement(host);
+  const subtitles = findSubtitleElement(host);
   let surface: Element | null = null;
 
-  if (video && controls) {
-    const common = lowestCommonAncestor(video, controls, host);
-    if (usableSurface(common, host, video, controls)) {
-      surface = common;
-    }
+  if (video) {
+    surface = findPlayerRootSurface(host, video, controls, subtitles);
   }
 
   return {
     video,
     controls,
+    subtitles,
     surface,
-    fallback: surface ? [] : fallbackSurfaces(host, video, controls)
+    fallback: surface ? [] : fallbackSurfaces(host, video, controls, subtitles)
   };
 }
 
-function markSurface(element: Element): void {
+function visibleContentRect(layoutRect: JellyChatLayoutRect): JellyChatVisibleRect {
+  const left = layoutRect.leftInset > 0 ? layoutRect.leftInset + "px" : emptyInsetValue;
+  const right = layoutRect.rightInset > 0 ? layoutRect.rightInset + "px" : emptyInsetValue;
+  return {
+    left,
+    right,
+    width: "calc(100% - " + left + " - " + right + ")"
+  };
+}
+
+function restoreInsetTarget(element: Element): void {
+  const htmlElement = element as HTMLElement;
+  if (styleSnapshots.has(htmlElement)) {
+    htmlElement.style.cssText = styleSnapshots.get(htmlElement) || "";
+    styleSnapshots.delete(htmlElement);
+  } else {
+    htmlElement.style.removeProperty("--jellychat-content-left-inset");
+    htmlElement.style.removeProperty("--jellychat-content-right-inset");
+    htmlElement.style.removeProperty("--jellychat-content-width");
+  }
+
+  element.classList.remove(
+    fullscreenSurfaceClass,
+    normalContentInsetClass,
+    headerControlsInsetClass,
+    playerControlsInsetClass,
+    playerProgressInsetClass,
+    playerSubtitlesInsetClass,
+    insetTargetClass,
+    blockInsetClass,
+    fixedInsetClass,
+    positionedSurfaceClass
+  );
+  element.removeAttribute(fullscreenSurfaceAttribute);
+}
+
+function restoreInsetTargets(targets: Element[], selector: string): void {
+  const known = targets.slice();
+  document.querySelectorAll(selector).forEach((element) => {
+    if (!known.includes(element)) known.push(element);
+  });
+
+  known.forEach(restoreInsetTarget);
+}
+
+function applyInsetTarget(element: Element, layoutRect: JellyChatLayoutRect, markerClassName: string): void {
   if (isWithinJellyChatElement(element)) {
     return;
   }
 
-  element.setAttribute(fullscreenSurfaceAttribute, "true");
-  element.classList.add(fullscreenSurfaceClass);
+  const htmlElement = element as HTMLElement;
+  if (!styleSnapshots.has(htmlElement)) {
+    styleSnapshots.set(htmlElement, htmlElement.style.cssText);
+  }
+
+  const visibleRect = visibleContentRect(layoutRect);
+  htmlElement.style.setProperty("--jellychat-content-left-inset", visibleRect.left);
+  htmlElement.style.setProperty("--jellychat-content-right-inset", visibleRect.right);
+  htmlElement.style.setProperty("--jellychat-content-width", visibleRect.width);
+  element.classList.add(markerClassName, insetTargetClass);
+  if (markerClassName === fullscreenSurfaceClass) {
+    element.setAttribute(fullscreenSurfaceAttribute, "true");
+  }
+
   const position = window.getComputedStyle ? window.getComputedStyle(element).position : "";
-  element.classList.toggle(positionedSurfaceClass, ["absolute", "fixed", "sticky"].includes(position));
+  const positioned = ["absolute", "fixed", "sticky"].includes(position);
+  element.classList.toggle(positionedSurfaceClass, positioned);
+  element.classList.toggle(fixedInsetClass, positioned);
+  element.classList.toggle(blockInsetClass, !positioned);
 }
 
 function clearDockedLayout(): void {
-  const knownSurfaces = fullscreenLayoutSurfaces.slice();
-  document.querySelectorAll("[" + fullscreenSurfaceAttribute + "], ." + fullscreenSurfaceClass).forEach((element) => {
-    if (!knownSurfaces.includes(element)) knownSurfaces.push(element);
-  });
-
-  knownSurfaces.forEach((element) => {
-    element.removeAttribute(fullscreenSurfaceAttribute);
-    element.classList.remove(fullscreenSurfaceClass, positionedSurfaceClass);
-  });
-
+  restoreInsetTargets(fullscreenLayoutSurfaces, "[" + fullscreenSurfaceAttribute + "], ." + fullscreenSurfaceClass);
   fullscreenLayoutSurfaces = [];
+}
+
+function clearNormalContentInset(): void {
+  restoreInsetTargets(normalContentInsetSurfaces, "." + normalContentInsetClass);
+  normalContentInsetSurfaces = [];
+}
+
+function clearHeaderControlsInset(): void {
+  restoreInsetTargets(headerControlsInsetSurfaces, "." + headerControlsInsetClass);
+  headerControlsInsetSurfaces = [];
+}
+
+function clearPlayerControlsInset(): void {
+  restoreInsetTargets(playerControlsInsetSurfaces, "." + playerControlsInsetClass);
+  playerControlsInsetSurfaces = [];
+}
+
+function clearPlayerProgressInset(): void {
+  restoreInsetTargets(playerProgressInsetSurfaces, "." + playerProgressInsetClass);
+  playerProgressInsetSurfaces = [];
+}
+
+function clearPlayerSubtitlesInset(): void {
+  restoreInsetTargets(playerSubtitlesInsetSurfaces, "." + playerSubtitlesInsetClass);
+  playerSubtitlesInsetSurfaces = [];
+}
+
+function isVisibleLayoutElement(element: Element): boolean {
+  const elementRect = rect(element);
+  if (!elementRect || elementRect.width <= 0 || elementRect.height <= 0) {
+    return false;
+  }
+
+  if (window.getComputedStyle) {
+    const style = window.getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+  }
+
+  return true;
+}
+
+function normalContentSelectors(): string[] {
+  return [
+    "main",
+    '[role="main"]',
+    ".mainAnimatedPages",
+    ".page:not(.hide)",
+    ".libraryPage:not(.hide)",
+    ".dashboardDocument"
+  ];
+}
+
+function findNormalContentSurfaces(): Element[] {
+  const candidates = querySelectorList(document.body, normalContentSelectors())
+    .filter((element) => !isWithinJellyChatElement(element) && isVisibleLayoutElement(element));
+  const topLevel = candidates.filter((candidate) => !candidates.some((other) => other !== candidate && other.contains(candidate)));
+
+  if (topLevel.length > 0) {
+    return topLevel.slice(0, 3);
+  }
+
+  return [];
+}
+
+function headerControlsSelectors(): string[] {
+  return [
+    ".skinHeader",
+    ".dashboardHeader",
+    ".viewMenuBar",
+    ".videoOsdHeader",
+    ".videoOsdTop",
+    ".videoOsdTopControls",
+    ".videoOsd .headerRight",
+    ".videoOsd .headerRightItems",
+    ".headerRight",
+    ".headerRightItems",
+    ".skinHeader .headerRight",
+    ".skinHeader .headerRightItems",
+    "header",
+    "header .headerRight",
+    "header .headerRightItems",
+    '[class*="videoOsdHeader"]',
+    '[class*="VideoOsdHeader"]',
+    '[class*="videoOsdTop"]',
+    '[class*="VideoOsdTop"]',
+    '[class*="headerRight"]',
+    '[class*="HeaderRight"]',
+    '[class*="topRight"]',
+    '[class*="TopRight"]'
+  ];
+}
+
+function findHeaderControlsSurfaces(host: Element, videoRoute: boolean): Element[] {
+  const candidates = querySelectorList(host, headerControlsSelectors())
+    .filter((element) => !isWithinJellyChatElement(element) && isVisibleLayoutElement(element));
+  const viewportWidth = window.innerWidth || 0;
+  const surfaces = filterNestedTargets(candidates.filter((element) => {
+    const elementRect = rect(element);
+    if (!elementRect) return false;
+    if (elementRect.width <= 24 || elementRect.height <= 8) return false;
+    if (videoRoute) return elementRect.top < 120;
+    return elementRect.top < 96 && elementRect.right > viewportWidth * 0.45;
+  })).filter((element) => !elementLooksLikeAppShellRoot(element));
+
+  return surfaces.slice(0, 8);
+}
+
+function applyHeaderControlsInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, videoRoute: boolean): Element[] {
+  clearHeaderControlsInset();
+  if (!host || !shouldInset) {
+    updateTargetDebug("headerControlsTarget", []);
+    clearDebugError("JellyChat layout target not found: header controls");
+    return [];
+  }
+
+  const surfaces = findHeaderControlsSurfaces(host, videoRoute);
+  surfaces.forEach((element) => {
+    applyInsetTarget(element, layoutRect, headerControlsInsetClass);
+  });
+  headerControlsInsetSurfaces = surfaces;
+  updateTargetDebug("headerControlsTarget", surfaces);
+  if (surfaces.length === 0) {
+    setDebugError("JellyChat layout target not found: header controls");
+  } else {
+    clearDebugError("JellyChat layout target not found: header controls");
+  }
+  return surfaces;
+}
+
+function applyNormalContentInset(shouldInset: boolean, layoutRect: JellyChatLayoutRect): Element[] {
+  clearNormalContentInset();
+  if (!shouldInset) {
+    clearDebugError("JellyChat layout target not found: page content");
+    return [];
+  }
+
+  const surfaces = findNormalContentSurfaces();
+  surfaces.forEach((element) => {
+    applyInsetTarget(element, layoutRect, normalContentInsetClass);
+  });
+  normalContentInsetSurfaces = surfaces;
+  if (surfaces.length === 0) {
+    setDebugError("JellyChat layout target not found: page content");
+  } else {
+    clearDebugError("JellyChat layout target not found: page content");
+  }
+  return surfaces;
 }
 
 function updateSurfaceDebug(host: Element | null, detection: ReturnType<typeof inspectPlayerSurface> | null, surfaces: Element[], shouldDock: boolean): void {
@@ -401,6 +849,7 @@ function updateSurfaceDebug(host: Element | null, detection: ReturnType<typeof i
   state.fullscreenHostClass = className(host);
   state.videoElementFound = !!detection?.video;
   state.controlsElementFound = !!detection?.controls;
+  state.subtitleElementFound = !!detection?.subtitles;
   state.fullscreenPlayerSurfaceSelector = surfaces.map(describeElementSelector).join(", ");
   state.fullscreenPlayerSurfaceTag = tag(primary);
   state.fullscreenPlayerSurfaceId = elementId(primary);
@@ -408,16 +857,222 @@ function updateSurfaceDebug(host: Element | null, detection: ReturnType<typeof i
   state.videoReservedWidth = shouldDock && surfaces.length > 0 ? drawerWidthPx : 0;
 }
 
-function applyDockedLayout(host: Element | null, shouldDock: boolean): Element[] {
+function updateTargetDebug(prefix: string, surfaces: Element[]): void {
+  const primary = surfaces[0] || null;
+  const state = debug();
+  state[prefix + "Selector"] = surfaces.map(describeElementSelector).join(", ");
+  state[prefix + "Tag"] = tag(primary);
+  state[prefix + "Id"] = elementId(primary);
+  state[prefix + "Class"] = className(primary);
+}
+
+function filterNestedTargets(elements: Element[]): Element[] {
+  return elements.filter((element) => !elements.some((other) => other !== element && other.contains(element)));
+}
+
+function filterTopLevelTargets(elements: Element[]): Element[] {
+  return elements.filter((element) => !elements.some((other) => other !== element && other.contains(element)));
+}
+
+function isCoveredBySurface(element: Element, surfaces: Element[]): boolean {
+  return surfaces.some((surface) => surface === element || surface.contains(element));
+}
+
+function elementLooksLikeVolumeTarget(element: Element, host: Element): boolean {
+  const chain = uniqueElements([element, ...ancestorsUntilHost(element, host)]);
+  return chain.some((candidate) => {
+    const label = (className(candidate) + " " + elementId(candidate)).toLowerCase();
+    return /volume|mute/.test(label);
+  });
+}
+
+function computedPosition(element: Element | null): string {
+  return element && window.getComputedStyle ? window.getComputedStyle(element).position : "";
+}
+
+function isPositionedInsetCandidate(element: Element | null): boolean {
+  return ["absolute", "fixed", "sticky"].includes(computedPosition(element));
+}
+
+function targetScore(element: Element, host: Element, pattern: RegExp, anchor: Element): number {
+  if (element === host || elementLooksLikeAppShellRoot(element) || isSkippableSurfaceElement(element)) return -1000;
+  const elementRect = rect(element);
+  if (!elementRect || elementRect.width <= 0 || elementRect.height <= 0) return -1000;
+
+  const label = (className(element) + " " + elementId(element)).toLowerCase();
+  let score = 0;
+  if (element === anchor) score += 40;
+  if (pattern.test(label)) score += 40;
+  if (isPositionedInsetCandidate(element)) score += 28;
+  if (elementRect.width > 120) score += 12;
+  if (elementRect.width > window.innerWidth * 0.35) score += 12;
+  if (/videoplayer|htmlvideoplayer|video-player|videoosdcontainer/.test(label) && element !== anchor && !pattern.test(label)) score -= 80;
+  if (/button|icon|item/.test(label) || tag(element) === "button") score -= 30;
+  return score;
+}
+
+function nearestInsetSurface(element: Element, host: Element, pattern: RegExp): Element | null {
+  const candidates = uniqueElements([element, ...ancestorsUntilHost(element, host)])
+    .filter((candidate) => {
+      if (candidate === host || elementLooksLikeAppShellRoot(candidate) || isWithinJellyChatElement(candidate) || !isVisibleLayoutElement(candidate)) return false;
+      if (candidate !== element) {
+        const label = (className(candidate) + " " + elementId(candidate)).toLowerCase();
+        if (!pattern.test(label)) return false;
+      }
+      return true;
+    });
+  return candidates.sort((first, second) => targetScore(second, host, pattern, element) - targetScore(first, host, pattern, element))[0] || null;
+}
+
+function targetSurfaces(host: Element, selectors: string[], pattern: RegExp, minimumWidth: number, minimumHeight: number): Element[] {
+  const candidates = querySelectorList(host, selectors).filter((element) => {
+    if (tag(element) === "track") return false;
+    if (!isVisibleLayoutElement(element)) return false;
+    const elementRect = rect(element);
+    return !!(elementRect && elementRect.width >= minimumWidth && elementRect.height >= minimumHeight);
+  });
+
+  return filterTopLevelTargets(uniqueElements(candidates.map((element) => nearestInsetSurface(element, host, pattern))));
+}
+
+function playerControlsSelectors(): string[] {
+  return [
+    ".videoOsd",
+    ".videoOsdBottom",
+    ".videoOsdBottom-maincontrols",
+    ".videoOsdControls",
+    ".osdControls",
+    ".playbackControls",
+    ".playerControls",
+    ".nowPlayingBar",
+    ".volumeSliderContainer",
+    ".buttons",
+    '[class*="videoOsd"]',
+    '[class*="VideoOsd"]',
+    '[class*="osdControls"]',
+    '[class*="OsdControls"]',
+    '[class*="playbackControls"]',
+    '[class*="PlaybackControls"]',
+    '[class*="playerControls"]',
+    '[class*="PlayerControls"]'
+  ];
+}
+
+function playerProgressSelectors(): string[] {
+  return [
+    ".progressContainer",
+    ".videoOsdBottom-progress",
+    ".osdProgress",
+    ".sliderContainer",
+    '[class*="progress"]',
+    '[class*="Progress"]',
+    '[class*="timeline"]',
+    '[class*="Timeline"]',
+    '[class*="seek"]',
+    '[class*="Seek"]',
+    '[role="slider"]',
+    '[role="progressbar"]',
+    'input[type="range"]',
+    "progress"
+  ];
+}
+
+function findPlayerControlsSurfaces(host: Element, coveredSurfaces: Element[]): Element[] {
+  const surfaces = targetSurfaces(host, playerControlsSelectors(), /videoosd|osd|bottom|control|transport|playback|nowplaying/, 80, 8);
+  return surfaces.filter((element) => !coveredSurfaces.includes(element)).slice(0, 12);
+}
+
+function findPlayerProgressSurfaces(host: Element, coveredSurfaces: Element[]): Element[] {
+  const surfaces = targetSurfaces(host, playerProgressSelectors(), /progress|timeline|seek|slider/, 80, 2)
+    .filter((element) => !elementLooksLikeVolumeTarget(element, host))
+    .map((element) => coveredSurfaces.find((surface) => surface !== element && surface.contains(element)) || element);
+  return filterTopLevelTargets(uniqueElements(surfaces)).slice(0, 8);
+}
+
+function findPlayerSubtitleSurfaces(host: Element, coveredSurfaces: Element[]): Element[] {
+  const surfaces = targetSurfaces(host, subtitleSelectors(), /subtitle|caption|texttrack|videoosd/, 40, 8);
+  return surfaces.filter((element) => !coveredSurfaces.includes(element)).slice(0, 8);
+}
+
+function applyPlayerControlsInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[]): Element[] {
+  clearPlayerControlsInset();
+  if (!host || !shouldInset) {
+    updateTargetDebug("playerControlsTarget", []);
+    clearDebugError("JellyChat layout target not found: player controls");
+    return [];
+  }
+
+  const surfaces = findPlayerControlsSurfaces(host, coveredSurfaces);
+  surfaces.forEach((element) => applyInsetTarget(element, layoutRect, playerControlsInsetClass));
+  playerControlsInsetSurfaces = surfaces;
+  updateTargetDebug("playerControlsTarget", surfaces);
+  if (surfaces.length === 0 && coveredSurfaces.length === 0) {
+    setDebugError("JellyChat layout target not found: player controls");
+  } else {
+    clearDebugError("JellyChat layout target not found: player controls");
+  }
+  return surfaces;
+}
+
+function applyPlayerProgressInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[]): Element[] {
+  clearPlayerProgressInset();
+  if (!host || !shouldInset) {
+    updateTargetDebug("playerProgressTarget", []);
+    clearDebugError("JellyChat layout target not found: player progress");
+    return [];
+  }
+
+  const surfaces = findPlayerProgressSurfaces(host, coveredSurfaces);
+  surfaces.forEach((element) => applyInsetTarget(element, layoutRect, playerProgressInsetClass));
+  playerProgressInsetSurfaces = surfaces;
+  updateTargetDebug("playerProgressTarget", surfaces);
+  if (surfaces.length === 0 && coveredSurfaces.length === 0) {
+    setDebugError("JellyChat layout target not found: player progress");
+  } else {
+    clearDebugError("JellyChat layout target not found: player progress");
+  }
+  return surfaces;
+}
+
+function applyPlayerSubtitlesInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[]): Element[] {
+  clearPlayerSubtitlesInset();
+  if (!host || !shouldInset) {
+    updateTargetDebug("playerSubtitlesTarget", []);
+    clearDebugError("JellyChat layout target not found: player subtitles");
+    return [];
+  }
+
+  const surfaces = findPlayerSubtitleSurfaces(host, coveredSurfaces);
+  surfaces.forEach((element) => applyInsetTarget(element, layoutRect, playerSubtitlesInsetClass));
+  playerSubtitlesInsetSurfaces = surfaces;
+  updateTargetDebug("playerSubtitlesTarget", surfaces);
+  if (surfaces.length === 0 && coveredSurfaces.length === 0) {
+    setDebugError("JellyChat layout target not found: player subtitles");
+  } else {
+    clearDebugError("JellyChat layout target not found: player subtitles");
+  }
+  return surfaces;
+}
+
+function applyDockedLayout(host: Element | null, shouldDock: boolean, layoutRect: JellyChatLayoutRect): Element[] {
   clearDockedLayout();
   if (!host) {
     updateSurfaceDebug(null, null, [], false);
+    clearDebugError("JellyChat layout target not found: video player");
     return [];
   }
 
   const detection = inspectPlayerSurface(host);
-  const surfaces = shouldDock ? uniqueElements([detection.surface, ...detection.fallback]) : [];
-  surfaces.forEach(markSurface);
+  const surfaces = shouldDock
+    ? filterTopLevelTargets(uniqueElements([
+      detection.surface,
+      ...detection.fallback
+    ]))
+    : [];
+  if (!shouldDock) {
+    clearDebugError("JellyChat layout target not found: video player");
+  }
+  surfaces.forEach((element) => applyInsetTarget(element, layoutRect, fullscreenSurfaceClass));
   fullscreenLayoutSurfaces = surfaces;
   updateSurfaceDebug(host, detection, surfaces, shouldDock);
 
@@ -429,6 +1084,12 @@ function applyDockedLayout(host: Element | null, shouldDock: boolean): Element[]
 
   if (shouldDock && window.JellyChatDebug) {
     window.JellyChatDebug.lastFullscreenLayoutAt = new Date().toISOString();
+  }
+
+  if (shouldDock && surfaces.length === 0) {
+    setDebugError("JellyChat layout target not found: video player");
+  } else {
+    clearDebugError("JellyChat layout target not found: video player");
   }
 
   return surfaces;
@@ -480,8 +1141,205 @@ function setLayoutClass(name: string, enabled: boolean): void {
   document.documentElement?.classList.toggle(name, enabled);
 }
 
-function layoutMode(drawerOpen: boolean, mobile: boolean, fullscreen: boolean): string {
-  if (fullscreen) return drawerOpen && !mobile ? "fullscreen-docked" : "fullscreen-overlay";
+function isFloatingButtonFocused(): boolean {
+  const floatingHost = document.getElementById(floatingHostId);
+  return !!(floatingHost && document.activeElement && floatingHost.contains(document.activeElement));
+}
+
+export function setFloatingButtonPointerInside(isInside: boolean): void {
+  floatingPointerInside = isInside;
+  if (isInside) {
+    setFloatingButtonHidden(false);
+    clearFloatingButtonTimer();
+  } else {
+    showFloatingButton("floating-pointer-leave");
+  }
+}
+
+function setFloatingButtonHidden(hidden: boolean): void {
+  setLayoutClass(floatingHiddenClass, hidden);
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.floatingButtonAutoHidden = hidden;
+  }
+}
+
+function controlsHost(): Element | null {
+  return getFullscreenHost() || document.body || null;
+}
+
+function controlsElementIsVisible(element: Element | null): boolean {
+  if (!element || !element.isConnected) return false;
+  const elementRect = rect(element);
+  if (!elementRect || elementRect.width <= 0 || elementRect.height <= 0) return false;
+  const label = (className(element) + " " + elementId(element)).toLowerCase();
+  if (/\bhide\b|\bhidden\b|hide-osd|osd-hidden|controls-hidden/.test(label)) return false;
+  if (!window.getComputedStyle) return true;
+  const style = window.getComputedStyle(element);
+  return style.display !== "none"
+    && style.visibility !== "hidden"
+    && Number(style.opacity || "1") > 0.05;
+}
+
+function updateFloatingButtonFromControlsVisibility(reason: string): boolean {
+  if (!detectVideoRoute()) {
+    setFloatingButtonHidden(false);
+    return false;
+  }
+
+  if (isDrawerOpen() || isFloatingButtonFocused() || floatingPointerInside) {
+    setFloatingButtonHidden(false);
+    clearFloatingButtonTimer();
+    return true;
+  }
+
+  const host = controlsHost();
+  const controls = host ? findControlsElement(host) : null;
+  if (!controls) {
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.controlsVisibilitySource = "fallback-timer";
+    }
+    return false;
+  }
+
+  observeControlsVisibility(controls);
+  const visible = controlsElementIsVisible(controls);
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.controlsVisibilitySource = "jellyfin-osd";
+    if (visible) {
+      window.JellyChatDebug.lastControlsVisibleAt = new Date().toISOString();
+    } else {
+      window.JellyChatDebug.lastControlsHiddenAt = new Date().toISOString();
+    }
+    window.JellyChatDebug.lastControlsVisibilityReason = reason;
+  }
+
+  setFloatingButtonHidden(!visible);
+  return true;
+}
+
+function observeControlsVisibility(element: Element): void {
+  if (observedControlsElement === element && controlsVisibilityObserver) {
+    return;
+  }
+
+  if (controlsVisibilityObserver) {
+    controlsVisibilityObserver.disconnect();
+    controlsVisibilityObserver = null;
+  }
+
+  observedControlsElement = element;
+  observedControlsTargets = [];
+  if (typeof MutationObserver === "undefined") {
+    return;
+  }
+
+  controlsVisibilityObserver = new MutationObserver(() => {
+    updateFloatingButtonFromControlsVisibility("jellyfin-osd");
+  });
+  const host = controlsHost();
+  const ancestors = host ? ancestorsUntilHost(element, host) : [];
+  observedControlsTargets = uniqueElements([element, ...ancestors]).filter((target) => {
+    const label = (className(target) + " " + elementId(target)).toLowerCase();
+    return target === element || /videoosd|osd|control|player|nowplaying/.test(label);
+  }).slice(0, 6);
+  observedControlsTargets.forEach((target) => {
+    controlsVisibilityObserver?.observe(target, {
+      attributes: true,
+      attributeFilter: ["class", "style", "hidden", "aria-hidden"]
+    });
+  });
+}
+
+function visibleControlsExist(): boolean {
+  const selectors = controlsSelectors();
+  return selectors.some((selector) => {
+    try {
+      return Array.from(document.querySelectorAll(selector)).some((element) => {
+        if (isWithinJellyChatElement(element)) return false;
+        const elementRect = rect(element);
+        if (!elementRect || elementRect.width <= 0 || elementRect.height <= 0) return false;
+        if (!window.getComputedStyle) return true;
+        const style = window.getComputedStyle(element);
+        return style.display !== "none"
+          && style.visibility !== "hidden"
+          && Number(style.opacity || "1") > 0.05;
+      });
+    } catch {
+      return false;
+    }
+  });
+}
+
+function clearFloatingButtonTimer(): void {
+  if (floatingButtonTimer) {
+    window.clearTimeout(floatingButtonTimer);
+    floatingButtonTimer = 0;
+  }
+}
+
+function hideFloatingButtonIfIdle(): void {
+  floatingButtonTimer = 0;
+  if (!detectVideoRoute() || isDrawerOpen() || isFloatingButtonFocused() || floatingPointerInside) {
+    setFloatingButtonHidden(false);
+    return;
+  }
+
+  if (updateFloatingButtonFromControlsVisibility("fallback-check")) {
+    return;
+  }
+
+  if (visibleControlsExist()) {
+    scheduleFloatingButtonAutoHide();
+    return;
+  }
+
+  setFloatingButtonHidden(true);
+}
+
+function scheduleFloatingButtonAutoHide(): void {
+  clearFloatingButtonTimer();
+  if (!detectVideoRoute() || isDrawerOpen() || isFloatingButtonFocused() || floatingPointerInside) {
+    setFloatingButtonHidden(false);
+    return;
+  }
+
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.controlsVisibilitySource = "fallback-timer";
+  }
+
+  floatingButtonTimer = window.setTimeout(hideFloatingButtonIfIdle, floatingIdleDelayMs);
+}
+
+export function showFloatingButton(reason: string): void {
+  setFloatingButtonHidden(false);
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.lastFloatingButtonShowReason = reason;
+    window.JellyChatDebug.lastControlsVisibleAt = new Date().toISOString();
+  }
+  const host = controlsHost();
+  const controls = host ? findControlsElement(host) : null;
+  if (controls) {
+    observeControlsVisibility(controls);
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.controlsVisibilitySource = "jellyfin-osd";
+    }
+  }
+  scheduleFloatingButtonAutoHide();
+}
+
+export function handleFloatingButtonFocusChange(reason: string): void {
+  if (isFloatingButtonFocused() || isDrawerOpen() || floatingPointerInside) {
+    setFloatingButtonHidden(false);
+    clearFloatingButtonTimer();
+    return;
+  }
+
+  showFloatingButton(reason);
+}
+
+function layoutMode(drawerOpen: boolean, mobile: boolean, fullscreen: boolean, videoRoute: boolean, canDock: boolean): string {
+  if (fullscreen) return drawerOpen && canDock ? "fullscreen-docked" : "fullscreen-overlay";
+  if (canDock) return "normal-docked";
   if (mobile) return "mobile";
   return "normal-docked";
 }
@@ -490,7 +1348,7 @@ function isDocked(mode: string, drawerOpen: boolean): boolean {
   return drawerOpen && (mode === "normal-docked" || mode === "fullscreen-docked");
 }
 
-function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, mode: string, mobile: boolean): void {
+function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, mode: string, mobile: boolean, drawerSide: DrawerSide): void {
   if (lastFullscreenHost && lastFullscreenHost !== host) {
     clearFullscreenHostClasses(lastFullscreenHost);
   }
@@ -503,6 +1361,8 @@ function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, 
   setElementClass(host, "jellychat-fullscreen-docked", mode === "fullscreen-docked" && drawerOpen);
   setElementClass(host, "jellychat-docked", isDocked(mode, drawerOpen));
   setElementClass(host, "jellychat-mobile", mobile);
+  setElementClass(host, "jellychat-drawer-left", drawerSide === "left");
+  setElementClass(host, "jellychat-drawer-right", drawerSide === "right");
   (host as HTMLElement).style.setProperty("--jellychat-drawer-width", drawerWidthPx + "px");
 }
 
@@ -514,23 +1374,53 @@ export function updateLayout(reason: string): void {
   const targetHost = fullscreenHost || getNormalMountHost();
   moveJellyChatRootToHost(targetHost);
 
-  const drawerOpen = isDrawerOpen();
-  const videoRoute = detectVideoRoute();
-  const mobile = window.innerWidth <= mobileLayoutMaxWidthPx;
-  const mode = layoutMode(drawerOpen, mobile, fullscreenActive);
+  const layoutRect = getJellyChatLayoutRect();
+  const drawerOpen = layoutRect.drawerOpen;
+  const drawerSide = layoutRect.drawerSide;
+  const videoRoute = layoutRect.isVideoRoute;
+  const viewportWidth = Math.max(
+    window.innerWidth || 0,
+    document.documentElement?.clientWidth || 0,
+    window.visualViewport?.width || 0
+  );
+  const mobile = viewportWidth <= mobileLayoutMaxWidthPx;
+  const hasRoomForDockedDrawer = viewportWidth >= drawerWidthPx + 360;
+  const canDock = !mobile || hasRoomForDockedDrawer;
+  const mode = layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
   const docked = isDocked(mode, drawerOpen);
-  const shouldDockPlayerSurface = docked && drawerOpen && videoRoute && !mobile;
+  const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock;
+  const shouldInsetNormalContent = docked && drawerOpen && !videoRoute && !fullscreenActive && canDock;
+  const shouldInsetHeaderControls = shouldDockPlayerSurface || shouldInsetNormalContent;
+  const mobileClassEnabled = mode === "mobile" || (fullscreenActive && mobile && !canDock);
 
-  document.body.style.setProperty("--jellychat-drawer-width", drawerWidthPx + "px");
   document.documentElement.style.setProperty("--jellychat-drawer-width", drawerWidthPx + "px");
-  updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobile);
-  const playerSurfaces = applyDockedLayout(fullscreenHost || (videoRoute ? document.body : null), shouldDockPlayerSurface);
+  updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobileClassEnabled, drawerSide);
+  const layoutHost = fullscreenHost || (videoRoute ? document.body : null);
+  const playerSurfaces = applyDockedLayout(layoutHost, shouldDockPlayerSurface, layoutRect);
+  const coveredPlayerSurfaces = playerSurfaces.slice();
+  const playerControlSurfaces = applyPlayerControlsInset(layoutHost, shouldDockPlayerSurface, layoutRect, coveredPlayerSurfaces);
+  const playerProgressSurfaces = applyPlayerProgressInset(layoutHost, shouldDockPlayerSurface, layoutRect, coveredPlayerSurfaces.concat(playerControlSurfaces));
+  const playerSubtitleSurfaces = applyPlayerSubtitlesInset(layoutHost, shouldDockPlayerSurface, layoutRect, coveredPlayerSurfaces);
+  const contentSurfaces = applyNormalContentInset(shouldInsetNormalContent, layoutRect);
+  const headerSurfaces = applyHeaderControlsInset(layoutHost || document.body, shouldInsetHeaderControls, layoutRect, videoRoute);
 
   setLayoutClass("jellychat-drawer-open", drawerOpen);
   setLayoutClass("jellychat-video-route", videoRoute);
   setLayoutClass("jellychat-docked", docked);
-  setLayoutClass("jellychat-mobile", mode === "mobile" || (fullscreenActive && mobile));
+  setLayoutClass("jellychat-mobile", mobileClassEnabled);
   setLayoutClass("jellychat-fullscreen", fullscreenActive);
+  setLayoutClass("jellychat-drawer-left", drawerSide === "left");
+  setLayoutClass("jellychat-drawer-right", drawerSide === "right");
+  setLayoutClass("jellychat-content-inset-found", contentSurfaces.length > 0);
+
+  if (drawerOpen || !videoRoute) {
+    setFloatingButtonHidden(false);
+    clearFloatingButtonTimer();
+  } else if (reason === "routechange" || reason === "hashchange" || reason === "popstate" || reason === "fullscreenchange" || reason === "react-mount" || reason === "start") {
+    showFloatingButton(reason);
+  } else if (videoRoute) {
+    scheduleFloatingButtonAutoHide();
+  }
 
   if (window.JellyChatDebug) {
     if (reason === "fullscreenchange") {
@@ -538,18 +1428,34 @@ export function updateLayout(reason: string): void {
     }
 
     window.JellyChatDebug.layoutMode = mode;
+    window.JellyChatDebug.drawerSide = drawerSide;
     window.JellyChatDebug.isVideoRoute = videoRoute;
+    window.JellyChatDebug.videoRoute = videoRoute;
     window.JellyChatDebug.isFullscreen = fullscreenActive;
     window.JellyChatDebug.drawerOpen = drawerOpen;
-    window.JellyChatDebug.triggerPlacement = fullscreenActive ? "fullscreen-safe" : (mobile ? "mobile" : (videoRoute ? "video-safe" : "normal"));
+    window.JellyChatDebug.triggerPlacement = fullscreenActive ? "fullscreen-safe" : (mode === "mobile" ? "mobile" : (videoRoute ? "video-safe" : "normal"));
     window.JellyChatDebug.drawerWidth = drawerWidthPx;
+    window.JellyChatDebug.viewportWidth = viewportWidth;
+    window.JellyChatDebug.canDock = canDock;
+    window.JellyChatDebug.leftInset = layoutRect.leftInset;
+    window.JellyChatDebug.rightInset = layoutRect.rightInset;
     window.JellyChatDebug.lastLayoutUpdateAt = new Date().toISOString();
+    window.JellyChatDebug.layoutTargetsFound = (!shouldInsetNormalContent || contentSurfaces.length > 0) && (!shouldInsetHeaderControls || headerSurfaces.length > 0) && (!shouldDockPlayerSurface || (playerSurfaces.length > 0 || playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0));
+    window.JellyChatDebug.contentInsetApplied = shouldInsetNormalContent && contentSurfaces.length > 0;
+    window.JellyChatDebug.headerControlsInsetApplied = shouldInsetHeaderControls && headerSurfaces.length > 0;
+    window.JellyChatDebug.playerInsetApplied = shouldDockPlayerSurface && playerSurfaces.length > 0;
+    window.JellyChatDebug.playerSurfaceInsetApplied = shouldDockPlayerSurface && playerSurfaces.length > 0;
+    window.JellyChatDebug.playerControlsInsetApplied = shouldDockPlayerSurface && playerControlSurfaces.length > 0;
+    window.JellyChatDebug.playerProgressInsetApplied = shouldDockPlayerSurface && playerProgressSurfaces.length > 0;
+    window.JellyChatDebug.playerSubtitlesInsetApplied = shouldDockPlayerSurface && playerSubtitleSurfaces.length > 0;
+    window.JellyChatDebug.normalContentInsetApplied = shouldInsetNormalContent && contentSurfaces.length > 0;
+    window.JellyChatDebug.controlsInsetApplied = shouldDockPlayerSurface && (playerSurfaces.length > 0 || playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0) && !!window.JellyChatDebug.controlsElementFound;
     window.JellyChatDebug.fullscreenElementTag = tag(fullscreenHost);
     window.JellyChatDebug.fullscreenHostTag = tag(fullscreenHost);
     window.JellyChatDebug.fullscreenHostId = elementId(fullscreenHost);
     window.JellyChatDebug.fullscreenHostClass = className(fullscreenHost);
     window.JellyChatDebug.controlsOverlapAvoided = !drawerOpen
-      || (shouldDockPlayerSurface && playerSurfaces.length > 0)
+      || (shouldDockPlayerSurface && (playerSurfaces.length > 0 || playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0))
       || (mode === "fullscreen-overlay" && mobile)
       || (!fullscreenActive && docked)
       || mode === "mobile"
@@ -558,7 +1464,7 @@ export function updateLayout(reason: string): void {
 
   updateMountDebug(targetHost);
   if (lastLayoutMode !== mode) {
-    logDebug("Layout mode changed", { mode, reason, videoRoute, drawerOpen });
+    logDebug("Layout mode changed", { mode, reason, videoRoute, drawerOpen, drawerSide });
     lastLayoutMode = mode;
   }
 }

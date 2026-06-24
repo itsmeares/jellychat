@@ -57,7 +57,7 @@ export function Composer({ actions, sending, syncPlay }: Props) {
         ref={inputRef}
         rows={1}
         placeholder={syncPlay.inGroup ? "Type a message" : "Join a SyncPlay group to chat"}
-        aria-label="SyncPlay chat message"
+        aria-label="JellyChat message"
         wrap="soft"
         disabled={disabled}
         value={value}
