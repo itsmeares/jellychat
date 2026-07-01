@@ -2,8 +2,8 @@ import type { ReactionEvent, ReactionOverlayItem, RoomEvent } from "../types";
 
 type Subscriber = (items: ReactionOverlayItem[]) => void;
 
-const overlayDurationMinMs = 3000;
-const overlayDurationMaxMs = 3800;
+const overlayDurationMinMs = 2250;
+const overlayDurationMaxMs = 2850;
 const hardOverlayCap = 120;
 const baseOverlayCap = 40;
 const participantOverlayStep = 20;
@@ -168,7 +168,7 @@ function createOverlayItem(reaction: ReactionEvent): ReactionOverlayItem | null 
     dx: reducedMotion ? 0 : Math.round(Math.random() * 56 - 28),
     rise: reducedMotion ? 18 : Math.round(rise),
     durationMs,
-    scale: reducedMotion ? 1 : 0.92 + Math.random() * 0.22,
+    scale: reducedMotion ? 1 : 0.8 + Math.random() * 0.4,
     reducedMotion
   };
 }
