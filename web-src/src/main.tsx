@@ -3,6 +3,7 @@ import { ChatApp } from "./components/ChatApp";
 import { getActiveMountHost, getDrawerSide, updateLayout } from "./runtime/layout";
 import { cleanupDuplicateRoots, countDebugNodes, recordError, rootId, waitForStylesheet } from "./runtime/util";
 import { startRuntime } from "./runtime/store";
+import { defaultQuickReactions } from "./runtime/emoji";
 import "./styles.css";
 
 function initializeDebug(): void {
@@ -80,6 +81,21 @@ function initializeDebug(): void {
     lastPlaybackStartItemId: null,
     startupGuardUntil: null,
     lastSeekEventAt: null,
+    reactionOverlayCount: 0,
+    reactionOverlayMax: 40,
+    reactionEventCount: 0,
+    lastReactionEmoji: null,
+    lastReactionSentAt: null,
+    lastReactionReceivedAt: null,
+    lastReactionClientEventId: null,
+    lastReactionDroppedReason: null,
+    emojiPickerOpen: false,
+    emojiSearchQuery: "",
+    favoriteEmojiCount: 0,
+    recentlyUsedEmojiCount: 0,
+    quickReactionSlots: defaultQuickReactions.slice(),
+    quickReactionEditMode: false,
+    lastQuickReactionEditAction: null,
     supportedEventTypes: ["chat.message", "reaction.emoji", "playback.start", "playback.play", "playback.pause", "playback.seek", "system.notice"],
     lastEventPollAt: null,
     lastEventPostAt: null,

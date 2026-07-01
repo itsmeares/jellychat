@@ -240,6 +240,7 @@ public class JellyChatController : ControllerBase
         }
 
         roomEvent.Emoji = emoji;
+        roomEvent.PositionSeconds = request.PositionSeconds;
         roomEvent.ItemId = NormalizeOptionalText(request.ItemId);
         roomEvent.ItemName = NormalizeOptionalText(request.ItemName);
         error = string.Empty;
@@ -283,6 +284,12 @@ public class JellyChatController : ControllerBase
         if (request.ToPositionTicks < 0)
         {
             error = "ToPositionTicks must be zero or greater.";
+            return false;
+        }
+
+        if (request.PositionSeconds < 0)
+        {
+            error = "PositionSeconds must be zero or greater.";
             return false;
         }
 

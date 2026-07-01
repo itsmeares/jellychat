@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChatDrawer } from "./ChatDrawer";
 import { ChatButton } from "./ChatButton";
+import { ReactionOverlay } from "./ReactionOverlay";
 import { actions, getState, subscribe } from "../runtime/store";
 import { floatingHostId } from "../runtime/util";
 
@@ -20,6 +21,7 @@ export function ChatApp() {
       <div id={floatingHostId} data-jellychat-host="true">
         <ChatButton isOpen={state.drawerOpen} actions={actions} />
       </div>
+      <ReactionOverlay />
       <ChatDrawer state={state} actions={actions} />
     </>
   );

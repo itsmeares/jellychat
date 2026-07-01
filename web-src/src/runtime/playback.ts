@@ -917,6 +917,22 @@ export function scanPlaybackTarget(): void {
   }
 }
 
+export function getCurrentPlaybackSnapshot(): { itemId: string; itemName: string; positionSeconds?: number } {
+  if (activeMedia) {
+    const item = updateCurrentPlaybackItem(activeMedia);
+    return {
+      itemId: item.itemId || currentPlaybackItemId,
+      itemName: item.itemName || currentPlaybackItemTitle,
+      positionSeconds: getMediaSeconds(activeMedia)
+    };
+  }
+
+  return {
+    itemId: currentPlaybackItemId,
+    itemName: currentPlaybackItemTitle
+  };
+}
+
 export function installPlaybackActionLogging(poster: PlaybackPoster): void {
   postPlaybackEvent = poster;
   setDebug({ seekDebounceMs });
