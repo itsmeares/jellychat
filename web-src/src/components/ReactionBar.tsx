@@ -96,7 +96,7 @@ export function ReactionBar({ actions, syncPlay }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [editMode, setEditMode] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState(0);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [lastEditAction, setLastEditAction] = useState<string | null>(null);
   const disabled = !syncPlay.inGroup;
   const results = searchEmojiCatalog(searchQuery);
@@ -112,8 +112,14 @@ export function ReactionBar({ actions, syncPlay }: Props) {
     window.JellyChatDebug.recentlyUsedEmojiCount = recent.length;
     window.JellyChatDebug.quickReactionSlots = quick.slice();
     window.JellyChatDebug.quickReactionEditMode = editMode;
+    window.JellyChatDebug.selectedQuickReactionSlotIndex = selectedSlot;
     window.JellyChatDebug.lastQuickReactionEditAction = lastEditAction;
-  }, [pickerOpen, searchQuery, favorites, recent, quick, editMode, lastEditAction]);
+  }, [pickerOpen, searchQuery, favorites, recent, quick, editMode, selectedSlot, lastEditAction]);
+
+  function clearSelectedSlot(action: string) {
+    setSelectedSlot(null);
+    setLastEditAction(action);
+  }
 
   async function sendReaction(emoji: string) {
     if (disabled) {
@@ -127,6 +133,11 @@ export function ReactionBar({ actions, syncPlay }: Props) {
   }
 
   function replaceQuickSlot(emoji: string) {
+    if (selectedSlot === null) {
+      setLastEditAction("emoji-ignored-no-slot");
+      return;
+    }
+
     setQuick((current) => {
       const next = current.length === quickReactionSlotCount ? current.slice() : defaultQuickReactions.slice();
       const existingIndex = next.indexOf(emoji);
@@ -135,11 +146,13 @@ export function ReactionBar({ actions, syncPlay }: Props) {
         next[selectedSlot] = emoji;
         next[existingIndex] = currentEmoji;
         setLastEditAction("swap-slot-" + selectedSlot + "-with-" + existingIndex);
+        setSelectedSlot(null);
         return saveQuickReactions(next);
       }
 
       next[selectedSlot] = emoji;
       setLastEditAction("replace-slot-" + selectedSlot);
+      setSelectedSlot(null);
       return saveQuickReactions(next);
     });
   }
@@ -169,6 +182,12 @@ export function ReactionBar({ actions, syncPlay }: Props) {
     }
 
     if (selectedSlot === index) {
+      clearSelectedSlot("deselect-slot-" + index);
+      return;
+    }
+
+    if (selectedSlot === null) {
+      setSelectedSlot(index);
       setLastEditAction("select-slot-" + index);
       return;
     }
@@ -179,7 +198,7 @@ export function ReactionBar({ actions, syncPlay }: Props) {
       next[selectedSlot] = next[index];
       next[index] = selectedEmoji;
       setLastEditAction("swap-slot-" + selectedSlot + "-with-" + index);
-      setSelectedSlot(index);
+      setSelectedSlot(null);
       return saveQuickReactions(next);
     });
   }
@@ -187,12 +206,17 @@ export function ReactionBar({ actions, syncPlay }: Props) {
   function toggleEditMode() {
     setEditMode((enabled) => {
       const next = !enabled;
-      if (next) {
-        setSelectedSlot(0);
-      }
+      setSelectedSlot(null);
       setLastEditAction(next ? "enter-edit-mode" : "exit-edit-mode");
       return next;
     });
+  }
+
+  function closePicker() {
+    setPickerOpen(false);
+    setEditMode(false);
+    setSearchQuery("");
+    clearSelectedSlot("close-picker");
   }
 
   const favoriteItems = toCatalogItems(favorites);
@@ -219,11 +243,12 @@ export function ReactionBar({ actions, syncPlay }: Props) {
           aria-label={pickerOpen ? "Close emoji picker" : "Open emoji picker"}
           aria-expanded={pickerOpen}
           onClick={() => {
-            setPickerOpen((open) => !open);
             if (pickerOpen) {
-              setEditMode(false);
-              setSearchQuery("");
+              closePicker();
+              return;
             }
+
+            setPickerOpen(true);
           }}
         >
           +
@@ -231,7 +256,16 @@ export function ReactionBar({ actions, syncPlay }: Props) {
       </div>
 
       {pickerOpen ? (
-        <div className="jellyChatEmojiPicker">
+        <div
+          className="jellyChatEmojiPicker"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              clearSelectedSlot("escape");
+            }
+          }}
+        >
           <div className="jellyChatEmojiPickerToolbar">
             <input
               type="search"

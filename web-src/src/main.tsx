@@ -95,6 +95,7 @@ function initializeDebug(): void {
     recentlyUsedEmojiCount: 0,
     quickReactionSlots: defaultQuickReactions.slice(),
     quickReactionEditMode: false,
+    selectedQuickReactionSlotIndex: null,
     lastQuickReactionEditAction: null,
     supportedEventTypes: ["chat.message", "reaction.emoji", "playback.start", "playback.play", "playback.pause", "playback.seek", "system.notice"],
     lastEventPollAt: null,

@@ -202,6 +202,7 @@ export type JellyChatDebug = Record<string, unknown> & {
   recentlyUsedEmojiCount: number;
   quickReactionSlots: string[];
   quickReactionEditMode: boolean;
+  selectedQuickReactionSlotIndex: number | null;
   lastQuickReactionEditAction: string | null;
   messageCount: number;
   lastEventPollAt: string | null;
