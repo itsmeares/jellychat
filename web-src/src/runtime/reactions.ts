@@ -2,8 +2,8 @@ import type { ReactionEvent, ReactionOverlayItem, RoomEvent } from "../types";
 
 type Subscriber = (items: ReactionOverlayItem[]) => void;
 
-const overlayDurationMinMs = 1600;
-const overlayDurationMaxMs = 2200;
+const overlayDurationMinMs = 3000;
+const overlayDurationMaxMs = 3800;
 const hardOverlayCap = 120;
 const baseOverlayCap = 40;
 const participantOverlayStep = 20;
@@ -151,7 +151,11 @@ function createOverlayItem(reaction: ReactionEvent): ReactionOverlayItem | null 
   const leftMin = bounds.left + horizontalPadding;
   const leftMax = bounds.right - horizontalPadding;
   const startLeft = leftMin + Math.random() * Math.max(1, leftMax - leftMin);
-  const startTop = bounds.bottom - Math.max(54, bounds.height * 0.2) + (Math.random() * 26 - 13);
+  const startTop = bounds.bottom - Math.max(58, bounds.height * 0.16) + (Math.random() * 26 - 13);
+  const rise = Math.min(
+    Math.max(170, bounds.height - 72),
+    Math.max(220, bounds.height * (0.7 + Math.random() * 0.1))
+  );
 
   return {
     id: reaction.clientEventId + ":" + Date.now() + ":" + Math.random().toString(36).slice(2),
@@ -162,7 +166,7 @@ function createOverlayItem(reaction: ReactionEvent): ReactionOverlayItem | null 
     left: Math.round(startLeft),
     top: Math.round(Math.max(bounds.top + 24, Math.min(bounds.bottom - 44, startTop))),
     dx: reducedMotion ? 0 : Math.round(Math.random() * 56 - 28),
-    rise: reducedMotion ? 18 : Math.round(Math.max(110, Math.min(240, bounds.height * (0.28 + Math.random() * 0.16)))),
+    rise: reducedMotion ? 18 : Math.round(rise),
     durationMs,
     scale: reducedMotion ? 1 : 0.92 + Math.random() * 0.22,
     reducedMotion
