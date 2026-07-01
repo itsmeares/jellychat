@@ -3,6 +3,7 @@ import { closeButtonId, drawerId, sideToggleButtonId, statusId, titleId } from "
 import { getCurrentGroupLabel } from "../runtime/store";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
+import { ReactionBar } from "./ReactionBar";
 
 type Props = {
   state: ChatState;
@@ -55,6 +56,7 @@ export function ChatDrawer({ state, actions }: Props) {
         {statusText}
       </div>
       <MessageList timelineItems={state.timelineItems} syncPlay={state.syncPlay} />
+      <ReactionBar actions={actions} syncPlay={state.syncPlay} />
       <Composer actions={actions} sending={state.sending} syncPlay={state.syncPlay} />
     </aside>
   );

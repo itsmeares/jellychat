@@ -41,6 +41,11 @@ public class JellyChatEventRequest
     public long? ToPositionTicks { get; set; }
 
     /// <summary>
+    /// Gets or sets the playback position in seconds.
+    /// </summary>
+    public double? PositionSeconds { get; set; }
+
+    /// <summary>
     /// Gets or sets the related Jellyfin item identifier.
     /// </summary>
     public string? ItemId { get; set; }

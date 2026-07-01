@@ -415,11 +415,262 @@ body.jellychat-mobile #jellyChatDrawer {
   font-size: 0.72rem;
 }
 
+.jellyChatReactions {
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #101317;
+}
+
+.jellyChatQuickReactions {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.65rem 1rem 0.6rem;
+}
+
+.jellyChatQuickReaction,
+.jellyChatEmojiOption,
+.jellyChatQuickEditSlot,
+.jellyChatEmojiEditToggle {
+  font: inherit;
+  cursor: pointer;
+}
+
+.jellyChatQuickReaction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.jellyChatQuickReaction:hover,
+.jellyChatQuickReaction:focus-visible,
+.jellyChatQuickReaction.is-picker-open {
+  border-color: rgba(0, 164, 220, 0.58);
+  background: rgba(0, 164, 220, 0.16);
+  outline: none;
+}
+
+.jellyChatQuickReaction:focus-visible,
+.jellyChatEmojiOption:focus-visible,
+.jellyChatQuickEditSlot:focus-visible,
+.jellyChatEmojiEditToggle:focus-visible,
+.jellyChatEmojiSearch:focus {
+  outline: 2px solid rgba(0, 164, 220, 0.85);
+  outline-offset: 1px;
+}
+
+.jellyChatQuickReaction:active,
+.jellyChatEmojiOption:active,
+.jellyChatQuickEditSlot:active,
+.jellyChatEmojiEditToggle:active {
+  transform: scale(0.97);
+}
+
+.jellyChatQuickReaction:disabled,
+.jellyChatEmojiOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jellyChatEmojiPicker {
+  max-height: min(22rem, 46vh);
+  overflow-y: auto;
+  padding: 0 1rem 0.75rem;
+  background: #101317;
+}
+
+.jellyChatEmojiPickerToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.35rem 0 0.6rem;
+  background: #101317;
+}
+
+.jellyChatEmojiSearch {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 2.15rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  padding: 0.42rem 0.58rem;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.jellyChatEmojiSearch::placeholder {
+  color: #b5bfcc;
+  opacity: 1;
+}
+
+.jellyChatEmojiEditToggle {
+  flex: 0 0 auto;
+  max-width: 8.6rem;
+  min-height: 2.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e8edf4;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.05rem;
+}
+
+.jellyChatEmojiEditToggle:hover,
+.jellyChatEmojiEditToggle:focus-visible,
+.jellyChatEmojiEditToggle.is-active {
+  border-color: rgba(0, 164, 220, 0.58);
+  background: rgba(0, 164, 220, 0.16);
+  color: #d8f4ff;
+}
+
+.jellyChatQuickEditSlots {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.jellyChatQuickEditSlot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.jellyChatQuickEditSlot.is-selected {
+  border-color: rgba(0, 164, 220, 0.78);
+  background: rgba(0, 164, 220, 0.18);
+}
+
+.jellyChatEmojiPickerSection {
+  margin-top: 0.65rem;
+}
+
+.jellyChatEmojiPickerHeading {
+  margin-bottom: 0.34rem;
+  color: #b9c4d2;
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1rem;
+}
+
+.jellyChatEmojiGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.32rem;
+  min-height: 2.1rem;
+}
+
+.jellyChatEmojiOption {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.jellyChatEmojiOption:hover,
+.jellyChatEmojiOption:focus-visible,
+.jellyChatEmojiOption.is-favorite {
+  border-color: rgba(0, 164, 220, 0.52);
+  background: rgba(0, 164, 220, 0.14);
+}
+
+.jellyChatEmojiHint {
+  grid-column: 1 / -1;
+  color: #aeb8c6;
+  font-size: 0.78rem;
+  line-height: 1.2rem;
+}
+
+#jellyChatReactionOverlayHost {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483599;
+  pointer-events: none;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.jellyChatReactionFloat {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  pointer-events: none;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif;
+  font-size: 2.55rem;
+  font-synthesis: none;
+  line-height: 1;
+  text-rendering: optimizeLegibility;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 6px 16px rgba(0, 0, 0, 0.28);
+  transform: translate3d(-50%, 0, 0) scale(var(--jellychat-reaction-scale, 1));
+  transform-origin: center;
+  animation:
+    jellyChatReactionDrift var(--jellychat-reaction-duration, 3400ms) linear forwards,
+    jellyChatReactionOpacity var(--jellychat-reaction-duration, 3400ms) linear forwards;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+@keyframes jellyChatReactionDrift {
+  from {
+    transform: translate3d(-50%, 0, 0) scale(var(--jellychat-reaction-scale, 1));
+  }
+
+  to {
+    transform: translate3d(calc(-50% + var(--jellychat-reaction-dx, 0px)), var(--jellychat-reaction-rise-y, -560px), 0) scale(var(--jellychat-reaction-scale, 1));
+  }
+}
+
+@keyframes jellyChatReactionOpacity {
+  0%,
+  72% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
 #jellyChatForm {
   display: flex;
   gap: 0.55rem;
   padding: 0.8rem 1rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 0;
   background: #101317;
 }
 
@@ -500,5 +751,32 @@ body.jellychat-mobile #jellyChatDrawer {
 @media (prefers-reduced-motion: reduce) {
   #jellyChatDrawer {
     transition: none;
+  }
+
+  .jellyChatQuickReaction:active,
+  .jellyChatEmojiOption:active,
+  .jellyChatQuickEditSlot:active,
+  .jellyChatEmojiEditToggle:active {
+    transform: none;
+  }
+
+  .jellyChatReactionFloat {
+    animation: jellyChatReactionFade 900ms linear forwards;
+  }
+}
+
+@keyframes jellyChatReactionFade {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+
+  22% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(-50% + var(--jellychat-reaction-dx, 0px)), var(--jellychat-reaction-rise-y, -18px), 0) scale(1);
   }
 }

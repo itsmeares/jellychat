@@ -2,6 +2,7 @@ export type SyncPlayContext = {
   inGroup: boolean;
   groupId: string;
   groupName: string;
+  participantCount: number;
   unavailable: boolean;
 };
 
@@ -19,6 +20,7 @@ export type RoomEvent = {
   playbackAction: string;
   fromPositionTicks: unknown;
   toPositionTicks: unknown;
+  positionSeconds: number | null;
   itemId: string;
   itemName: string;
   clientEventId: string;
@@ -84,7 +86,35 @@ export type ChatActions = {
   toggleDrawer: () => void;
   toggleDrawerSide: () => void;
   sendMessage: (text: string) => Promise<boolean>;
+  sendReaction: (emoji: string) => Promise<boolean>;
   setInputFocused: (focused: boolean) => void;
+};
+
+export type ReactionOverlayItem = {
+  id: string;
+  emoji: string;
+  clientEventId: string;
+  createdAtMs: number;
+  expiresAtMs: number;
+  left: number;
+  top: number;
+  dx: number;
+  rise: number;
+  durationMs: number;
+  scale: number;
+  reducedMotion: boolean;
+};
+
+export type ReactionEvent = {
+  emoji: string;
+  clientEventId: string;
+  userId: string;
+  userName: string;
+  groupId: string;
+  itemId: string;
+  itemName: string;
+  positionSeconds: number | null;
+  createdAtUtc: string;
 };
 
 export type JellyChatDebug = Record<string, unknown> & {
@@ -158,6 +188,22 @@ export type JellyChatDebug = Record<string, unknown> & {
   lastPlaybackStartItemId: string | null;
   startupGuardUntil: string | null;
   lastSeekEventAt: string | null;
+  reactionOverlayCount: number;
+  reactionOverlayMax: number;
+  reactionEventCount: number;
+  lastReactionEmoji: string | null;
+  lastReactionSentAt: string | null;
+  lastReactionReceivedAt: string | null;
+  lastReactionClientEventId: string | null;
+  lastReactionDroppedReason: string | null;
+  emojiPickerOpen: boolean;
+  emojiSearchQuery: string;
+  favoriteEmojiCount: number;
+  recentlyUsedEmojiCount: number;
+  quickReactionSlots: string[];
+  quickReactionEditMode: boolean;
+  selectedQuickReactionSlotIndex: number | null;
+  lastQuickReactionEditAction: string | null;
   messageCount: number;
   lastEventPollAt: string | null;
   lastEventPostAt: string | null;

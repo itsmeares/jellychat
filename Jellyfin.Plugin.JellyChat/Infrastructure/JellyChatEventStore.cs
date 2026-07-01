@@ -99,6 +99,7 @@ public class JellyChatEventStore
             PlaybackAction = source.PlaybackAction,
             FromPositionTicks = source.FromPositionTicks,
             ToPositionTicks = source.ToPositionTicks,
+            PositionSeconds = source.PositionSeconds,
             ItemId = source.ItemId,
             ItemName = source.ItemName,
             ClientEventId = source.ClientEventId

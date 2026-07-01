@@ -1,9 +1,10 @@
-import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, PlaybackEventType, RoomEvent, SyncPlayContext, TimelineItem } from "../types";
-import { getEvents, normalizeChatMessage, postChatMessage, postPlaybackEvent } from "../api/events";
+import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, PlaybackEventType, ReactionEvent, RoomEvent, SyncPlayContext, TimelineItem } from "../types";
+import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
 import { buildTimelineItems, countDebugNodes, createClientEventId, formId, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
 import { getActiveMountHost, getDrawerSide, handleFloatingButtonFocusChange, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, showFloatingButton, updateLayout } from "./layout";
-import { installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
+import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
+import { addReactionOverlay, addRoomReactionOverlay, recordReactionReceived, setReactionParticipantCount } from "./reactions";
 
 type Subscriber = (state: ChatState) => void;
 type PlaybackPostRequest = {
@@ -28,10 +29,12 @@ let optimisticSequence = 0;
 let cachedLocalActorName = "";
 let cachedCurrentSessionIds: string[] = [];
 const localClientEventIds = new Set<string>();
+const seenReactionEventKeys = new Set<string>();
 let currentSyncPlayContext: SyncPlayContext = {
   inGroup: false,
   groupId: "",
   groupName: "",
+  participantCount: 1,
   unavailable: true
 };
 let state: ChatState = {
@@ -101,8 +104,10 @@ function createRoomEvent(args: {
   userName: string;
   clientEventId: string;
   text?: string;
+  emoji?: string;
   fromPositionTicks?: number;
   toPositionTicks?: number;
+  positionSeconds?: number;
   itemId?: string;
   itemName?: string;
   optimistic?: boolean;
@@ -124,10 +129,11 @@ function createRoomEvent(args: {
     sessionId: "",
     createdAtUtc: new Date().toISOString(),
     text: args.text || "",
-    emoji: "",
+    emoji: args.emoji || "",
     playbackAction: args.type.replace("playback.", ""),
     fromPositionTicks: args.fromPositionTicks ?? null,
     toPositionTicks: args.toPositionTicks ?? null,
+    positionSeconds: args.positionSeconds ?? null,
     itemId: args.itemId || "",
     itemName: args.itemName || "",
     clientEventId: args.clientEventId,
@@ -184,8 +190,10 @@ function mergeConfirmedEvent(existing: RoomEvent, incoming: RoomEvent): RoomEven
     sequence: incoming.sequence || existing.sequence,
     createdAtUtc: incoming.createdAtUtc || existing.createdAtUtc,
     text: incoming.text || existing.text,
+    emoji: incoming.emoji || existing.emoji,
     fromPositionTicks: incoming.fromPositionTicks ?? existing.fromPositionTicks,
     toPositionTicks: incoming.toPositionTicks ?? existing.toPositionTicks,
+    positionSeconds: incoming.positionSeconds ?? existing.positionSeconds,
     itemId: incoming.itemId || existing.itemId,
     itemName: incoming.itemName || existing.itemName,
     userName,
@@ -327,6 +335,47 @@ function updateLastSequenceFromEvents(events: RoomEvent[]): void {
   }
 }
 
+function getReactionEventKey(event: RoomEvent): string {
+  return event.clientEventId || event.eventKey || (event.sequence > 0 ? "sequence:" + event.sequence : "id:" + event.id);
+}
+
+function isReactionEvent(event: RoomEvent): boolean {
+  return event.type === "reaction.emoji" && !!event.emoji;
+}
+
+function recordSeenReactionEvents(events: RoomEvent[]): void {
+  events.filter(isReactionEvent).forEach((event) => {
+    seenReactionEventKeys.add(getReactionEventKey(event));
+  });
+}
+
+function processReactionEvents(events: RoomEvent[], skipOverlay: boolean): void {
+  const reactionEvents = events.filter(isReactionEvent);
+  if (reactionEvents.length === 0) {
+    return;
+  }
+
+  if (skipOverlay) {
+    recordSeenReactionEvents(reactionEvents);
+    return;
+  }
+
+  reactionEvents.forEach((event) => {
+    const key = getReactionEventKey(event);
+    if (seenReactionEventKeys.has(key)) {
+      return;
+    }
+
+    seenReactionEventKeys.add(key);
+    recordReactionReceived(event);
+    if (skipOverlay || localClientEventIds.has(event.clientEventId)) {
+      return;
+    }
+
+    addRoomReactionOverlay(event);
+  });
+}
+
 async function fetchChatEvents(forceFull: boolean): Promise<void> {
   if (eventFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
     return;
@@ -349,8 +398,10 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
       window.JellyChatDebug.lastEventRoundTripMs = Date.now() - startedAt;
     }
     updateLastSequenceFromEvents(events);
-    if (events.length > 0 || shouldFetchFull) {
-      mergeHistoryEvents(events);
+    processReactionEvents(events, shouldFetchFull);
+    const timelineEvents = events.filter((event) => !isReactionEvent(event));
+    if (timelineEvents.length > 0 || shouldFetchFull) {
+      mergeHistoryEvents(timelineEvents);
     } else {
       emit();
     }
@@ -368,8 +419,10 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     inGroup: !!context.inGroup,
     groupId: context.groupId || "",
     groupName: context.groupName || "",
+    participantCount: Math.max(1, Math.floor(context.participantCount || 1)),
     unavailable: !!context.unavailable
   };
+  setReactionParticipantCount(currentSyncPlayContext.participantCount);
 
   if (!currentSyncPlayContext.inGroup || groupChanged) {
     const hadTimeline = historyEvents.length > 0 || timelineItems.length > 0;
@@ -380,6 +433,7 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     lastSequence = 0;
     optimisticSequence = 0;
     lastEventGroupId = currentSyncPlayContext.groupId;
+    seenReactionEventKeys.clear();
     if (window.JellyChatDebug) {
       if (hadTimeline) {
         window.JellyChatDebug.lastTimelineClearedAt = new Date().toISOString();
@@ -669,6 +723,11 @@ function extractParticipantsFromGroups(groups: any[]): string[] {
   return participants;
 }
 
+function getGroupParticipantCount(group: any): number {
+  const participants = group && group.Participants;
+  return Array.isArray(participants) && participants.length > 0 ? participants.length : 1;
+}
+
 function getEventPollIntervalMs(): number {
   return isDrawerOpen() && currentSyncPlayContext.inGroup && currentSyncPlayContext.groupId
     ? refreshIntervalMs
@@ -721,14 +780,14 @@ function secondsToTicks(positionSeconds: number | undefined): number | undefined
 
 async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
   if (!window.ApiClient) {
-    return { inGroup: false, groupId: "", groupName: "", unavailable: true };
+    return { inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: true };
   }
 
   const sessions = await fetchSessions();
   cachedCurrentSessionIds = getCurrentSessionIds(sessions);
   const matchingUserSessions = sessions.filter(matchesCurrentUser);
   if (matchingUserSessions.length === 0) {
-    return { inGroup: false, groupId: "", groupName: "", unavailable: false };
+    return { inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: false };
   }
 
   const groupIds = getGroupIdsForCurrentUserSessions(sessions);
@@ -748,6 +807,7 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
       inGroup: true,
       groupId: preferredGroupId || resolveSyncPlayGroupId(matchingGroup),
       groupName: resolveSyncPlayGroupName(matchingGroup),
+      participantCount: getGroupParticipantCount(matchingGroup),
       unavailable: false
     };
   }
@@ -759,12 +819,13 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
         inGroup: true,
         groupId: resolveSyncPlayGroupId(matchingGroup),
         groupName: resolveSyncPlayGroupName(matchingGroup),
+        participantCount: getGroupParticipantCount(matchingGroup),
         unavailable: false
       };
     }
   }
 
-  return { inGroup: false, groupId: "", groupName: "", unavailable: groupsUnavailable };
+  return { inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: groupsUnavailable };
 }
 
 async function refreshSyncPlayState(): Promise<void> {
@@ -774,7 +835,7 @@ async function refreshSyncPlayState(): Promise<void> {
     setCurrentSyncPlayContext(await resolveCurrentSyncPlayContext());
   } catch (err) {
     logDebug("Failed to refresh SyncPlay state", err);
-    setCurrentSyncPlayContext({ inGroup: false, groupId: "", groupName: "", unavailable: true });
+    setCurrentSyncPlayContext({ inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: true });
   } finally {
     refreshInProgress = false;
   }
@@ -956,6 +1017,75 @@ export const actions: ChatActions = {
       sendInProgress = false;
       emit();
       focusComposer("send-success");
+    }
+  },
+  sendReaction: async (emoji: string) => {
+    const normalizedEmoji = emoji.trim();
+    if (!normalizedEmoji || !currentSyncPlayContext.inGroup) {
+      return false;
+    }
+
+    const clientEventId = createClientEventId();
+    localClientEventIds.add(clientEventId);
+    seenReactionEventKeys.add(clientEventId);
+    const playback = getCurrentPlaybackSnapshot();
+    const positionSeconds = typeof playback.positionSeconds === "number" && Number.isFinite(playback.positionSeconds)
+      ? playback.positionSeconds
+      : undefined;
+    const localReaction: ReactionEvent = {
+      emoji: normalizedEmoji,
+      clientEventId,
+      userId: getCurrentUserId(),
+      userName: "",
+      groupId: currentSyncPlayContext.groupId,
+      itemId: playback.itemId || "",
+      itemName: playback.itemName || "",
+      positionSeconds: positionSeconds ?? null,
+      createdAtUtc: new Date().toISOString()
+    };
+    addReactionOverlay(localReaction);
+    if (window.JellyChatDebug) {
+      const now = new Date().toISOString();
+      window.JellyChatDebug.reactionEventCount = Number(window.JellyChatDebug.reactionEventCount || 0) + 1;
+      window.JellyChatDebug.lastReactionEmoji = normalizedEmoji;
+      window.JellyChatDebug.lastReactionSentAt = now;
+      window.JellyChatDebug.lastReactionClientEventId = clientEventId;
+    }
+
+    try {
+      const postContext = await resolveEventPostContext();
+      if (!postContext) {
+        logDebug("Reaction blocked because no active SyncPlay group could be resolved.");
+        return false;
+      }
+
+      setReactionParticipantCount(Math.max(1, postContext.participants.length || currentSyncPlayContext.participantCount));
+
+      const result = await postEmojiReaction({
+        emoji: normalizedEmoji,
+        senderSessionId: postContext.senderSessionId,
+        groupId: postContext.groupId,
+        participants: postContext.participants,
+        itemId: playback.itemId,
+        itemName: playback.itemName,
+        positionSeconds,
+        clientEventId
+      });
+      if (window.JellyChatDebug) {
+        window.JellyChatDebug.lastEventPostAt = new Date().toISOString();
+      }
+
+      if (result && result.id) {
+        seenReactionEventKeys.add(getReactionEventKey(result));
+        void refreshEventsImmediately();
+        return true;
+      }
+
+      logDebug("Failed to send emoji reaction.");
+      return false;
+    } catch (err) {
+      logDebug("Failed to send emoji reaction", err);
+      return false;
     }
   },
   setInputFocused: (focused: boolean) => {

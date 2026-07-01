@@ -22,11 +22,25 @@ export function normalizeRoomEvent(roomEvent: unknown): RoomEvent {
     playbackAction: String(getValue(roomEvent, "PlaybackAction", "playbackAction") || ""),
     fromPositionTicks: getValue(roomEvent, "FromPositionTicks", "fromPositionTicks"),
     toPositionTicks: getValue(roomEvent, "ToPositionTicks", "toPositionTicks"),
+    positionSeconds: normalizeNullableNumber(getValue(roomEvent, "PositionSeconds", "positionSeconds")),
     itemId: String(getValue(roomEvent, "ItemId", "itemId") || ""),
     itemName: String(getValue(roomEvent, "ItemName", "itemName") || ""),
     clientEventId,
     eventKey: clientEventId ? "client:" + clientEventId : (sequence > 0 ? "sequence:" + sequence : "id:" + id)
   };
+}
+
+function normalizeNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 export function normalizeEventsResponse(response: unknown): RoomEvent[] {
@@ -145,6 +159,41 @@ export async function postPlaybackEvent(args: {
 
   if (args.itemName) {
     payload.ItemName = args.itemName;
+  }
+
+  const normalized = normalizePostResponse(await postJson("JellyChat/Events", payload, true));
+  return normalized ? normalizeRoomEvent(normalized) : null;
+}
+
+export async function postEmojiReaction(args: {
+  groupId: string;
+  senderSessionId: string;
+  emoji: string;
+  participants: string[];
+  itemId?: string;
+  itemName?: string;
+  positionSeconds?: number;
+  clientEventId?: string;
+}): Promise<RoomEvent | null> {
+  const payload: Record<string, unknown> = {
+    GroupId: args.groupId || "",
+    SenderSessionId: args.senderSessionId || "",
+    Type: "reaction.emoji",
+    Emoji: args.emoji,
+    ClientEventId: args.clientEventId || createClientEventId(),
+    ParticipantsCsv: args.participants.join(",")
+  };
+
+  if (args.itemId) {
+    payload.ItemId = args.itemId;
+  }
+
+  if (args.itemName) {
+    payload.ItemName = args.itemName;
+  }
+
+  if (typeof args.positionSeconds === "number" && Number.isFinite(args.positionSeconds)) {
+    payload.PositionSeconds = args.positionSeconds;
   }
 
   const normalized = normalizePostResponse(await postJson("JellyChat/Events", payload, true));
