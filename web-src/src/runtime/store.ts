@@ -1025,6 +1025,33 @@ export const actions: ChatActions = {
       return false;
     }
 
+    const clientEventId = createClientEventId();
+    localClientEventIds.add(clientEventId);
+    seenReactionEventKeys.add(clientEventId);
+    const playback = getCurrentPlaybackSnapshot();
+    const positionSeconds = typeof playback.positionSeconds === "number" && Number.isFinite(playback.positionSeconds)
+      ? playback.positionSeconds
+      : undefined;
+    const localReaction: ReactionEvent = {
+      emoji: normalizedEmoji,
+      clientEventId,
+      userId: getCurrentUserId(),
+      userName: "",
+      groupId: currentSyncPlayContext.groupId,
+      itemId: playback.itemId || "",
+      itemName: playback.itemName || "",
+      positionSeconds: positionSeconds ?? null,
+      createdAtUtc: new Date().toISOString()
+    };
+    addReactionOverlay(localReaction);
+    if (window.JellyChatDebug) {
+      const now = new Date().toISOString();
+      window.JellyChatDebug.reactionEventCount = Number(window.JellyChatDebug.reactionEventCount || 0) + 1;
+      window.JellyChatDebug.lastReactionEmoji = normalizedEmoji;
+      window.JellyChatDebug.lastReactionSentAt = now;
+      window.JellyChatDebug.lastReactionClientEventId = clientEventId;
+    }
+
     try {
       const postContext = await resolveEventPostContext();
       if (!postContext) {
@@ -1033,32 +1060,6 @@ export const actions: ChatActions = {
       }
 
       setReactionParticipantCount(Math.max(1, postContext.participants.length || currentSyncPlayContext.participantCount));
-      const clientEventId = createClientEventId();
-      localClientEventIds.add(clientEventId);
-      seenReactionEventKeys.add(clientEventId);
-      const playback = getCurrentPlaybackSnapshot();
-      const positionSeconds = typeof playback.positionSeconds === "number" && Number.isFinite(playback.positionSeconds)
-        ? playback.positionSeconds
-        : undefined;
-      const localReaction: ReactionEvent = {
-        emoji: normalizedEmoji,
-        clientEventId,
-        userId: getCurrentUserId(),
-        userName: postContext.userName,
-        groupId: postContext.groupId,
-        itemId: playback.itemId || "",
-        itemName: playback.itemName || "",
-        positionSeconds: positionSeconds ?? null,
-        createdAtUtc: new Date().toISOString()
-      };
-      addReactionOverlay(localReaction);
-      if (window.JellyChatDebug) {
-        const now = new Date().toISOString();
-        window.JellyChatDebug.reactionEventCount = Number(window.JellyChatDebug.reactionEventCount || 0) + 1;
-        window.JellyChatDebug.lastReactionEmoji = normalizedEmoji;
-        window.JellyChatDebug.lastReactionSentAt = now;
-        window.JellyChatDebug.lastReactionClientEventId = clientEventId;
-      }
 
       const result = await postEmojiReaction({
         emoji: normalizedEmoji,
