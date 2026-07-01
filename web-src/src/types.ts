@@ -117,6 +117,15 @@ export type ReactionEvent = {
   createdAtUtc: string;
 };
 
+export type JellyChatDebugDetails = {
+  layout: Record<string, unknown>;
+  events: Record<string, unknown>;
+  playback: Record<string, unknown>;
+  reactions: Record<string, unknown>;
+  emojiPicker: Record<string, unknown>;
+  lifecycle: Record<string, unknown>;
+};
+
 export type JellyChatDebug = Record<string, unknown> & {
   loaded: boolean;
   frontend: "react";
@@ -205,9 +214,22 @@ export type JellyChatDebug = Record<string, unknown> & {
   selectedQuickReactionSlotIndex: number | null;
   lastQuickReactionEditAction: string | null;
   messageCount: number;
+  timelineCount: number;
+  currentGroupId: string;
+  drawerOpen: boolean;
+  drawerSide: DrawerSide;
+  drawerWidth: number;
+  counts: Record<string, unknown>;
+  status: Record<string, unknown>;
+  last: Record<string, unknown>;
+  details: JellyChatDebugDetails;
   lastEventPollAt: string | null;
   lastEventPostAt: string | null;
   lastError: string | null;
+  dump: () => Record<string, unknown>;
+  reset: () => Record<string, unknown>;
+  setVerbose: (enabled: boolean) => Record<string, unknown>;
+  getSummary: () => Record<string, unknown>;
 };
 
 declare global {
