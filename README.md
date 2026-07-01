@@ -28,7 +28,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Install folder: `JellyChat`
 - Jellyfin display name: `JellyChat`
 - Internal project path: `Jellyfin.Plugin.JellyChat`
-- Version: `0.3.0`
+- Version: `0.4.0`
 - Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
 - Framework: `net9.0`
 - Description: JellyChat drawer backed by a plugin-owned in-memory event stream, with no toast chat transport, external WebSocket server, or new ports.
@@ -141,7 +141,7 @@ Notes:
 
 ## Release Build
 
-Publish the v0.3.0 release output:
+Publish the v0.4.0 release output:
 
 ```bash
 dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
@@ -157,10 +157,10 @@ Create the release zip from the contents of the publish directory:
 
 ```bash
 cd Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish
-zip -r Jellyfin.Plugin.JellyChat_0.3.0.zip .
+zip -r Jellyfin.Plugin.JellyChat_0.4.0.zip .
 ```
 
-Create a GitHub release tagged `v0.3.0` and attach `Jellyfin.Plugin.JellyChat_0.3.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
+Create a GitHub release tagged `v0.4.0` and attach `Jellyfin.Plugin.JellyChat_0.4.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
 
 ## Testing Checklist
 
