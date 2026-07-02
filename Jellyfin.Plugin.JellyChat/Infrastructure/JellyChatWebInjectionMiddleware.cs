@@ -26,11 +26,11 @@ public sealed class JellyChatWebInjectionMiddleware
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     private static readonly Regex JellyChatCssTagRegex = new(
-        @"<link\b[^>]*\bhref=""/JellyChat/Assets/jellychat\.css\?v=[^""]*""[^>]*>\s*",
+        @"<link\b[^>]*\bhref=""[^""]*/JellyChat/Assets/jellychat\.css\?v=[^""]*""[^>]*>\s*",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     private static readonly Regex JellyChatScriptTagRegex = new(
-        @"<script\b[^>]*\bsrc=""/JellyChat/Assets/jellychat\.js\?v=[^""]*""[^>]*>\s*</script>\s*",
+        @"<script\b[^>]*\bsrc=""[^""]*/JellyChat/Assets/jellychat\.js\?v=[^""]*""[^>]*>\s*</script>\s*",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
     private readonly RequestDelegate _next;
@@ -93,7 +93,7 @@ public sealed class JellyChatWebInjectionMiddleware
                 html = await reader.ReadToEndAsync().ConfigureAwait(false);
             }
 
-            if (!TryInjectAssets(html, context.Request.Path.Value ?? string.Empty, out string transformedHtml))
+            if (!TryInjectAssets(html, context.Request.Path.Value ?? string.Empty, ResolveAssetPathBase(context.Request), out string transformedHtml))
             {
                 byte[] originalBytes = HtmlEncoding.GetBytes(html);
                 context.Response.ContentLength = originalBytes.Length;
@@ -128,9 +128,7 @@ public sealed class JellyChatWebInjectionMiddleware
         }
 
         string path = request.Path.Value ?? string.Empty;
-        return string.Equals(path, "/web", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(path, "/web/", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(path, "/web/index.html", StringComparison.OrdinalIgnoreCase);
+        return TryInferPathBaseFromWebPath(path, out _);
     }
 
     private static bool ShouldTransformResponse(HttpResponse response)
@@ -144,7 +142,7 @@ public sealed class JellyChatWebInjectionMiddleware
         return contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool TryInjectAssets(string html, string path, out string transformedHtml)
+    private bool TryInjectAssets(string html, string path, string assetPathBase, out string transformedHtml)
     {
         transformedHtml = html;
         int bodyIndex = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
@@ -164,18 +162,71 @@ public sealed class JellyChatWebInjectionMiddleware
 
         string version = _assetProvider.PluginVersion;
         string encodedVersion = Uri.EscapeDataString(version);
+        string stylesheetUrl = BuildAssetUrl(assetPathBase, "jellychat.css", encodedVersion);
+        string scriptUrl = BuildAssetUrl(assetPathBase, "jellychat.js", encodedVersion);
         string assetBlock = string.Format(
             CultureInfo.InvariantCulture,
-            "{0}<!-- JellyChat:start v{1} -->{0}<link rel=\"stylesheet\" href=\"/JellyChat/Assets/jellychat.css?v={2}\">{0}<script defer src=\"/JellyChat/Assets/jellychat.js?v={2}\"></script>{0}<!-- JellyChat:end -->{0}",
+            "{0}<!-- JellyChat:start v{1} -->{0}<link rel=\"stylesheet\" href=\"{2}\" data-jellychat-style=\"true\">{0}<script defer src=\"{3}\" data-jellychat-script=\"true\"></script>{0}<!-- JellyChat:end -->{0}",
             Environment.NewLine,
             version,
-            encodedVersion);
+            stylesheetUrl,
+            scriptUrl);
 
         transformedHtml = string.Concat(
             withoutJellyChat.AsSpan(0, bodyIndex),
             assetBlock,
             withoutJellyChat.AsSpan(bodyIndex));
         return true;
+    }
+
+    private static string ResolveAssetPathBase(HttpRequest request)
+    {
+        if (request.PathBase.HasValue)
+        {
+            return NormalizePathBase(request.PathBase.Value ?? string.Empty);
+        }
+
+        return TryInferPathBaseFromWebPath(request.Path.Value ?? string.Empty, out string inferredPathBase)
+            ? inferredPathBase
+            : string.Empty;
+    }
+
+    private static bool TryInferPathBaseFromWebPath(string path, out string pathBase)
+    {
+        pathBase = string.Empty;
+        string normalizedPath = path.TrimEnd('/');
+        if (string.Equals(normalizedPath, "/web", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        const string WebIndexSuffix = "/web/index.html";
+        if (normalizedPath.EndsWith(WebIndexSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            pathBase = NormalizePathBase(normalizedPath[..^WebIndexSuffix.Length]);
+            return true;
+        }
+
+        const string WebSuffix = "/web";
+        if (normalizedPath.EndsWith(WebSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            pathBase = NormalizePathBase(normalizedPath[..^WebSuffix.Length]);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizePathBase(string pathBase)
+    {
+        string normalizedPathBase = pathBase.TrimEnd('/');
+        return string.Equals(normalizedPathBase, "/", StringComparison.Ordinal) ? string.Empty : normalizedPathBase;
+    }
+
+    private static string BuildAssetUrl(string assetPathBase, string assetName, string encodedVersion)
+    {
+        string normalizedPathBase = NormalizePathBase(assetPathBase);
+        return string.Concat(normalizedPathBase, "/JellyChat/Assets/", assetName, "?v=", encodedVersion);
     }
 
     private static string RemoveExistingJellyChatAssets(string html)
