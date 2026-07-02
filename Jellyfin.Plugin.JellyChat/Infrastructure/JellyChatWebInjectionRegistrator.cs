@@ -1,13 +1,13 @@
 using System;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
 /// <summary>
-/// Registers JellyChat web transformations.
+/// Registers JellyChat web services.
 /// </summary>
 public class JellyChatWebInjectionRegistrator : IPluginServiceRegistrator
 {
@@ -15,6 +15,7 @@ public class JellyChatWebInjectionRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         serviceCollection.AddSingleton<JellyChatEventStore>();
-        serviceCollection.AddHostedService<JellyChatWebInjectionStartupService>();
+        serviceCollection.AddSingleton<JellyChatAssetProvider>();
+        serviceCollection.AddSingleton<IStartupFilter, JellyChatWebInjectionStartupFilter>();
     }
 }

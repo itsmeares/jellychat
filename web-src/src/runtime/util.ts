@@ -383,29 +383,87 @@ export function cleanupDuplicateRoots(preferredHost: HTMLElement): HTMLElement |
   return activeRoot;
 }
 
+function resolveAssetVersion(scriptSrc: string): string {
+  if (!scriptSrc) {
+    return "";
+  }
+
+  try {
+    return new URL(scriptSrc, window.location.href).searchParams.get("v") || "";
+  } catch {
+    return "";
+  }
+}
+
+function findInjectionMarker(): boolean {
+  if (!document.createTreeWalker) {
+    return false;
+  }
+
+  const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_COMMENT);
+  let node = walker.nextNode();
+  while (node) {
+    if (node.nodeValue && node.nodeValue.includes("JellyChat:start")) {
+      return true;
+    }
+
+    node = walker.nextNode();
+  }
+
+  return false;
+}
+
+export function markSelfContainedAssetsLoaded(scriptSrc: string): void {
+  if (!window.JellyChatDebug) {
+    return;
+  }
+
+  window.JellyChatDebug.injectionMode = "self-contained";
+  window.JellyChatDebug.assetMode = "plugin-endpoint";
+  window.JellyChatDebug.fileTransformationRequired = false;
+  window.JellyChatDebug.injectedAssetVersion = resolveAssetVersion(scriptSrc);
+  window.JellyChatDebug.injectionMarkerFound = findInjectionMarker();
+  window.JellyChatDebug.assetJsLoaded = true;
+  window.JellyChatDebug.lastInjectionError = null;
+}
+
+function markStylesheetLoaded(loaded: boolean, error: string | null): void {
+  if (!window.JellyChatDebug) {
+    return;
+  }
+
+  window.JellyChatDebug.assetCssLoaded = loaded;
+  window.JellyChatDebug.lastInjectionError = error;
+}
+
 export function waitForStylesheet(): Promise<void> {
-  const link = document.querySelector<HTMLLinkElement>('link[data-jellychat-style="true"]');
+  const link = document.querySelector<HTMLLinkElement>('link[href^="/JellyChat/Assets/jellychat.css"], link[data-jellychat-style="true"]');
   if (!link) {
+    markStylesheetLoaded(false, "JellyChat stylesheet link not found.");
     return Promise.resolve();
   }
 
   if ((link as HTMLLinkElement).sheet) {
+    markStylesheetLoaded(true, null);
     return Promise.resolve();
   }
 
   return new Promise((resolve) => {
     const timeout = window.setTimeout(() => {
+      markStylesheetLoaded(false, "JellyChat stylesheet load timed out.");
       recordError("JellyChat stylesheet load timed out.");
       resolve();
     }, 2500);
 
     link.addEventListener("load", () => {
       window.clearTimeout(timeout);
+      markStylesheetLoaded(true, null);
       resolve();
     }, { once: true });
 
     link.addEventListener("error", () => {
       window.clearTimeout(timeout);
+      markStylesheetLoaded(false, "JellyChat stylesheet failed to load.");
       recordError("JellyChat stylesheet failed to load.");
       resolve();
     }, { once: true });

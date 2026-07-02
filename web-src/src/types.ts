@@ -131,6 +131,13 @@ export type JellyChatDebug = Record<string, unknown> & {
   frontend: "react";
   mounted: boolean;
   reactMounted: boolean;
+  injectionMode: "self-contained";
+  assetMode: "plugin-endpoint";
+  fileTransformationRequired: false;
+  injectedAssetVersion: string;
+  injectionMarkerFound: boolean;
+  assetCssLoaded: boolean;
+  assetJsLoaded: boolean;
   rootCount: number;
   buttonCount: number;
   intervalCount: number;
@@ -226,6 +233,7 @@ export type JellyChatDebug = Record<string, unknown> & {
   lastEventPollAt: string | null;
   lastEventPostAt: string | null;
   lastError: string | null;
+  lastInjectionError: string | null;
   dump: () => Record<string, unknown>;
   reset: () => Record<string, unknown>;
   setVerbose: (enabled: boolean) => Record<string, unknown>;

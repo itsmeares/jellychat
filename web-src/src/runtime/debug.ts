@@ -13,6 +13,13 @@ const summaryKeys = [
   "frontend",
   "mounted",
   "reactMounted",
+  "injectionMode",
+  "assetMode",
+  "fileTransformationRequired",
+  "injectedAssetVersion",
+  "injectionMarkerFound",
+  "assetCssLoaded",
+  "assetJsLoaded",
   "apiMode",
   "currentGroupId",
   "drawerOpen",
@@ -27,7 +34,8 @@ const summaryKeys = [
   "playbackEventCount",
   "reactionEventCount",
   "reactionOverlayCount",
-  "lastError"
+  "lastError",
+  "lastInjectionError"
 ];
 
 const structuredKeys = ["counts", "status", "last", "details"];
@@ -248,6 +256,13 @@ function defaultValues(): DebugRecord {
     frontend: "react",
     mounted: false,
     reactMounted: false,
+    injectionMode: "self-contained",
+    assetMode: "plugin-endpoint",
+    fileTransformationRequired: false,
+    injectedAssetVersion: "",
+    injectionMarkerFound: false,
+    assetCssLoaded: false,
+    assetJsLoaded: false,
     mountCount: 0,
     rootCount: 0,
     buttonCount: 0,
@@ -406,7 +421,8 @@ function defaultValues(): DebugRecord {
     controlsOverlapAvoided: false,
     controlsInsetApplied: false,
     floatingButtonAutoHidden: false,
-    lastError: null
+    lastError: null,
+    lastInjectionError: null
   };
 }
 
@@ -466,6 +482,13 @@ export function initializeJellyChatDebug(): DebugRecord {
       frontend: topLevel.frontend,
       mounted: topLevel.mounted,
       reactMounted: topLevel.reactMounted,
+      injectionMode: topLevel.injectionMode,
+      assetMode: topLevel.assetMode,
+      fileTransformationRequired: topLevel.fileTransformationRequired,
+      injectedAssetVersion: topLevel.injectedAssetVersion,
+      injectionMarkerFound: topLevel.injectionMarkerFound,
+      assetCssLoaded: topLevel.assetCssLoaded,
+      assetJsLoaded: topLevel.assetJsLoaded,
       apiMode: topLevel.apiMode,
       currentGroupId: topLevel.currentGroupId,
       drawerOpen: topLevel.drawerOpen,
@@ -480,6 +503,7 @@ export function initializeJellyChatDebug(): DebugRecord {
   function buildLast(): DebugRecord {
     return {
       error: topLevel.lastError,
+      injectionError: topLevel.lastInjectionError,
       sequence: details.events.lastSequence,
       eventPollAt: details.events.lastEventPollAt,
       eventPostAt: details.events.lastEventPostAt,
@@ -533,6 +557,7 @@ export function initializeJellyChatDebug(): DebugRecord {
       submitCount: 0,
       confirmedOptimisticEventCount: 0,
       lastError: null,
+      lastInjectionError: null,
       lastImmediateRefreshAt: null,
       lastOptimisticClientEventId: null,
       lastOptimisticActorName: null,
