@@ -233,6 +233,7 @@ export type JellyChatDebug = Record<string, unknown> & {
   isJellyfinDesktop: boolean;
   layoutMode: string;
   desktopVideoSafeMode: boolean;
+  desktopOverlayCssFallbackApplied: boolean;
   videoSurfaceInsetApplied: boolean;
   videoSurfaceResizeSuppressed: boolean;
   playerControlsInsetApplied: boolean;
