@@ -14,5 +14,6 @@ owner: "itsmeares"
 artifacts:
 - "Jellyfin.Plugin.JellyChat.dll"
 changelog: >
-  Adds self-contained Jellyfin Web injection through plugin-owned middleware and
-  plugin-owned asset endpoints.
+  Removes the Jellyfin File Transformation requirement and adds self-contained
+  Jellyfin Web injection through plugin-owned middleware and plugin-owned asset
+  endpoints.
