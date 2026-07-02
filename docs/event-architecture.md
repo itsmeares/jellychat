@@ -1,6 +1,6 @@
 # JellyChat Event Architecture
 
-JellyChat v0.2 uses a bounded room event stream keyed by Jellyfin SyncPlay group id. The stream is the shared backend shape for chat messages, emoji reactions, playback action log entries, and future room events.
+JellyChat uses a bounded room event stream keyed by Jellyfin SyncPlay group id. The stream is the shared backend shape for chat messages, emoji reactions, playback action log entries, and future room events.
 
 ## Boundaries
 
@@ -8,7 +8,7 @@ JellyChat v0.2 uses a bounded room event stream keyed by Jellyfin SyncPlay group
 - JellyChat does not issue playback commands and does not implement sync logic.
 - Playback events such as `playback.play`, `playback.pause`, and `playback.seek` are timeline/log entries only.
 - No external WebSocket server, separate frontend app, or additional network port is used.
-- File Transformation remains the script injection mechanism for Jellyfin Web.
+- JellyChat v0.5.0 and later inject Jellyfin Web assets through plugin-owned middleware and `/JellyChat/Assets/*` endpoints. File Transformation was required only by older versions before v0.5.0.
 - Event history is in memory only and resets when Jellyfin or the plugin restarts.
 - GIF support is intentionally out of scope for this step.
 

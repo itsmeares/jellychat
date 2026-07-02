@@ -11,7 +11,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Does not use Jellyfin toast notifications as the chat transport.
 - Does not run a separate WebSocket service.
 - Does not require opening or configuring additional ports.
-- Depends on Jellyfin File Transformation to inject `jellychat.css` and `jellychat.js` into Jellyfin web.
+- Injects `jellychat.css` and `jellychat.js` into Jellyfin web through JellyChat-owned middleware and asset endpoints.
 
 ## Current Limitations
 
@@ -28,7 +28,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Install folder: `JellyChat`
 - Jellyfin display name: `JellyChat`
 - Internal project path: `Jellyfin.Plugin.JellyChat`
-- Version: `0.4.0`
+- Version: `0.5.0`
 - Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
 - Framework: `net9.0`
 - Description: JellyChat drawer backed by a plugin-owned in-memory event stream, with no toast chat transport, external WebSocket server, or new ports.
@@ -39,8 +39,8 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Built against `Jellyfin.Controller` / `Jellyfin.Model` `10.11.8`.
 - Target ABI: `10.11.0.0`.
 - .NET SDK 9.0 for building.
-- Jellyfin File Transformation plugin installed and enabled.
-  - Without File Transformation, JellyChat frontend assets will not be injected into the web client.
+- JellyChat v0.5.0 and later do not require Jellyfin File Transformation.
+  - Older JellyChat versions before v0.5.0 required File Transformation for Jellyfin Web injection.
 
 ## Frontend Build
 
@@ -60,6 +60,13 @@ Jellyfin.Plugin.JellyChat/Web/jellychat.js
 ```
 
 `dotnet publish` runs `npm run build` only. Run `npm install` or `npm ci` as a separate setup step before publishing.
+
+At runtime, JellyChat serves those assets from same-origin plugin endpoints:
+
+```text
+/JellyChat/Assets/jellychat.css
+/JellyChat/Assets/jellychat.js
+```
 
 ## Repository Install
 
@@ -141,7 +148,7 @@ Notes:
 
 ## Release Build
 
-Publish the v0.4.0 release output:
+Publish the v0.5.0 release output:
 
 ```bash
 dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
@@ -157,10 +164,10 @@ Create the release zip from the contents of the publish directory:
 
 ```bash
 cd Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish
-zip -r Jellyfin.Plugin.JellyChat_0.4.0.zip .
+zip -r Jellyfin.Plugin.JellyChat_0.5.0.zip .
 ```
 
-Create a GitHub release tagged `v0.4.0` and attach `Jellyfin.Plugin.JellyChat_0.4.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
+Create a GitHub release tagged `v0.5.0` and attach `Jellyfin.Plugin.JellyChat_0.5.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
 
 ## Testing Checklist
 
@@ -176,12 +183,14 @@ Create a GitHub release tagged `v0.4.0` and attach `Jellyfin.Plugin.JellyChat_0.
 
 - Chat button does not appear:
   - Verify the user is in an active SyncPlay group.
-  - Verify File Transformation is installed and enabled.
   - Restart Jellyfin after plugin deploy/update.
+  - Open `/JellyChat/Assets/jellychat.js` and `/JellyChat/Assets/jellychat.css` in the same browser session and confirm both return `200`.
+  - Open `/web/index.html`, view source, and confirm one `JellyChat:start` marker block is present.
 - Messages do not appear on another device:
   - Confirm both devices are in the same SyncPlay group.
   - Refresh or reopen the drawer to force an event poll.
-  - Check the browser console for `[JellyChat]` logs.
+  - Check the browser console for `[JellyChat] self-contained assets loaded` and other `[JellyChat]` logs.
+  - Check `window.JellyChatDebug.injectionMode`, `window.JellyChatDebug.assetMode`, and `window.JellyChatDebug.lastInjectionError`.
 
 ## Acknowledgements
 
