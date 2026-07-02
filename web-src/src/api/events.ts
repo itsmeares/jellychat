@@ -26,7 +26,8 @@ export function normalizeRoomEvent(roomEvent: unknown): RoomEvent {
     itemId: String(getValue(roomEvent, "ItemId", "itemId") || ""),
     itemName: String(getValue(roomEvent, "ItemName", "itemName") || ""),
     clientEventId,
-    eventKey: clientEventId ? "client:" + clientEventId : (sequence > 0 ? "sequence:" + sequence : "id:" + id)
+    eventKey: clientEventId ? "client:" + clientEventId : (sequence > 0 ? "sequence:" + sequence : "id:" + id),
+    isTyping: normalizeNullableBoolean(getValue(roomEvent, "IsTyping", "isTyping"))
   };
 }
 
@@ -38,6 +39,20 @@ function normalizeNullableNumber(value: unknown): number | null {
   if (typeof value === "string" && value.trim().length > 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function normalizeNullableBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
   }
 
   return null;
@@ -197,5 +212,24 @@ export async function postEmojiReaction(args: {
   }
 
   const normalized = normalizePostResponse(await postJson("JellyChat/Events", payload, true));
+  return normalized ? normalizeRoomEvent(normalized) : null;
+}
+
+export async function postTypingUpdate(args: {
+  groupId: string;
+  senderSessionId: string;
+  isTyping: boolean;
+  participants: string[];
+  clientEventId?: string;
+}): Promise<RoomEvent | null> {
+  const normalized = normalizePostResponse(await postJson("JellyChat/Events", {
+    GroupId: args.groupId || "",
+    SenderSessionId: args.senderSessionId || "",
+    Type: "typing.update",
+    IsTyping: args.isTyping,
+    ClientEventId: args.clientEventId || createClientEventId(),
+    ParticipantsCsv: args.participants.join(",")
+  }, true));
+
   return normalized ? normalizeRoomEvent(normalized) : null;
 }

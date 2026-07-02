@@ -1,6 +1,7 @@
 import type { DrawerSide } from "../types";
-import { drawerId, drawerWidthPx, floatingHostId, markerClass, mobileLayoutMaxWidthPx, rootId } from "./util";
+import { drawerId, mobileLayoutMaxWidthPx, rootId } from "./util";
 import { countDebugNodes, logDebug } from "./util";
+import { getDrawerBackgroundAlphaPreference, getDrawerWidthPreference } from "./preferences";
 
 const fullscreenSurfaceAttribute = "data-jellychat-fullscreen-surface";
 const fullscreenSurfaceClass = "jellychat-fullscreen-player-surface";
@@ -14,15 +15,12 @@ const insetTargetClass = "jellychat-inset-target";
 const blockInsetClass = "jellychat-inset-block";
 const fixedInsetClass = "jellychat-inset-positioned";
 const drawerSideStorageKey = "jellychat.drawerSide";
-const floatingHiddenClass = "jellychat-floating-hidden";
-const floatingIdleDelayMs = 1200;
 const emptyInsetValue = "0px";
 
 let normalMountHost: HTMLElement | null = null;
 let lastFullscreenHost: HTMLElement | null = null;
 let lastLayoutMode = "";
 let layoutResizeTimer = 0;
-let floatingButtonTimer = 0;
 let fullscreenLayoutSurfaces: Element[] = [];
 let normalContentInsetSurfaces: Element[] = [];
 let headerControlsInsetSurfaces: Element[] = [];
@@ -31,10 +29,6 @@ let playerProgressInsetSurfaces: Element[] = [];
 let playerSubtitlesInsetSurfaces: Element[] = [];
 let lastFullscreenLayoutSignature = "";
 const styleSnapshots = new WeakMap<HTMLElement, string>();
-let controlsVisibilityObserver: MutationObserver | null = null;
-let observedControlsElement: Element | null = null;
-let observedControlsTargets: Element[] = [];
-let floatingPointerInside = false;
 
 type JellyChatLayoutRect = {
   leftInset: number;
@@ -122,7 +116,7 @@ export function setDrawerSide(side: DrawerSide): void {
 export function getJellyChatLayoutRect(): JellyChatLayoutRect {
   const drawerOpen = isDrawerOpen();
   const drawerSide = getDrawerSide();
-  const drawerWidth = drawerOpen ? drawerWidthPx : 0;
+  const drawerWidth = drawerOpen ? getDrawerWidthPreference().width : 0;
   return {
     leftInset: drawerOpen && drawerSide === "left" ? drawerWidth : 0,
     rightInset: drawerOpen && drawerSide === "right" ? drawerWidth : 0,
@@ -199,8 +193,7 @@ function clearFullscreenHostClasses(element: Element | null): void {
 
 function isJellyChatElement(element: Element | null): boolean {
   return !!(element
-    && (element.id === floatingHostId
-      || element.id === drawerId
+    && (element.id === drawerId
       || element.id === rootId
       || element.hasAttribute("data-jellychat-host")
       || element.hasAttribute("data-jellychat-root")
@@ -906,7 +899,7 @@ function updateSurfaceDebug(host: Element | null, detection: ReturnType<typeof i
   state.fullscreenPlayerSurfaceTag = tag(primary);
   state.fullscreenPlayerSurfaceId = elementId(primary);
   state.fullscreenPlayerSurfaceClass = className(primary);
-  state.videoReservedWidth = shouldDock && surfaces.length > 0 ? drawerWidthPx : 0;
+  state.videoReservedWidth = shouldDock && surfaces.length > 0 ? getDrawerWidthPreference().width : 0;
 }
 
 function updateTargetDebug(prefix: string, surfaces: Element[]): void {
@@ -1203,28 +1196,6 @@ function setLayoutClass(name: string, enabled: boolean): void {
   document.documentElement?.classList.toggle(name, enabled);
 }
 
-function isFloatingButtonFocused(): boolean {
-  const floatingHost = document.getElementById(floatingHostId);
-  return !!(floatingHost && document.activeElement && floatingHost.contains(document.activeElement));
-}
-
-export function setFloatingButtonPointerInside(isInside: boolean): void {
-  floatingPointerInside = isInside;
-  if (isInside) {
-    setFloatingButtonHidden(false);
-    clearFloatingButtonTimer();
-  } else {
-    showFloatingButton("floating-pointer-leave");
-  }
-}
-
-function setFloatingButtonHidden(hidden: boolean): void {
-  setLayoutClass(floatingHiddenClass, hidden);
-  if (window.JellyChatDebug) {
-    window.JellyChatDebug.floatingButtonAutoHidden = hidden;
-  }
-}
-
 function controlsHost(): Element | null {
   return getFullscreenHost() || document.body || null;
 }
@@ -1242,163 +1213,6 @@ function controlsElementIsVisible(element: Element | null): boolean {
     && Number(style.opacity || "1") > 0.05;
 }
 
-function updateFloatingButtonFromControlsVisibility(reason: string): boolean {
-  if (!detectVideoRoute()) {
-    setFloatingButtonHidden(false);
-    return false;
-  }
-
-  if (isDrawerOpen() || isFloatingButtonFocused() || floatingPointerInside) {
-    setFloatingButtonHidden(false);
-    clearFloatingButtonTimer();
-    return true;
-  }
-
-  const host = controlsHost();
-  const controls = host ? findControlsElement(host) : null;
-  if (!controls) {
-    if (window.JellyChatDebug) {
-      window.JellyChatDebug.controlsVisibilitySource = "fallback-timer";
-    }
-    return false;
-  }
-
-  observeControlsVisibility(controls);
-  const visible = controlsElementIsVisible(controls);
-  if (window.JellyChatDebug) {
-    window.JellyChatDebug.controlsVisibilitySource = "jellyfin-osd";
-    if (visible) {
-      window.JellyChatDebug.lastControlsVisibleAt = new Date().toISOString();
-    } else {
-      window.JellyChatDebug.lastControlsHiddenAt = new Date().toISOString();
-    }
-    window.JellyChatDebug.lastControlsVisibilityReason = reason;
-  }
-
-  setFloatingButtonHidden(!visible);
-  return true;
-}
-
-function observeControlsVisibility(element: Element): void {
-  if (observedControlsElement === element && controlsVisibilityObserver) {
-    return;
-  }
-
-  if (controlsVisibilityObserver) {
-    controlsVisibilityObserver.disconnect();
-    controlsVisibilityObserver = null;
-  }
-
-  observedControlsElement = element;
-  observedControlsTargets = [];
-  if (typeof MutationObserver === "undefined") {
-    return;
-  }
-
-  controlsVisibilityObserver = new MutationObserver(() => {
-    updateFloatingButtonFromControlsVisibility("jellyfin-osd");
-  });
-  const host = controlsHost();
-  const ancestors = host ? ancestorsUntilHost(element, host) : [];
-  observedControlsTargets = uniqueElements([element, ...ancestors]).filter((target) => {
-    const label = (className(target) + " " + elementId(target)).toLowerCase();
-    return target === element || /videoosd|osd|control|player|nowplaying/.test(label);
-  }).slice(0, 6);
-  observedControlsTargets.forEach((target) => {
-    controlsVisibilityObserver?.observe(target, {
-      attributes: true,
-      attributeFilter: ["class", "style", "hidden", "aria-hidden"]
-    });
-  });
-}
-
-function visibleControlsExist(): boolean {
-  const selectors = controlsSelectors();
-  return selectors.some((selector) => {
-    try {
-      return Array.from(document.querySelectorAll(selector)).some((element) => {
-        if (isWithinJellyChatElement(element)) return false;
-        const elementRect = rect(element);
-        if (!elementRect || elementRect.width <= 0 || elementRect.height <= 0) return false;
-        if (!window.getComputedStyle) return true;
-        const style = window.getComputedStyle(element);
-        return style.display !== "none"
-          && style.visibility !== "hidden"
-          && Number(style.opacity || "1") > 0.05;
-      });
-    } catch {
-      return false;
-    }
-  });
-}
-
-function clearFloatingButtonTimer(): void {
-  if (floatingButtonTimer) {
-    window.clearTimeout(floatingButtonTimer);
-    floatingButtonTimer = 0;
-  }
-}
-
-function hideFloatingButtonIfIdle(): void {
-  floatingButtonTimer = 0;
-  if (!detectVideoRoute() || isDrawerOpen() || isFloatingButtonFocused() || floatingPointerInside) {
-    setFloatingButtonHidden(false);
-    return;
-  }
-
-  if (updateFloatingButtonFromControlsVisibility("fallback-check")) {
-    return;
-  }
-
-  if (visibleControlsExist()) {
-    scheduleFloatingButtonAutoHide();
-    return;
-  }
-
-  setFloatingButtonHidden(true);
-}
-
-function scheduleFloatingButtonAutoHide(): void {
-  clearFloatingButtonTimer();
-  if (!detectVideoRoute() || isDrawerOpen() || isFloatingButtonFocused() || floatingPointerInside) {
-    setFloatingButtonHidden(false);
-    return;
-  }
-
-  if (window.JellyChatDebug) {
-    window.JellyChatDebug.controlsVisibilitySource = "fallback-timer";
-  }
-
-  floatingButtonTimer = window.setTimeout(hideFloatingButtonIfIdle, floatingIdleDelayMs);
-}
-
-export function showFloatingButton(reason: string): void {
-  setFloatingButtonHidden(false);
-  if (window.JellyChatDebug) {
-    window.JellyChatDebug.lastFloatingButtonShowReason = reason;
-    window.JellyChatDebug.lastControlsVisibleAt = new Date().toISOString();
-  }
-  const host = controlsHost();
-  const controls = host ? findControlsElement(host) : null;
-  if (controls) {
-    observeControlsVisibility(controls);
-    if (window.JellyChatDebug) {
-      window.JellyChatDebug.controlsVisibilitySource = "jellyfin-osd";
-    }
-  }
-  scheduleFloatingButtonAutoHide();
-}
-
-export function handleFloatingButtonFocusChange(reason: string): void {
-  if (isFloatingButtonFocused() || isDrawerOpen() || floatingPointerInside) {
-    setFloatingButtonHidden(false);
-    clearFloatingButtonTimer();
-    return;
-  }
-
-  showFloatingButton(reason);
-}
-
 function layoutMode(drawerOpen: boolean, mobile: boolean, fullscreen: boolean, videoRoute: boolean, canDock: boolean): string {
   if (fullscreen) return drawerOpen && canDock ? "fullscreen-docked" : "fullscreen-overlay";
   if (canDock) return "normal-docked";
@@ -1410,7 +1224,7 @@ function isDocked(mode: string, drawerOpen: boolean): boolean {
   return drawerOpen && (mode === "normal-docked" || mode === "fullscreen-docked");
 }
 
-function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, mode: string, mobile: boolean, drawerSide: DrawerSide): void {
+function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, mode: string, mobile: boolean, drawerSide: DrawerSide, drawerWidth: number): void {
   if (lastFullscreenHost && lastFullscreenHost !== host) {
     clearFullscreenHostClasses(lastFullscreenHost);
   }
@@ -1425,7 +1239,7 @@ function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, 
   setElementClass(host, "jellychat-mobile", mobile);
   setElementClass(host, "jellychat-drawer-left", drawerSide === "left");
   setElementClass(host, "jellychat-drawer-right", drawerSide === "right");
-  (host as HTMLElement).style.setProperty("--jellychat-drawer-width", drawerWidthPx + "px");
+  (host as HTMLElement).style.setProperty("--jellychat-drawer-width", drawerWidth + "px");
 }
 
 export function updateLayout(reason: string): void {
@@ -1439,6 +1253,7 @@ export function updateLayout(reason: string): void {
   const layoutRect = getJellyChatLayoutRect();
   const drawerOpen = layoutRect.drawerOpen;
   const drawerSide = layoutRect.drawerSide;
+  const widthPreference = getDrawerWidthPreference();
   const videoRoute = layoutRect.isVideoRoute;
   const viewportWidth = Math.max(
     window.innerWidth || 0,
@@ -1446,7 +1261,7 @@ export function updateLayout(reason: string): void {
     window.visualViewport?.width || 0
   );
   const mobile = viewportWidth <= mobileLayoutMaxWidthPx;
-  const hasRoomForDockedDrawer = viewportWidth >= drawerWidthPx + 360;
+  const hasRoomForDockedDrawer = viewportWidth >= widthPreference.width + 360;
   const canDock = !mobile || hasRoomForDockedDrawer;
   const runtimeShell = detectRuntimeShell();
   const desktopVideoSafeMode = runtimeShell.isJellyfinDesktop && drawerOpen && videoRoute && canDock;
@@ -1458,11 +1273,13 @@ export function updateLayout(reason: string): void {
   const shouldInsetHeaderControls = shouldInsetPlayerOverlays || shouldInsetNormalContent;
   const mobileClassEnabled = mode === "mobile" || (fullscreenActive && mobile && !canDock);
 
-  document.documentElement.style.setProperty("--jellychat-drawer-width", drawerWidthPx + "px");
+  const alphaPreference = getDrawerBackgroundAlphaPreference(desktopVideoSafeMode);
+  document.documentElement.style.setProperty("--jellychat-drawer-width", widthPreference.width + "px");
+  document.documentElement.style.setProperty("--jellychat-drawer-background-alpha", String(alphaPreference.alpha));
   document.documentElement.style.setProperty("--jellychat-content-left-inset", layoutRect.leftInset + "px");
   document.documentElement.style.setProperty("--jellychat-content-right-inset", layoutRect.rightInset + "px");
   document.documentElement.style.setProperty("--jellychat-content-width", "calc(100% - " + layoutRect.leftInset + "px - " + layoutRect.rightInset + "px)");
-  updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobileClassEnabled, drawerSide);
+  updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobileClassEnabled, drawerSide, widthPreference.width);
   const layoutHost = fullscreenHost || (videoRoute ? document.body : null);
   const playerSurfaces = applyDockedLayout(layoutHost, shouldDockPlayerSurface, layoutRect);
   const coveredPlayerSurfaces = playerSurfaces.slice();
@@ -1486,15 +1303,6 @@ export function updateLayout(reason: string): void {
   setLayoutClass("jellychat-drawer-right", drawerSide === "right");
   setLayoutClass("jellychat-content-inset-found", contentSurfaces.length > 0);
 
-  if (drawerOpen || !videoRoute) {
-    setFloatingButtonHidden(false);
-    clearFloatingButtonTimer();
-  } else if (reason === "routechange" || reason === "hashchange" || reason === "popstate" || reason === "fullscreenchange" || reason === "react-mount" || reason === "start") {
-    showFloatingButton(reason);
-  } else if (videoRoute) {
-    scheduleFloatingButtonAutoHide();
-  }
-
   if (window.JellyChatDebug) {
     if (reason === "fullscreenchange") {
       window.JellyChatDebug.lastFullscreenChangeAt = new Date().toISOString();
@@ -1506,8 +1314,12 @@ export function updateLayout(reason: string): void {
     window.JellyChatDebug.videoRoute = videoRoute;
     window.JellyChatDebug.isFullscreen = fullscreenActive;
     window.JellyChatDebug.drawerOpen = drawerOpen;
-    window.JellyChatDebug.triggerPlacement = fullscreenActive ? "fullscreen-safe" : (mode === "mobile" ? "mobile" : (videoRoute ? "video-safe" : "normal"));
-    window.JellyChatDebug.drawerWidth = drawerWidthPx;
+    window.JellyChatDebug.drawerWidth = widthPreference.width;
+    window.JellyChatDebug.drawerWidthSource = widthPreference.source;
+    window.JellyChatDebug.drawerWidthMin = widthPreference.min;
+    window.JellyChatDebug.drawerWidthMax = widthPreference.max;
+    window.JellyChatDebug.drawerBackgroundAlpha = alphaPreference.alpha;
+    window.JellyChatDebug.drawerBackgroundAlphaSource = alphaPreference.source;
     window.JellyChatDebug.viewportWidth = viewportWidth;
     window.JellyChatDebug.canDock = canDock;
     window.JellyChatDebug.leftInset = layoutRect.leftInset;

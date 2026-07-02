@@ -219,6 +219,24 @@ export function ReactionBar({ actions, syncPlay }: Props) {
     clearSelectedSlot("close-picker");
   }
 
+  useEffect(() => {
+    function closeFromEvent() {
+      closePicker();
+    }
+
+    function exitEditFromEvent() {
+      setEditMode(false);
+      clearSelectedSlot("escape-edit-mode");
+    }
+
+    window.addEventListener("jellychat-close-emoji-picker", closeFromEvent);
+    window.addEventListener("jellychat-exit-quick-edit", exitEditFromEvent);
+    return () => {
+      window.removeEventListener("jellychat-close-emoji-picker", closeFromEvent);
+      window.removeEventListener("jellychat-exit-quick-edit", exitEditFromEvent);
+    };
+  }, []);
+
   const favoriteItems = toCatalogItems(favorites);
   const recentItems = toCatalogItems(recent);
 
@@ -262,7 +280,7 @@ export function ReactionBar({ actions, syncPlay }: Props) {
             if (event.key === "Escape") {
               event.preventDefault();
               event.stopPropagation();
-              clearSelectedSlot("escape");
+              closePicker();
             }
           }}
         >

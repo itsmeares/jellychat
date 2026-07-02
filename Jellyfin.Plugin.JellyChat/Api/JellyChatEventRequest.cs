@@ -61,6 +61,11 @@ public class JellyChatEventRequest
     public string? ClientEventId { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the sender is typing.
+    /// </summary>
+    public bool? IsTyping { get; set; }
+
+    /// <summary>
     /// Gets or sets the sender session identifier from the web client.
     /// </summary>
     public string? SenderSessionId { get; set; }

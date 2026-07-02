@@ -11,6 +11,8 @@ namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 public class JellyChatEventStore
 {
     private const int MaxEventsPerGroup = 200;
+    private const string TypingUpdateEventType = "typing.update";
+    private static readonly TimeSpan TypingEventTtl = TimeSpan.FromSeconds(6);
     private readonly Dictionary<Guid, GroupEventState> _eventsByGroup = [];
     private readonly object _syncLock = new object();
 
@@ -45,6 +47,14 @@ public class JellyChatEventStore
             storedEvent.Sequence = state.NextSequence;
             storedEvent.CreatedAtUtc = DateTime.UtcNow;
             state.NextSequence += 1;
+
+            if (string.Equals(storedEvent.Type, TypingUpdateEventType, StringComparison.Ordinal))
+            {
+                state.TypingBySession[storedEvent.SessionId] = storedEvent;
+                PruneTyping(state);
+                return Snapshot(storedEvent);
+            }
+
             state.Events.Add(storedEvent);
 
             if (state.Events.Count > MaxEventsPerGroup)
@@ -73,12 +83,26 @@ public class JellyChatEventStore
             }
 
             long cursor = afterSequence.GetValueOrDefault(0);
+            PruneTyping(state);
             return state.Events
                 .Where(roomEvent => roomEvent.Sequence > cursor)
+                .Concat(state.TypingBySession.Values.Where(roomEvent => roomEvent.Sequence > cursor))
                 .TakeLast(Math.Clamp(limit, 1, MaxEventsPerGroup))
                 .OrderBy(static roomEvent => roomEvent.Sequence)
                 .Select(Snapshot)
                 .ToList();
+        }
+    }
+
+    private static void PruneTyping(GroupEventState state)
+    {
+        var cutoff = DateTime.UtcNow - TypingEventTtl;
+        foreach (var sessionId in state.TypingBySession
+            .Where(pair => pair.Value.CreatedAtUtc < cutoff)
+            .Select(pair => pair.Key)
+            .ToList())
+        {
+            state.TypingBySession.Remove(sessionId);
         }
     }
 
@@ -102,7 +126,8 @@ public class JellyChatEventStore
             PositionSeconds = source.PositionSeconds,
             ItemId = source.ItemId,
             ItemName = source.ItemName,
-            ClientEventId = source.ClientEventId
+            ClientEventId = source.ClientEventId,
+            IsTyping = source.IsTyping
         };
     }
 
@@ -111,5 +136,7 @@ public class JellyChatEventStore
         public long NextSequence { get; set; } = 1;
 
         public List<JellyChatEvent> Events { get; } = [];
+
+        public Dictionary<string, JellyChatEvent> TypingBySession { get; } = new(StringComparer.Ordinal);
     }
 }

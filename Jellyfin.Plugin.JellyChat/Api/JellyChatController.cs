@@ -28,6 +28,7 @@ public class JellyChatController : ControllerBase
     private const string PlaybackPlayEventType = "playback.play";
     private const string PlaybackPauseEventType = "playback.pause";
     private const string PlaybackSeekEventType = "playback.seek";
+    private const string TypingUpdateEventType = "typing.update";
     private const string SystemNoticeEventType = "system.notice";
     private const int DefaultEventLimit = 100;
     private const int MaxEventLimit = 200;
@@ -204,6 +205,8 @@ public class JellyChatController : ControllerBase
                 return true;
             case PlaybackSeekEventType:
                 return TryApplySeekEvent(request, roomEvent, out error);
+            case TypingUpdateEventType:
+                return TryApplyTypingEvent(request, roomEvent, out error);
             case SystemNoticeEventType:
                 return TryApplyTextEvent(request, roomEvent, "Text is required for system.notice.", out error);
             default:
@@ -243,6 +246,19 @@ public class JellyChatController : ControllerBase
         roomEvent.PositionSeconds = request.PositionSeconds;
         roomEvent.ItemId = NormalizeOptionalText(request.ItemId);
         roomEvent.ItemName = NormalizeOptionalText(request.ItemName);
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryApplyTypingEvent(JellyChatEventRequest request, JellyChatEvent roomEvent, out string error)
+    {
+        if (!request.IsTyping.HasValue)
+        {
+            error = "IsTyping is required.";
+            return false;
+        }
+
+        roomEvent.IsTyping = request.IsTyping.Value;
         error = string.Empty;
         return true;
     }

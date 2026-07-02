@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { SyncPlayContext, TimelineItem } from "../types";
+import type { SyncPlayContext, TimelineItem, TypingRemoteUser } from "../types";
 import { emptyStateId, messagesId } from "../runtime/util";
 import { MessageGroup } from "./MessageGroup";
 import { PlaybackTimelineRow } from "./PlaybackTimelineRow";
@@ -7,9 +7,22 @@ import { PlaybackTimelineRow } from "./PlaybackTimelineRow";
 type Props = {
   timelineItems: TimelineItem[];
   syncPlay: SyncPlayContext;
+  typingUsers: TypingRemoteUser[];
 };
 
-export function MessageList({ timelineItems, syncPlay }: Props) {
+function typingText(users: TypingRemoteUser[]): string {
+  if (users.length === 1) {
+    return users[0].userName + " is typing...";
+  }
+
+  if (users.length === 2) {
+    return users[0].userName + " and " + users[1].userName + " are typing...";
+  }
+
+  return "Several people are typing...";
+}
+
+export function MessageList({ timelineItems, syncPlay, typingUsers }: Props) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottom = useRef(true);
 
@@ -33,7 +46,7 @@ export function MessageList({ timelineItems, syncPlay }: Props) {
         window.JellyChatDebug.lastAutoScrollReason = "pinned-to-bottom";
       }
     }
-  }, [timelineItems]);
+  }, [timelineItems, typingUsers]);
 
   return (
     <div
@@ -62,6 +75,11 @@ export function MessageList({ timelineItems, syncPlay }: Props) {
           ? <MessageGroup key={item.key} group={item.group} />
           : <PlaybackTimelineRow key={item.key} item={item} />
       ))}
+      {typingUsers.length > 0 ? (
+        <div className="jellyChatTypingIndicator" aria-live="polite">
+          {typingText(typingUsers)}
+        </div>
+      ) : null}
     </div>
   );
 }

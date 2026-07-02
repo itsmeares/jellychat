@@ -4,7 +4,6 @@ import { getAssetBasePath, getInjectedAssetBaseUrl, recordInjectedAssetSource } 
 export const rootId = "jellyChatRoot";
 export const buttonId = "jellyChatButton";
 export const markerClass = "jellyChatButton";
-export const floatingHostId = "jellyChatFloatingHost";
 export const drawerId = "jellyChatDrawer";
 export const titleId = "jellyChatTitle";
 export const closeButtonId = "jellyChatCloseButton";
@@ -348,6 +347,7 @@ export function countDebugNodes(): void {
 
   window.JellyChatDebug.rootCount = document.querySelectorAll("[data-jellychat-root]").length;
   window.JellyChatDebug.buttonCount = document.querySelectorAll("[data-jellychat-button]").length;
+  window.JellyChatDebug.triggerCount = document.querySelectorAll("[data-jellychat-trigger]").length;
 }
 
 export function cleanupDuplicateRoots(preferredHost: HTMLElement): HTMLElement | null {

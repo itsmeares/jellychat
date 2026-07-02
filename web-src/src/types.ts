@@ -25,6 +25,7 @@ export type RoomEvent = {
   itemName: string;
   clientEventId: string;
   eventKey: string;
+  isTyping: boolean | null;
   optimistic?: boolean;
 };
 
@@ -69,15 +70,45 @@ export type TimelineItem =
   | PlaybackTimelineItem;
 
 export type DrawerSide = "right" | "left";
+export type TriggerMode = "native-header" | "native-video-osd" | "floating-fallback";
+
+export type TriggerIndicatorState = {
+  unreadChatIndicatorActive: boolean;
+  playbackActivityIndicatorActive: boolean;
+  lastUnreadEventType: string | null;
+  lastUnreadEventSeq: number | null;
+  lastActivityEventType: string | null;
+  lastActivityEventSeq: number | null;
+};
+
+export type TypingRemoteUser = {
+  key: string;
+  userName: string;
+  userId: string;
+  sessionId: string;
+  groupId: string;
+  expiresAtMs: number;
+};
 
 export type ChatState = {
   drawerOpen: boolean;
   drawerSide: DrawerSide;
+  drawerWidth: number;
+  drawerWidthSource: string;
+  drawerResizeActive: boolean;
+  drawerWidthMin: number;
+  drawerWidthMax: number;
+  drawerBackgroundAlpha: number;
+  drawerBackgroundAlphaSource: string;
   syncPlay: SyncPlayContext;
   messages: ChatMessage[];
   groups: MessageGroupModel[];
   timelineItems: TimelineItem[];
   sending: boolean;
+  triggerIndicator: TriggerIndicatorState;
+  typingLocalActive: boolean;
+  typingRemoteUsers: TypingRemoteUser[];
+  typingTtlMs: number;
 };
 
 export type ChatActions = {
@@ -85,6 +116,14 @@ export type ChatActions = {
   closeDrawer: () => void;
   toggleDrawer: () => void;
   toggleDrawerSide: () => void;
+  setDrawerWidth: (width: number, source: string) => void;
+  resetDrawerWidth: () => void;
+  setDrawerBackgroundAlpha: (alpha: number) => void;
+  resetDrawerBackgroundAlpha: () => void;
+  resetDrawerPreferences: () => void;
+  setDrawerResizeActive: (active: boolean) => void;
+  noteComposerInput: (value: string) => void;
+  stopTyping: (reason: string) => void;
   sendMessage: (text: string) => Promise<boolean>;
   sendReaction: (emoji: string) => Promise<boolean>;
   setInputFocused: (focused: boolean) => void;
@@ -228,6 +267,27 @@ export type JellyChatDebug = Record<string, unknown> & {
   drawerOpen: boolean;
   drawerSide: DrawerSide;
   drawerWidth: number;
+  drawerWidthSource: string;
+  drawerResizeActive: boolean;
+  drawerWidthMin: number;
+  drawerWidthMax: number;
+  drawerBackgroundAlpha: number;
+  drawerBackgroundAlphaSource: string;
+  triggerMode: TriggerMode;
+  triggerHostFound: boolean;
+  triggerHostSelector: string;
+  triggerCount: number;
+  unreadChatIndicatorActive: boolean;
+  playbackActivityIndicatorActive: boolean;
+  lastUnreadEventType: string | null;
+  lastUnreadEventSeq: number | null;
+  lastActivityEventType: string | null;
+  lastActivityEventSeq: number | null;
+  typingLocalActive: boolean;
+  typingRemoteCount: number;
+  typingRemoteUsers: string[];
+  lastTypingEventAt: string | null;
+  typingTtlMs: number;
   runtimeShell: string;
   clientShell: string;
   isJellyfinDesktop: boolean;
