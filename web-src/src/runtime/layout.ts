@@ -890,6 +890,17 @@ function computedPosition(element: Element | null): string {
   return element && window.getComputedStyle ? window.getComputedStyle(element).position : "";
 }
 
+function electronVersion(): string {
+  const processLike = (window as unknown as { process?: { versions?: { electron?: string } } }).process;
+  return processLike?.versions?.electron || "";
+}
+
+function isJellyfinDesktopShell(): boolean {
+  const userAgent = window.navigator?.userAgent || "";
+  return /JellyfinMediaPlayer|Jellyfin Desktop|JellyfinDesktop|Electron/i.test(userAgent)
+    || electronVersion().length > 0;
+}
+
 function isPositionedInsetCandidate(element: Element | null): boolean {
   return ["absolute", "fixed", "sticky"].includes(computedPosition(element));
 }
@@ -1386,9 +1397,11 @@ export function updateLayout(reason: string): void {
   const mobile = viewportWidth <= mobileLayoutMaxWidthPx;
   const hasRoomForDockedDrawer = viewportWidth >= drawerWidthPx + 360;
   const canDock = !mobile || hasRoomForDockedDrawer;
-  const mode = layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
+  const desktopShell = isJellyfinDesktopShell();
+  const useDesktopOverlay = desktopShell && videoRoute && drawerOpen;
+  const mode = useDesktopOverlay ? "desktop-overlay" : layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
   const docked = isDocked(mode, drawerOpen);
-  const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock;
+  const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock && !desktopShell;
   const shouldInsetNormalContent = docked && drawerOpen && !videoRoute && !fullscreenActive && canDock;
   const shouldInsetHeaderControls = shouldDockPlayerSurface || shouldInsetNormalContent;
   const mobileClassEnabled = mode === "mobile" || (fullscreenActive && mobile && !canDock);
@@ -1437,6 +1450,8 @@ export function updateLayout(reason: string): void {
     window.JellyChatDebug.drawerWidth = drawerWidthPx;
     window.JellyChatDebug.viewportWidth = viewportWidth;
     window.JellyChatDebug.canDock = canDock;
+    window.JellyChatDebug.desktopShellDetected = desktopShell;
+    window.JellyChatDebug.nativePlayerOverlayMode = useDesktopOverlay;
     window.JellyChatDebug.leftInset = layoutRect.leftInset;
     window.JellyChatDebug.rightInset = layoutRect.rightInset;
     window.JellyChatDebug.lastLayoutUpdateAt = new Date().toISOString();
