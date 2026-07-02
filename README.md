@@ -11,6 +11,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Does not use Jellyfin toast notifications as the chat transport.
 - Does not run a separate WebSocket service.
 - Does not require opening or configuring additional ports.
+- Uses self-contained Jellyfin Web injection through JellyChat-owned middleware and asset endpoints.
 - Injects `jellychat.css` and `jellychat.js` into Jellyfin web through JellyChat-owned middleware and asset endpoints.
 
 ## Current Limitations
@@ -148,9 +149,12 @@ Notes:
 
 ## Release Build
 
-Publish the v0.5.0 release output:
+Build the frontend assets, then publish the v0.5.0 release output:
 
 ```bash
+cd web-src
+npm run build
+cd ..
 dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
 ```
 
@@ -162,9 +166,10 @@ Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
 
 Create the release zip from the contents of the publish directory:
 
-```bash
-cd Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish
-zip -r Jellyfin.Plugin.JellyChat_0.5.0.zip .
+```powershell
+$publish = "Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish"
+New-Item -ItemType Directory -Force artifacts | Out-Null
+Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/Jellyfin.Plugin.JellyChat_0.5.0.zip" -Force
 ```
 
 Create a GitHub release tagged `v0.5.0` and attach `Jellyfin.Plugin.JellyChat_0.5.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
@@ -186,6 +191,7 @@ Create a GitHub release tagged `v0.5.0` and attach `Jellyfin.Plugin.JellyChat_0.
   - Restart Jellyfin after plugin deploy/update.
   - Open `/JellyChat/Assets/jellychat.js` and `/JellyChat/Assets/jellychat.css` in the same browser session and confirm both return `200`.
   - Open `/web/index.html`, view source, and confirm one `JellyChat:start` marker block is present.
+  - Check the browser console for `[JellyChat] self-contained assets loaded` and other JellyChat injection or asset logs.
 - Messages do not appear on another device:
   - Confirm both devices are in the same SyncPlay group.
   - Refresh or reopen the drawer to force an event poll.
