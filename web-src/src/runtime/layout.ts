@@ -1350,7 +1350,6 @@ export function handleFloatingButtonFocusChange(reason: string): void {
 
 function layoutMode(drawerOpen: boolean, mobile: boolean, fullscreen: boolean, videoRoute: boolean, canDock: boolean): string {
   if (fullscreen) return drawerOpen && canDock ? "fullscreen-docked" : "fullscreen-overlay";
-  if (videoRoute && drawerOpen) return "video-overlay";
   if (canDock) return "normal-docked";
   if (mobile) return "mobile";
   return "normal-docked";
@@ -1399,11 +1398,10 @@ export function updateLayout(reason: string): void {
   const hasRoomForDockedDrawer = viewportWidth >= drawerWidthPx + 360;
   const canDock = !mobile || hasRoomForDockedDrawer;
   const desktopShell = isJellyfinDesktopShell();
-  const useVideoOverlay = videoRoute && drawerOpen && !fullscreenActive;
   const useDesktopOverlay = desktopShell && videoRoute && drawerOpen;
   const mode = useDesktopOverlay ? "desktop-overlay" : layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
   const docked = isDocked(mode, drawerOpen);
-  const shouldDockPlayerSurface = drawerOpen && videoRoute && fullscreenActive && canDock && !desktopShell;
+  const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock && !desktopShell;
   const shouldInsetNormalContent = docked && drawerOpen && !videoRoute && !fullscreenActive && canDock;
   const shouldInsetHeaderControls = shouldDockPlayerSurface || shouldInsetNormalContent;
   const mobileClassEnabled = mode === "mobile" || (fullscreenActive && mobile && !canDock);
@@ -1453,7 +1451,7 @@ export function updateLayout(reason: string): void {
     window.JellyChatDebug.viewportWidth = viewportWidth;
     window.JellyChatDebug.canDock = canDock;
     window.JellyChatDebug.desktopShellDetected = desktopShell;
-    window.JellyChatDebug.nativePlayerOverlayMode = useDesktopOverlay || useVideoOverlay;
+    window.JellyChatDebug.nativePlayerOverlayMode = useDesktopOverlay;
     window.JellyChatDebug.leftInset = layoutRect.leftInset;
     window.JellyChatDebug.rightInset = layoutRect.rightInset;
     window.JellyChatDebug.lastLayoutUpdateAt = new Date().toISOString();
