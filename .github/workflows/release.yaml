@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,6 +57,7 @@ jobs:
               timestamp: now
             };
 
+            manifest[0].versions = manifest[0].versions.filter(entry => entry.version !== version);
             manifest[0].versions.unshift(newEntry);
             fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 4) + '\n');
 
@@ -66,10 +68,61 @@ jobs:
           sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${VERSION}</AssemblyVersion>|" Directory.Build.props
           sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>${VERSION}</FileVersion>|" Directory.Build.props
 
-      - name: Commit and push
+      - name: Create manifest update pull request
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH="release/update-manifest-${VERSION}"
+          TITLE="release: update manifest and version to ${VERSION}"
+          BODY_FILE="/tmp/jellychat-release-pr-body.md"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git checkout -B "${BRANCH}"
+
           git add manifest.json Directory.Build.props
-          git commit -m "release: update manifest and version to ${{ steps.version.outputs.version }}"
-          git push
+          if git diff --cached --quiet; then
+            echo "No release metadata changes to publish."
+            exit 0
+          fi
+
+          git commit -m "${TITLE}"
+          git push --force-with-lease origin "${BRANCH}"
+
+          cat > "${BODY_FILE}" <<EOF
+          ## Summary
+          - Add/update JellyChat ${VERSION} release metadata
+          - Point manifest to the published release asset
+          - Use checksum ${checksum}
+
+          ## Validation
+          - Release workflow downloaded Jellyfin.Plugin.JellyChat_${VERSION}.zip
+          - Release workflow computed checksum ${checksum}
+          - Release workflow updated manifest.json and Directory.Build.props
+          EOF
+
+          PR_NUMBER=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "${BRANCH}" \
+            --base main \
+            --state open \
+            --json number \
+            --jq '.[0].number // ""')
+
+          if [ -n "${PR_NUMBER}" ]; then
+            gh pr edit "${PR_NUMBER}" \
+              --repo "${{ github.repository }}" \
+              --title "${TITLE}" \
+              --body-file "${BODY_FILE}"
+            echo "Updated existing release metadata PR #${PR_NUMBER}."
+          else
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --base main \
+              --head "${BRANCH}" \
+              --title "${TITLE}" \
+              --body-file "${BODY_FILE}"
+          fi
+        env:
+          # Optional PAT/GitHub App token. Falls back to GITHUB_TOKEN if unset.
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}

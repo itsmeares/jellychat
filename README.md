@@ -172,7 +172,7 @@ New-Item -ItemType Directory -Force artifacts | Out-Null
 Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/Jellyfin.Plugin.JellyChat_0.5.0.zip" -Force
 ```
 
-Create a GitHub release tagged `v0.5.0` and attach `Jellyfin.Plugin.JellyChat_0.5.0.zip`. The release workflow updates `manifest.json` with the release asset URL, checksum, timestamp, and version entry after the release is published.
+Create a GitHub release tagged `v0.5.0` and attach `Jellyfin.Plugin.JellyChat_0.5.0.zip`. The release workflow opens a manifest update pull request with the release asset URL, checksum, timestamp, and version entry after the release is published.
 
 ## Testing Checklist
 
