@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## What's new - JellyChat no longer requires the Jellyfin File Transformation plugin. - Adds self-contained JellyChat Web injection. - Serves `jellychat.css` and `jellychat.js` through JellyChat plugin asset endpoints. - Uses versioned same-origin asset URLs instead of inline CSS/JS. - Keeps normal chat, playback action logs, floating emoji reactions, and drawer layout behavior unchanged. ## Upgrade notes - File Transformation is no longer required for JellyChat v0.5.0 and later. - Older JellyChat versions before v0.5.0 required File Transformation. - Restart Jellyfin after updating JellyChat. - If the JellyChat button does not appear, check: - `/JellyChat/Assets/jellychat.js` - `/JellyChat/Assets/jellychat.css` - the browser console for JellyChat injection or asset loading logs ## Validation - Browser Jellyfin Web tested without File Transformation. - iPad Jellyfin Web tested without File Transformation. - Normal chat tested. - Playback start/pause/resume/seek logs tested. - Floating emoji reactions tested. - Drawer left/right layout tested.",
+                "targetAbi": "10.11.0.0",
+                "version": "0.5.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.5.0/Jellyfin.Plugin.JellyChat_0.5.0.zip",
+                "checksum": "db7e35f3c7199bdecc64a2c15e3e1d0b",
+                "timestamp": "2026-07-02T01:29:59"
+            },
+            {
                 "changelog": "JellyChat v0.4.0 release. Highlights: - Adds Teleparty-style floating emoji reactions for active SyncPlay/JellyChat rooms. - Adds quick reaction bar, local emoji picker, favorites, recently used emoji, search, and quick reaction editing. - Keeps reactions ephemeral: no chat timeline rows and no reaction text in history. - Shows local reactions immediately, with constant-speed upward float, subtle size variation, and reduced-motion support. Validation: - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check",
                 "targetAbi": "10.11.0.0",
                 "version": "0.4.0",
