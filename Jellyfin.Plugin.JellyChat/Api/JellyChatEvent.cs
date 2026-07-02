@@ -53,6 +53,11 @@ public class JellyChatEvent
     public string? Text { get; set; }
 
     /// <summary>
+    /// Gets or sets the optional reply target metadata for chat messages.
+    /// </summary>
+    public JellyChatReplyTarget? ReplyTo { get; set; }
+
+    /// <summary>
     /// Gets or sets the emoji payload.
     /// </summary>
     public string? Emoji { get; set; }

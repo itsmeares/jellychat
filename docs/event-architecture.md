@@ -18,11 +18,14 @@ JellyChat uses a bounded room event stream keyed by Jellyfin SyncPlay group id. 
 - `GET /JellyChat/Events?groupId=<id>&afterSequence=<optional>&limit=<optional>` returns recent event snapshots for a visible SyncPlay group.
 - Server-owned fields are `Id`, `Sequence`, `UserId`, `UserName`, `SessionId`, and `CreatedAtUtc`.
 - `ClientEventId` is used for best-effort dedupe inside retained in-memory history.
+- `chat.message` events may include compact `ReplyTo` metadata with target event id, user id/name, one-line message preview, and creation timestamp.
+- `ReplyTo` is rejected for non-chat event types and does not create threads or nested history.
 
 Supported event types for this step:
 
 - `chat.message`
 - `reaction.emoji`
+- `playback.start`
 - `playback.play`
 - `playback.pause`
 - `playback.seek`

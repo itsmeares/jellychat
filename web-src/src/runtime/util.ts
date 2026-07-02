@@ -1,4 +1,4 @@
-import type { ChatMessage, MessageGroupModel, PlaybackEventType, PlaybackTimelineItem, RoomEvent, TimelineItem } from "../types";
+import type { ChatMessage, MessageGroupModel, PlaybackEventType, PlaybackTimelineItem, ReplyTarget, RoomEvent, TimelineItem } from "../types";
 import { getAssetBasePath, getInjectedAssetBaseUrl, recordInjectedAssetSource } from "./urls";
 
 export const rootId = "jellyChatRoot";
@@ -129,10 +129,59 @@ export function formatMessageTime(message: { createdAtUtc: string }): string {
     return "";
   }
 
-  return createdAt.toLocaleTimeString([], {
+  const time = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const messageDay = new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate()).getTime();
+
+  if (messageDay === today) {
+    return time;
+  }
+
+  if (messageDay === today - 24 * 60 * 60 * 1000) {
+    return "Yesterday " + time;
+  }
+
+  return createdAt.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
+}
+
+export function formatFullTimestamp(message: { createdAtUtc: string }): string {
+  if (!message.createdAtUtc) {
+    return "";
+  }
+
+  const createdAt = new Date(message.createdAtUtc);
+  if (Number.isNaN(createdAt.getTime())) {
+    return "";
+  }
+
+  return createdAt.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    second: "2-digit"
   });
+}
+
+export function buildReplyTarget(message: ChatMessage): ReplyTarget {
+  return {
+    eventId: message.id,
+    userId: message.userId,
+    userName: isUsableDisplayName(message.userName) ? message.userName.trim() : "Someone",
+    messagePreview: trimReplyPreview(message.text),
+    createdAt: message.createdAtUtc
+  };
+}
+
+export function trimReplyPreview(value: string, maxLength = 140): string {
+  const collapsed = String(value || "").replace(/\s+/g, " ").trim();
+  if (collapsed.length <= maxLength) {
+    return collapsed;
+  }
+
+  return collapsed.slice(0, Math.max(0, maxLength - 3)).trimEnd() + "...";
 }
 
 function coerceTicks(value: unknown): number | null {
@@ -213,8 +262,10 @@ function createChatMessage(event: RoomEvent): ChatMessage | null {
     userId: event.userId,
     userName: isUsableDisplayName(event.userName) ? event.userName.trim() : "Someone",
     text: event.text,
+    replyTo: event.replyTo,
     createdAtUtc: event.createdAtUtc,
-    eventKey: event.eventKey
+    eventKey: event.eventKey,
+    optimistic: event.optimistic
   };
 }
 

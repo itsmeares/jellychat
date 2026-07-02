@@ -509,15 +509,123 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
 .jellyChatMessageStack {
   display: flex;
   flex-direction: column;
-  gap: 0.28rem;
+  gap: 0.22rem;
 }
 
 .jellyChatMessage {
+  position: relative;
   padding: 0.52rem 0.65rem;
+  padding-right: 2.35rem;
   border-radius: 0.55rem;
   background: rgba(255, 255, 255, 0.07);
   color: #f6f8fb;
   overflow-wrap: anywhere;
+}
+
+.jellyChatMessage.is-continuation {
+  padding-top: 0.42rem;
+  padding-bottom: 0.42rem;
+}
+
+.jellyChatMessage.is-optimistic {
+  opacity: 0.72;
+}
+
+.jellyChatMessage.is-highlighted {
+  background: rgba(0, 164, 220, 0.18);
+  outline: 2px solid rgba(0, 164, 220, 0.75);
+  outline-offset: 2px;
+  transition: background 0.16s cubic-bezier(0.22, 1, 0.36, 1), outline-color 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.jellyChatMessageReplyButton {
+  position: absolute;
+  top: 0.32rem;
+  right: 0.34rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border: 0;
+  border-radius: 0.42rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd4df;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  opacity: 0.42;
+}
+
+.jellyChatMessage:hover .jellyChatMessageReplyButton,
+.jellyChatMessageReplyButton:focus-visible {
+  background: rgba(0, 164, 220, 0.2);
+  color: #d8f4ff;
+  opacity: 1;
+}
+
+.jellyChatMessageReplyButton:focus-visible {
+  outline: 2px solid rgba(0, 164, 220, 0.85);
+  outline-offset: 1px;
+}
+
+.jellyChatMessageReplyButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.jellyChatReplyQuote {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 0.42rem;
+  padding: 0.4rem 0.48rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.42rem;
+  background: rgba(0, 0, 0, 0.18);
+  color: #d8dee8;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.jellyChatReplyQuote:hover,
+.jellyChatReplyQuote:focus-visible {
+  border-color: rgba(0, 164, 220, 0.46);
+  background: rgba(0, 164, 220, 0.12);
+  outline: none;
+}
+
+.jellyChatReplyQuote:focus-visible {
+  outline: 2px solid rgba(0, 164, 220, 0.85);
+  outline-offset: 1px;
+}
+
+.jellyChatReplyQuote:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.jellyChatReplyQuoteAuthor,
+.jellyChatReplyQuotePreview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jellyChatReplyQuoteAuthor {
+  color: #d8f4ff;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1rem;
+}
+
+.jellyChatReplyQuotePreview {
+  color: #b9c4d2;
+  font-size: 0.78rem;
+  line-height: 1.05rem;
 }
 
 .jellyChatMessageBody {
@@ -531,10 +639,11 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   align-items: baseline;
   justify-content: center;
   gap: 0.45rem;
-  margin: 0.7rem 0;
+  margin: 0.42rem 0 0.48rem;
+  padding: 0.12rem 0.25rem;
   color: #aeb8c6;
-  font-size: 0.78rem;
-  line-height: 1.15rem;
+  font-size: 0.74rem;
+  line-height: 1.05rem;
   text-align: center;
 }
 
@@ -554,6 +663,53 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   color: #aeb8c6;
   font-size: 0.78rem;
   line-height: 1.2rem;
+}
+
+.jellyChatMessageActionMenu {
+  position: fixed;
+  z-index: 2147483604;
+  min-width: 9rem;
+  padding: 0.32rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(18, 21, 26, 0.98);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.32);
+  color: #f6f8fb;
+}
+
+.jellyChatMessageActionMenu button {
+  display: block;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.38rem 0.52rem;
+  border: 0;
+  border-radius: 0.34rem;
+  background: transparent;
+  color: #e8edf4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  text-align: left;
+}
+
+.jellyChatMessageActionMenu button:hover,
+.jellyChatMessageActionMenu button:focus-visible {
+  background: rgba(0, 164, 220, 0.18);
+  color: #d8f4ff;
+  outline: none;
+}
+
+.jellyChatCopyFeedback {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2147483605;
+  padding: 0.38rem 0.55rem;
+  border-radius: 0.45rem;
+  background: rgba(18, 21, 26, 0.96);
+  color: #e8edf4;
+  font-size: 0.78rem;
+  line-height: 1rem;
 }
 
 .jellyChatReactions {
@@ -807,11 +963,79 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   }
 }
 
+.jellyChatComposerArea {
+  flex: 0 0 auto;
+  border-top: 0;
+  background: transparent;
+}
+
+.jellyChatComposerReply {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.62rem 1rem 0;
+  padding: 0.48rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.jellyChatComposerReplyText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.jellyChatComposerReplyLabel,
+.jellyChatComposerReplyPreview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jellyChatComposerReplyLabel {
+  color: #d8f4ff;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1rem;
+}
+
+.jellyChatComposerReplyPreview {
+  color: #b9c4d2;
+  font-size: 0.8rem;
+  line-height: 1.1rem;
+}
+
+.jellyChatComposerReply button {
+  flex: 0 0 auto;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d8dee8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.jellyChatComposerReply button:hover,
+.jellyChatComposerReply button:focus-visible {
+  background: rgba(0, 164, 220, 0.18);
+  color: #d8f4ff;
+  outline: none;
+}
+
+.jellyChatComposerReply button:focus-visible {
+  outline: 2px solid rgba(0, 164, 220, 0.85);
+  outline-offset: 1px;
+}
+
 #jellyChatForm {
   display: flex;
   gap: 0.55rem;
   padding: 0.8rem 1rem 1rem;
-  border-top: 0;
   background: transparent;
 }
 
@@ -889,6 +1113,10 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   }
 
   .jellyChatResizeHandle::after {
+    transition: none;
+  }
+
+  .jellyChatMessage.is-highlighted {
     transition: none;
   }
 

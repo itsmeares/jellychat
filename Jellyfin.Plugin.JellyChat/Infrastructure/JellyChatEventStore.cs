@@ -119,6 +119,7 @@ public class JellyChatEventStore
             SessionId = source.SessionId,
             CreatedAtUtc = source.CreatedAtUtc,
             Text = source.Text,
+            ReplyTo = SnapshotReplyTarget(source.ReplyTo),
             Emoji = source.Emoji,
             PlaybackAction = source.PlaybackAction,
             FromPositionTicks = source.FromPositionTicks,
@@ -128,6 +129,23 @@ public class JellyChatEventStore
             ItemName = source.ItemName,
             ClientEventId = source.ClientEventId,
             IsTyping = source.IsTyping
+        };
+    }
+
+    private static JellyChatReplyTarget? SnapshotReplyTarget(JellyChatReplyTarget? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        return new JellyChatReplyTarget
+        {
+            EventId = source.EventId,
+            UserId = source.UserId,
+            UserName = source.UserName,
+            MessagePreview = source.MessagePreview,
+            CreatedAt = source.CreatedAt
         };
     }
 

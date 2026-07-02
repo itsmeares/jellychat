@@ -16,6 +16,7 @@ export type RoomEvent = {
   sessionId: string;
   createdAtUtc: string;
   text: string;
+  replyTo: ReplyTarget | null;
   emoji: string;
   playbackAction: string;
   fromPositionTicks: unknown;
@@ -29,6 +30,14 @@ export type RoomEvent = {
   optimistic?: boolean;
 };
 
+export type ReplyTarget = {
+  eventId: string;
+  userId: string;
+  userName: string;
+  messagePreview: string;
+  createdAt: string;
+};
+
 export type ChatMessage = {
   id: string;
   sequence: number;
@@ -36,8 +45,10 @@ export type ChatMessage = {
   userId: string;
   userName: string;
   text: string;
+  replyTo: ReplyTarget | null;
   createdAtUtc: string;
   eventKey: string;
+  optimistic?: boolean;
 };
 
 export type MessageGroupModel = {
@@ -109,6 +120,10 @@ export type ChatState = {
   typingLocalActive: boolean;
   typingRemoteUsers: TypingRemoteUser[];
   typingTtlMs: number;
+  replyTarget: ReplyTarget | null;
+  replyTargetFound: boolean;
+  messageActionMenu: MessageActionMenuState;
+  highlightedMessageId: string | null;
 };
 
 export type ChatActions = {
@@ -127,6 +142,21 @@ export type ChatActions = {
   sendMessage: (text: string) => Promise<boolean>;
   sendReaction: (emoji: string) => Promise<boolean>;
   setInputFocused: (focused: boolean) => void;
+  startReply: (message: ChatMessage) => void;
+  cancelReply: (reason: string) => void;
+  openMessageActionMenu: (message: ChatMessage, x: number, y: number) => void;
+  closeMessageActionMenu: (reason: string) => void;
+  copyMessage: (message: ChatMessage) => Promise<boolean>;
+  highlightMessage: (messageId: string) => void;
+};
+
+export type MessageActionMenuState = {
+  open: boolean;
+  message: ChatMessage | null;
+  x: number;
+  y: number;
+  copiedMessageId: string | null;
+  feedback: string;
 };
 
 export type ReactionOverlayItem = {
@@ -208,6 +238,15 @@ export type JellyChatDebug = Record<string, unknown> & {
   lastAutoScrollReason: string | null;
   lastEventRoundTripMs: number | null;
   lastEventMergeCount: number;
+  replyActive: boolean;
+  replyTargetEventId: string | null;
+  replyTargetFound: boolean;
+  contextMenuOpen: boolean;
+  lastCopiedMessageId: string | null;
+  highlightedMessageId: string | null;
+  groupedMessageCount: number;
+  messageActionMenuOpen: boolean;
+  lastMessageAction: string | null;
   playbackListenerCount: number;
   playbackEventCount: number;
   seekDebounceMs: number;

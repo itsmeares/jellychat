@@ -1,4 +1,4 @@
-import type { ChatMessage, PlaybackEventType, RoomEvent } from "../types";
+import type { ChatMessage, PlaybackEventType, ReplyTarget, RoomEvent } from "../types";
 import { fetchJson, postJson } from "./jellyfin";
 import { createClientEventId, getValue, isUsableDisplayName } from "../runtime/util";
 
@@ -18,6 +18,7 @@ export function normalizeRoomEvent(roomEvent: unknown): RoomEvent {
     sessionId: String(getValue(roomEvent, "SessionId", "sessionId") || ""),
     createdAtUtc: String(getValue(roomEvent, "CreatedAtUtc", "createdAtUtc") || ""),
     text: String(getValue(roomEvent, "Text", "text") || ""),
+    replyTo: normalizeReplyTarget(getValue(roomEvent, "ReplyTo", "replyTo")),
     emoji: String(getValue(roomEvent, "Emoji", "emoji") || ""),
     playbackAction: String(getValue(roomEvent, "PlaybackAction", "playbackAction") || ""),
     fromPositionTicks: getValue(roomEvent, "FromPositionTicks", "fromPositionTicks"),
@@ -28,6 +29,26 @@ export function normalizeRoomEvent(roomEvent: unknown): RoomEvent {
     clientEventId,
     eventKey: clientEventId ? "client:" + clientEventId : (sequence > 0 ? "sequence:" + sequence : "id:" + id),
     isTyping: normalizeNullableBoolean(getValue(roomEvent, "IsTyping", "isTyping"))
+  };
+}
+
+function normalizeReplyTarget(value: unknown): ReplyTarget | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const eventId = String(getValue(value, "EventId", "eventId") || "").trim();
+  const messagePreview = String(getValue(value, "MessagePreview", "messagePreview") || "").trim();
+  if (!eventId || !messagePreview) {
+    return null;
+  }
+
+  return {
+    eventId,
+    userId: String(getValue(value, "UserId", "userId") || "").trim(),
+    userName: String(getValue(value, "UserName", "userName") || "").trim() || "Someone",
+    messagePreview,
+    createdAt: String(getValue(value, "CreatedAt", "createdAt") || "").trim()
   };
 }
 
@@ -89,6 +110,7 @@ export function normalizeChatMessage(roomEvent: unknown): ChatMessage | null {
     userId: event.userId,
     userName: isUsableDisplayName(event.userName) ? event.userName.trim() : "Someone",
     text: event.text,
+    replyTo: event.replyTo,
     createdAtUtc: event.createdAtUtc,
     eventKey: event.eventKey
   };
@@ -126,15 +148,28 @@ export async function postChatMessage(args: {
   text: string;
   participants: string[];
   clientEventId?: string;
+  replyTo?: ReplyTarget | null;
 }): Promise<ChatMessage | null> {
-  const response = await postJson("JellyChat/Events", {
+  const payload: Record<string, unknown> = {
     GroupId: args.groupId || "",
     SenderSessionId: args.senderSessionId || "",
     Type: "chat.message",
     Text: args.text,
     ClientEventId: args.clientEventId || createClientEventId(),
     ParticipantsCsv: args.participants.join(",")
-  }, true);
+  };
+
+  if (args.replyTo) {
+    payload.ReplyTo = {
+      EventId: args.replyTo.eventId,
+      UserId: args.replyTo.userId,
+      UserName: args.replyTo.userName,
+      MessagePreview: args.replyTo.messagePreview,
+      CreatedAt: args.replyTo.createdAt
+    };
+  }
+
+  const response = await postJson("JellyChat/Events", payload, true);
 
   const normalized = normalizePostResponse(response);
   return normalized ? normalizeChatMessage(normalized) : null;
