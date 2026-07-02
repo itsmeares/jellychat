@@ -27,8 +27,15 @@ const summaryKeys = [
   "drawerOpen",
   "drawerSide",
   "drawerWidth",
+  "drawerWidthSource",
+  "drawerResizeActive",
+  "drawerWidthMin",
+  "drawerWidthMax",
+  "drawerBackgroundAlpha",
+  "drawerBackgroundAlphaSource",
   "rootCount",
   "buttonCount",
+  "triggerCount",
   "intervalCount",
   "listenerCount",
   "messageCount",
@@ -63,7 +70,10 @@ mapFields("layout", [
   "isVideoRoute",
   "videoRoute",
   "isFullscreen",
+  "triggerMode",
   "triggerPlacement",
+  "triggerHostFound",
+  "triggerHostSelector",
   "viewportWidth",
   "canDock",
   "leftInset",
@@ -117,9 +127,7 @@ mapFields("layout", [
   "rootParentClass",
   "lastFullscreenChangeAt",
   "controlsOverlapAvoided",
-  "controlsInsetApplied",
-  "floatingButtonAutoHidden",
-  "lastFloatingButtonShowReason"
+  "controlsInsetApplied"
 ]);
 
 mapFields("events", [
@@ -155,7 +163,18 @@ mapFields("events", [
   "lastFocusReason",
   "groupCount",
   "groupingWindowMs",
-  "lastGroupedAt"
+  "lastGroupedAt",
+  "unreadChatIndicatorActive",
+  "playbackActivityIndicatorActive",
+  "lastUnreadEventType",
+  "lastUnreadEventSeq",
+  "lastActivityEventType",
+  "lastActivityEventSeq",
+  "typingLocalActive",
+  "typingRemoteCount",
+  "typingRemoteUsers",
+  "lastTypingEventAt",
+  "typingTtlMs"
 ]);
 
 mapFields("playback", [
@@ -277,6 +296,7 @@ function defaultValues(): DebugRecord {
     mountCount: 0,
     rootCount: 0,
     buttonCount: 0,
+    triggerCount: 0,
     listenerCount: 0,
     intervalCount: 0,
     currentGroupId: "",
@@ -358,7 +378,7 @@ function defaultValues(): DebugRecord {
     quickReactionEditMode: false,
     selectedQuickReactionSlotIndex: null,
     lastQuickReactionEditAction: null,
-    supportedEventTypes: ["chat.message", "reaction.emoji", "playback.start", "playback.play", "playback.pause", "playback.seek", "system.notice"],
+    supportedEventTypes: ["chat.message", "reaction.emoji", "playback.start", "playback.play", "playback.pause", "playback.seek", "typing.update", "system.notice"],
     lastEventPollAt: null,
     lastEventPostAt: null,
     inputFocused: false,
@@ -384,8 +404,28 @@ function defaultValues(): DebugRecord {
     isFullscreen: false,
     drawerOpen: false,
     drawerSide: getDrawerSide(),
+    drawerWidthSource: "default",
+    drawerResizeActive: false,
+    drawerWidthMin: 280,
+    drawerWidthMax: 560,
+    drawerBackgroundAlpha: 0.96,
+    drawerBackgroundAlphaSource: "default",
+    triggerMode: "floating-fallback",
     triggerPlacement: "normal",
+    triggerHostFound: false,
+    triggerHostSelector: "",
     drawerWidth: 340,
+    unreadChatIndicatorActive: false,
+    playbackActivityIndicatorActive: false,
+    lastUnreadEventType: null,
+    lastUnreadEventSeq: null,
+    lastActivityEventType: null,
+    lastActivityEventSeq: null,
+    typingLocalActive: false,
+    typingRemoteCount: 0,
+    typingRemoteUsers: [],
+    lastTypingEventAt: null,
+    typingTtlMs: 5000,
     leftInset: 0,
     rightInset: 0,
     layoutTargetsFound: false,
@@ -438,7 +478,6 @@ function defaultValues(): DebugRecord {
     lastFullscreenChangeAt: null,
     controlsOverlapAvoided: false,
     controlsInsetApplied: false,
-    floatingButtonAutoHidden: false,
     lastError: null,
     lastInjectionError: null
   };
@@ -483,6 +522,7 @@ export function initializeJellyChatDebug(): DebugRecord {
     return {
       root: topLevel.rootCount,
       button: topLevel.buttonCount,
+      trigger: topLevel.triggerCount,
       interval: topLevel.intervalCount,
       listener: topLevel.listenerCount,
       message: topLevel.messageCount,
@@ -514,6 +554,14 @@ export function initializeJellyChatDebug(): DebugRecord {
       drawerOpen: topLevel.drawerOpen,
       drawerSide: topLevel.drawerSide,
       drawerWidth: topLevel.drawerWidth,
+      drawerWidthSource: topLevel.drawerWidthSource,
+      drawerBackgroundAlpha: topLevel.drawerBackgroundAlpha,
+      drawerBackgroundAlphaSource: topLevel.drawerBackgroundAlphaSource,
+      triggerMode: details.layout.triggerMode,
+      triggerHostFound: details.layout.triggerHostFound,
+      unreadChatIndicatorActive: details.events.unreadChatIndicatorActive,
+      playbackActivityIndicatorActive: details.events.playbackActivityIndicatorActive,
+      typingRemoteCount: details.events.typingRemoteCount,
       runtimeShell: details.layout.runtimeShell,
       clientShell: details.layout.clientShell,
       isJellyfinDesktop: details.layout.isJellyfinDesktop,
@@ -555,11 +603,18 @@ export function initializeJellyChatDebug(): DebugRecord {
     snapshot.layout.drawerOpen = topLevel.drawerOpen;
     snapshot.layout.drawerSide = topLevel.drawerSide;
     snapshot.layout.drawerWidth = topLevel.drawerWidth;
+    snapshot.layout.drawerWidthSource = topLevel.drawerWidthSource;
+    snapshot.layout.drawerResizeActive = topLevel.drawerResizeActive;
+    snapshot.layout.drawerWidthMin = topLevel.drawerWidthMin;
+    snapshot.layout.drawerWidthMax = topLevel.drawerWidthMax;
+    snapshot.layout.drawerBackgroundAlpha = topLevel.drawerBackgroundAlpha;
+    snapshot.layout.drawerBackgroundAlphaSource = topLevel.drawerBackgroundAlphaSource;
     snapshot.reactions.reactionEventCount = topLevel.reactionEventCount;
     snapshot.reactions.reactionOverlayCount = topLevel.reactionOverlayCount;
     snapshot.playback.playbackEventCount = topLevel.playbackEventCount;
     snapshot.lifecycle.rootCount = topLevel.rootCount;
     snapshot.lifecycle.buttonCount = topLevel.buttonCount;
+    snapshot.lifecycle.triggerCount = topLevel.triggerCount;
     snapshot.lifecycle.intervalCount = topLevel.intervalCount;
     snapshot.lifecycle.listenerCount = topLevel.listenerCount;
     return snapshot;

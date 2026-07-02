@@ -1,6 +1,6 @@
 # JellyChat Event Architecture
 
-JellyChat uses a bounded room event stream keyed by Jellyfin SyncPlay group id. The stream is the shared backend shape for chat messages, emoji reactions, playback action log entries, and future room events.
+JellyChat uses a bounded room event stream keyed by Jellyfin SyncPlay group id. The stream is the shared backend shape for chat messages, emoji reactions, playback action log entries, ephemeral typing updates, and future room events.
 
 ## Boundaries
 
@@ -26,8 +26,9 @@ Supported event types for this step:
 - `playback.play`
 - `playback.pause`
 - `playback.seek`
+- `typing.update`
 - `system.notice`
 
 ## Storage
 
-`JellyChatEventStore` keeps up to 200 recent events per SyncPlay group. Each group has a monotonic `Sequence` that starts at 1 after server/plugin startup. Store methods return snapshots so controller callers cannot mutate retained history.
+`JellyChatEventStore` keeps up to 200 recent durable events per SyncPlay group. `typing.update` events use the same sequence stream but are retained only briefly as ephemeral presence, so stale typing does not replay as chat history. Each group has a monotonic `Sequence` that starts at 1 after server/plugin startup. Store methods return snapshots so controller callers cannot mutate retained history.

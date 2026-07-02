@@ -91,4 +91,9 @@ public class JellyChatEvent
     /// Gets or sets the client-generated event identifier.
     /// </summary>
     public string? ClientEventId { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the sender is typing.
+    /// </summary>
+    public bool? IsTyping { get; set; }
 }

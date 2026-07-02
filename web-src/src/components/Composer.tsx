@@ -28,6 +28,7 @@ export function Composer({ actions, sending, syncPlay }: Props) {
     const sent = await actions.sendMessage(value);
     if (sent) {
       setValue("");
+      actions.stopTyping("message-sent");
       window.setTimeout(resizeInput, 0);
     }
   }
@@ -63,12 +64,16 @@ export function Composer({ actions, sending, syncPlay }: Props) {
         value={value}
         onChange={(event) => {
           setValue(event.target.value);
+          actions.noteComposerInput(event.target.value);
           window.setTimeout(resizeInput, 0);
         }}
         onKeyDown={onKeyDown}
         onKeyUp={(event) => event.stopPropagation()}
         onFocus={() => actions.setInputFocused(true)}
-        onBlur={() => actions.setInputFocused(false)}
+        onBlur={() => {
+          actions.stopTyping("composer-blur");
+          actions.setInputFocused(false);
+        }}
       />
       <button id={sendButtonId} type="submit" disabled={disabled || value.trim().length === 0}>
         {sending ? "Sending..." : "Send"}

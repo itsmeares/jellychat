@@ -18,7 +18,8 @@ The drawer now uses one room event stream for chat messages and future room acti
 - Jellyfin SyncPlay remains responsible for playback synchronization.
 - JellyChat uses SyncPlay group/session data only to find the current room context.
 - Chat messages are stored as `chat.message` events and rendered by the injected drawer.
-- Reaction and playback action events are accepted by the backend for early v0.2 compatibility, but the drawer does not yet render overlay reactions or playback timelines.
+- Reaction and playback action events share the same event stream; reactions stay ephemeral overlays while playback actions render as timeline log entries.
+- Typing presence uses short-lived `typing.update` events on the same API and does not render as timeline history.
 - No external WebSocket server, new port, persistent storage, or new realtime channel is added.
 
 ## Memory Leak Guard

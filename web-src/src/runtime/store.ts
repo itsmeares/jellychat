@@ -1,10 +1,12 @@
-import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, PlaybackEventType, ReactionEvent, RoomEvent, SyncPlayContext, TimelineItem } from "../types";
-import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent } from "../api/events";
+import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, PlaybackEventType, ReactionEvent, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
+import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent, postTypingUpdate } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
 import { buildTimelineItems, countDebugNodes, createClientEventId, formId, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
-import { getActiveMountHost, getDrawerSide, handleFloatingButtonFocusChange, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, showFloatingButton, updateLayout } from "./layout";
+import { getActiveMountHost, getDrawerSide, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, updateLayout } from "./layout";
 import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
 import { addReactionOverlay, addRoomReactionOverlay, recordReactionReceived, setReactionParticipantCount } from "./reactions";
+import { getDrawerBackgroundAlphaPreference, getDrawerWidthPreference, resetDrawerBackgroundAlpha as resetStoredDrawerBackgroundAlpha, resetDrawerPreferences as resetStoredDrawerPreferences, resetDrawerWidth as resetStoredDrawerWidth, saveDrawerBackgroundAlpha, saveDrawerWidth } from "./preferences";
+import { restoreTriggerFocus } from "./trigger";
 
 type Subscriber = (state: ChatState) => void;
 type PlaybackPostRequest = {
@@ -30,6 +32,23 @@ let cachedLocalActorName = "";
 let cachedCurrentSessionIds: string[] = [];
 const localClientEventIds = new Set<string>();
 const seenReactionEventKeys = new Set<string>();
+const typingTtlMs = 5000;
+const typingIdleMs = 4000;
+const typingRefreshMs = 2500;
+let typingLocalActive = false;
+let typingIdleTimer = 0;
+let typingRefreshTimer = 0;
+let typingExpiryTimer = 0;
+let drawerResizeActive = false;
+let remoteTypingUsers: TypingRemoteUser[] = [];
+let triggerIndicator: TriggerIndicatorState = {
+  unreadChatIndicatorActive: false,
+  playbackActivityIndicatorActive: false,
+  lastUnreadEventType: null,
+  lastUnreadEventSeq: null,
+  lastActivityEventType: null,
+  lastActivityEventSeq: null
+};
 let currentSyncPlayContext: SyncPlayContext = {
   inGroup: false,
   groupId: "",
@@ -40,11 +59,22 @@ let currentSyncPlayContext: SyncPlayContext = {
 let state: ChatState = {
   drawerOpen: false,
   drawerSide: getDrawerSide(),
+  drawerWidth: getDrawerWidthPreference().width,
+  drawerWidthSource: getDrawerWidthPreference().source,
+  drawerResizeActive: false,
+  drawerWidthMin: getDrawerWidthPreference().min,
+  drawerWidthMax: getDrawerWidthPreference().max,
+  drawerBackgroundAlpha: getDrawerBackgroundAlphaPreference(false).alpha,
+  drawerBackgroundAlphaSource: getDrawerBackgroundAlphaPreference(false).source,
   syncPlay: currentSyncPlayContext,
   messages: [],
   groups: [],
   timelineItems: [],
-  sending: false
+  sending: false,
+  triggerIndicator,
+  typingLocalActive: false,
+  typingRemoteUsers: [],
+  typingTtlMs
 };
 
 const subscribers = new Set<Subscriber>();
@@ -64,15 +94,79 @@ function setActorDebug(actorName: string, fallbackReason: string): void {
   window.JellyChatDebug.lastActorFallbackReason = fallbackReason || null;
 }
 
+function getDrawerPreferenceSnapshot() {
+  const width = getDrawerWidthPreference();
+  const alpha = getDrawerBackgroundAlphaPreference(!!window.JellyChatDebug?.desktopVideoSafeMode);
+  return { width, alpha };
+}
+
+function updatePresenceDebug(): void {
+  if (!window.JellyChatDebug) {
+    return;
+  }
+
+  window.JellyChatDebug.unreadChatIndicatorActive = triggerIndicator.unreadChatIndicatorActive;
+  window.JellyChatDebug.playbackActivityIndicatorActive = triggerIndicator.playbackActivityIndicatorActive;
+  window.JellyChatDebug.lastUnreadEventType = triggerIndicator.lastUnreadEventType;
+  window.JellyChatDebug.lastUnreadEventSeq = triggerIndicator.lastUnreadEventSeq;
+  window.JellyChatDebug.lastActivityEventType = triggerIndicator.lastActivityEventType;
+  window.JellyChatDebug.lastActivityEventSeq = triggerIndicator.lastActivityEventSeq;
+  window.JellyChatDebug.typingLocalActive = typingLocalActive;
+  window.JellyChatDebug.typingRemoteCount = remoteTypingUsers.length;
+  window.JellyChatDebug.typingRemoteUsers = remoteTypingUsers.map((user) => user.userName);
+  window.JellyChatDebug.typingTtlMs = typingTtlMs;
+}
+
+function scheduleTypingExpiry(): void {
+  if (typingExpiryTimer) {
+    window.clearTimeout(typingExpiryTimer);
+    typingExpiryTimer = 0;
+  }
+
+  if (remoteTypingUsers.length === 0) {
+    return;
+  }
+
+  const nextExpiry = Math.max(0, Math.min(...remoteTypingUsers.map((user) => user.expiresAtMs)) - Date.now());
+  typingExpiryTimer = window.setTimeout(() => {
+    typingExpiryTimer = 0;
+    pruneRemoteTypingUsers();
+    emit();
+  }, Math.max(100, nextExpiry + 25));
+}
+
+function pruneRemoteTypingUsers(): void {
+  const now = Date.now();
+  const before = remoteTypingUsers.length;
+  remoteTypingUsers = remoteTypingUsers.filter((user) => user.expiresAtMs > now && user.groupId === currentSyncPlayContext.groupId);
+  if (before !== remoteTypingUsers.length) {
+    updatePresenceDebug();
+  }
+  scheduleTypingExpiry();
+}
+
 function emit(): void {
+  pruneRemoteTypingUsers();
+  const prefs = getDrawerPreferenceSnapshot();
   state = {
     drawerOpen: isDrawerOpen(),
     drawerSide: getDrawerSide(),
+    drawerWidth: prefs.width.width,
+    drawerWidthSource: prefs.width.source,
+    drawerResizeActive,
+    drawerWidthMin: prefs.width.min,
+    drawerWidthMax: prefs.width.max,
+    drawerBackgroundAlpha: prefs.alpha.alpha,
+    drawerBackgroundAlphaSource: prefs.alpha.source,
     syncPlay: currentSyncPlayContext,
     messages: historyMessages.slice(),
     groups: groupedMessages.slice(),
     timelineItems: timelineItems.slice(),
-    sending: sendInProgress
+    sending: sendInProgress,
+    triggerIndicator: { ...triggerIndicator },
+    typingLocalActive,
+    typingRemoteUsers: remoteTypingUsers.slice(),
+    typingTtlMs
   };
 
   if (window.JellyChatDebug) {
@@ -81,6 +175,14 @@ function emit(): void {
     window.JellyChatDebug.timelineCount = timelineItems.length;
     window.JellyChatDebug.currentGroupId = currentSyncPlayContext.groupId;
     window.JellyChatDebug.lastSequence = lastSequence;
+    window.JellyChatDebug.drawerWidth = prefs.width.width;
+    window.JellyChatDebug.drawerWidthSource = prefs.width.source;
+    window.JellyChatDebug.drawerWidthMin = prefs.width.min;
+    window.JellyChatDebug.drawerWidthMax = prefs.width.max;
+    window.JellyChatDebug.drawerResizeActive = drawerResizeActive;
+    window.JellyChatDebug.drawerBackgroundAlpha = prefs.alpha.alpha;
+    window.JellyChatDebug.drawerBackgroundAlphaSource = prefs.alpha.source;
+    updatePresenceDebug();
     countDebugNodes();
   }
 
@@ -138,6 +240,7 @@ function createRoomEvent(args: {
     itemName: args.itemName || "",
     clientEventId: args.clientEventId,
     eventKey: args.clientEventId ? "client:" + args.clientEventId : "id:" + args.id,
+    isTyping: null,
     optimistic: args.optimistic
   };
 }
@@ -343,6 +446,17 @@ function isReactionEvent(event: RoomEvent): boolean {
   return event.type === "reaction.emoji" && !!event.emoji;
 }
 
+function isTypingEvent(event: RoomEvent): boolean {
+  return event.type === "typing.update";
+}
+
+function isPlaybackRoomEvent(event: RoomEvent): boolean {
+  return event.type === "playback.start"
+    || event.type === "playback.play"
+    || event.type === "playback.pause"
+    || event.type === "playback.seek";
+}
+
 function recordSeenReactionEvents(events: RoomEvent[]): void {
   events.filter(isReactionEvent).forEach((event) => {
     seenReactionEventKeys.add(getReactionEventKey(event));
@@ -376,6 +490,99 @@ function processReactionEvents(events: RoomEvent[], skipOverlay: boolean): void 
   });
 }
 
+function typingUserKey(event: RoomEvent): string {
+  return event.sessionId || event.userId || event.clientEventId || event.eventKey;
+}
+
+function processTypingEvents(events: RoomEvent[]): void {
+  const typingEvents = events.filter(isTypingEvent);
+  if (typingEvents.length === 0) {
+    return;
+  }
+
+  typingEvents.forEach((event) => {
+    if (event.groupId !== currentSyncPlayContext.groupId || isCurrentUserEvent(event) || localClientEventIds.has(event.clientEventId)) {
+      return;
+    }
+
+    const key = typingUserKey(event);
+    if (!key) {
+      return;
+    }
+
+    if (event.isTyping === false) {
+      remoteTypingUsers = remoteTypingUsers.filter((user) => user.key !== key);
+      return;
+    }
+
+    if (event.isTyping !== true) {
+      return;
+    }
+
+    const user: TypingRemoteUser = {
+      key,
+      userName: isUsableDisplayName(event.userName) ? event.userName.trim() : "Someone",
+      userId: event.userId,
+      sessionId: event.sessionId,
+      groupId: event.groupId,
+      expiresAtMs: Date.now() + typingTtlMs
+    };
+    remoteTypingUsers = remoteTypingUsers.filter((entry) => entry.key !== key).concat(user);
+  });
+
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.lastTypingEventAt = new Date().toISOString();
+  }
+  pruneRemoteTypingUsers();
+  updatePresenceDebug();
+}
+
+function clearTriggerIndicators(): void {
+  triggerIndicator = {
+    unreadChatIndicatorActive: false,
+    playbackActivityIndicatorActive: false,
+    lastUnreadEventType: null,
+    lastUnreadEventSeq: null,
+    lastActivityEventType: null,
+    lastActivityEventSeq: null
+  };
+  updatePresenceDebug();
+}
+
+function recordClosedDrawerIndicators(events: RoomEvent[], skipHistory: boolean): void {
+  if (skipHistory || isDrawerOpen()) {
+    return;
+  }
+
+  events.forEach((event) => {
+    if (event.groupId !== currentSyncPlayContext.groupId || isReactionEvent(event) || isTypingEvent(event) || isCurrentUserEvent(event) || localClientEventIds.has(event.clientEventId)) {
+      return;
+    }
+
+    if (event.type === "chat.message") {
+      triggerIndicator = {
+        ...triggerIndicator,
+        unreadChatIndicatorActive: true,
+        playbackActivityIndicatorActive: false,
+        lastUnreadEventType: event.type,
+        lastUnreadEventSeq: event.sequence || null
+      };
+      return;
+    }
+
+    if (isPlaybackRoomEvent(event) && !triggerIndicator.unreadChatIndicatorActive) {
+      triggerIndicator = {
+        ...triggerIndicator,
+        playbackActivityIndicatorActive: true,
+        lastActivityEventType: event.type,
+        lastActivityEventSeq: event.sequence || null
+      };
+    }
+  });
+
+  updatePresenceDebug();
+}
+
 async function fetchChatEvents(forceFull: boolean): Promise<void> {
   if (eventFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
     return;
@@ -399,7 +606,9 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
     }
     updateLastSequenceFromEvents(events);
     processReactionEvents(events, shouldFetchFull);
-    const timelineEvents = events.filter((event) => !isReactionEvent(event));
+    processTypingEvents(events);
+    recordClosedDrawerIndicators(events, shouldFetchFull);
+    const timelineEvents = events.filter((event) => !isReactionEvent(event) && !isTypingEvent(event));
     if (timelineEvents.length > 0 || shouldFetchFull) {
       mergeHistoryEvents(timelineEvents);
     } else {
@@ -426,6 +635,10 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
 
   if (!currentSyncPlayContext.inGroup || groupChanged) {
     const hadTimeline = historyEvents.length > 0 || timelineItems.length > 0;
+    clearTriggerIndicators();
+    remoteTypingUsers = [];
+    clearLocalTypingTimers();
+    typingLocalActive = false;
     historyEvents = [];
     historyMessages = [];
     groupedMessages = [];
@@ -770,6 +983,102 @@ async function resolveEventPostContext(): Promise<{ senderSessionId: string; gro
   };
 }
 
+function clearLocalTypingTimers(): void {
+  if (typingIdleTimer) {
+    window.clearTimeout(typingIdleTimer);
+    typingIdleTimer = 0;
+  }
+
+  if (typingRefreshTimer) {
+    window.clearTimeout(typingRefreshTimer);
+    typingRefreshTimer = 0;
+  }
+}
+
+async function postLocalTypingState(isTyping: boolean, reason: string): Promise<void> {
+  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+    return;
+  }
+
+  try {
+    const postContext = await resolveEventPostContext();
+    if (!postContext) {
+      return;
+    }
+
+    const clientEventId = createClientEventId();
+    localClientEventIds.add(clientEventId);
+    await postTypingUpdate({
+      groupId: postContext.groupId,
+      senderSessionId: postContext.senderSessionId,
+      isTyping,
+      participants: postContext.participants,
+      clientEventId
+    });
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.lastEventPostAt = new Date().toISOString();
+      window.JellyChatDebug.lastTypingEventAt = new Date().toISOString();
+      window.JellyChatDebug.lastFocusReason = reason;
+    }
+  } catch (err) {
+    logDebug("Failed to send typing update", err);
+  }
+}
+
+function scheduleTypingRefresh(): void {
+  if (typingRefreshTimer) {
+    window.clearTimeout(typingRefreshTimer);
+  }
+
+  typingRefreshTimer = window.setTimeout(() => {
+    typingRefreshTimer = 0;
+    if (!typingLocalActive || !isDrawerOpen()) {
+      return;
+    }
+
+    void postLocalTypingState(true, "typing-refresh");
+    scheduleTypingRefresh();
+  }, typingRefreshMs);
+}
+
+function stopLocalTyping(reason: string): void {
+  clearLocalTypingTimers();
+  if (!typingLocalActive) {
+    updatePresenceDebug();
+    return;
+  }
+
+  typingLocalActive = false;
+  updatePresenceDebug();
+  emit();
+  void postLocalTypingState(false, reason);
+}
+
+function noteLocalTyping(value: string): void {
+  if (!currentSyncPlayContext.inGroup || !isDrawerOpen() || sendInProgress) {
+    stopLocalTyping("typing-disabled");
+    return;
+  }
+
+  if (value.trim().length === 0) {
+    stopLocalTyping("typing-cleared");
+    return;
+  }
+
+  if (!typingLocalActive) {
+    typingLocalActive = true;
+    void postLocalTypingState(true, "typing-start");
+    scheduleTypingRefresh();
+  }
+
+  if (typingIdleTimer) {
+    window.clearTimeout(typingIdleTimer);
+  }
+  typingIdleTimer = window.setTimeout(() => stopLocalTyping("typing-idle"), typingIdleMs);
+  updatePresenceDebug();
+  emit();
+}
+
 function secondsToTicks(positionSeconds: number | undefined): number | undefined {
   if (positionSeconds === undefined || !Number.isFinite(positionSeconds)) {
     return undefined;
@@ -898,6 +1207,7 @@ export function focusComposer(reason: string): void {
 
 export const actions: ChatActions = {
   openDrawer: () => {
+    clearTriggerIndicators();
     moveJellyChatRootToHost(getActiveMountHost());
     emit();
     window.setTimeout(() => {
@@ -916,6 +1226,7 @@ export const actions: ChatActions = {
     }, 0);
   },
   closeDrawer: () => {
+    stopLocalTyping("drawer-close");
     const drawer = document.getElementById("jellyChatDrawer");
     if (drawer) {
       drawer.classList.remove("is-open");
@@ -926,6 +1237,7 @@ export const actions: ChatActions = {
     }
     emit();
     updateLayout("drawer-close");
+    restoreTriggerFocus();
   },
   toggleDrawer: () => {
     if (isDrawerOpen()) {
@@ -939,6 +1251,42 @@ export const actions: ChatActions = {
     setDrawerSide(nextSide);
     emit();
     updateLayout("drawer-side");
+  },
+  setDrawerWidth: (width: number) => {
+    saveDrawerWidth(width);
+    emit();
+    updateLayout("drawer-width");
+  },
+  resetDrawerWidth: () => {
+    resetStoredDrawerWidth();
+    emit();
+    updateLayout("drawer-width-reset");
+  },
+  setDrawerBackgroundAlpha: (alpha: number) => {
+    saveDrawerBackgroundAlpha(alpha);
+    emit();
+    updateLayout("drawer-alpha");
+  },
+  resetDrawerBackgroundAlpha: () => {
+    resetStoredDrawerBackgroundAlpha();
+    emit();
+    updateLayout("drawer-alpha-reset");
+  },
+  resetDrawerPreferences: () => {
+    resetStoredDrawerPreferences();
+    emit();
+    updateLayout("drawer-prefs-reset");
+  },
+  setDrawerResizeActive: (active: boolean) => {
+    drawerResizeActive = active;
+    document.documentElement?.classList.toggle("jellychat-resizing", active);
+    emit();
+  },
+  noteComposerInput: (value: string) => {
+    noteLocalTyping(value);
+  },
+  stopTyping: (reason: string) => {
+    stopLocalTyping(reason);
   },
   sendMessage: async (text: string) => {
     const trimmedText = text.trim();
@@ -988,6 +1336,7 @@ export const actions: ChatActions = {
       }
 
       if (result && result.id) {
+        stopLocalTyping("message-sent");
         mergeHistoryEvents([{
           ...createRoomEvent({
             id: result.id,
@@ -1089,6 +1438,9 @@ export const actions: ChatActions = {
     }
   },
   setInputFocused: (focused: boolean) => {
+    if (!focused) {
+      stopLocalTyping("composer-blur");
+    }
     if (window.JellyChatDebug) {
       window.JellyChatDebug.inputFocused = focused;
     }
@@ -1213,30 +1565,50 @@ export function startRuntime(): void {
     bindEvent(document, "visibilitychange", () => {
       if (!document.hidden) pollJellyChat();
     });
-    bindEvent(document, "mousemove", () => showFloatingButton("mousemove"), { passive: true });
-    bindEvent(document, "pointermove", () => showFloatingButton("pointermove"), { passive: true });
-    bindEvent(document, "touchstart", () => showFloatingButton("touchstart"), { passive: true });
-    bindEvent(document, "focusin", () => handleFloatingButtonFocusChange("focusin"));
-    bindEvent(document, "focusout", () => handleFloatingButtonFocusChange("focusout"));
+    bindEvent(document, "keydown", (event) => {
+      const keyboardEvent = event as KeyboardEvent;
+      if (keyboardEvent.key !== "Escape" || !isDrawerOpen()) {
+        return;
+      }
+
+      if (document.querySelector("[data-jellychat-settings-popover='true']")) {
+        window.dispatchEvent(new Event("jellychat-close-settings"));
+        keyboardEvent.preventDefault();
+        return;
+      }
+
+      if (document.querySelector(".jellyChatEmojiPicker")) {
+        window.dispatchEvent(new Event("jellychat-close-emoji-picker"));
+        keyboardEvent.preventDefault();
+        return;
+      }
+
+      if (document.querySelector(".jellyChatEmojiEditToggle.is-active")) {
+        window.dispatchEvent(new Event("jellychat-exit-quick-edit"));
+        keyboardEvent.preventDefault();
+        return;
+      }
+
+      actions.closeDrawer();
+      keyboardEvent.preventDefault();
+    });
+    bindEvent(window, "beforeunload", () => stopLocalTyping("beforeunload"));
+    bindEvent(window, "pagehide", () => stopLocalTyping("pagehide"));
     bindEvent(window, "resize", () => scheduleLayoutUpdate("resize"));
     bindEvent(document, "fullscreenchange", () => {
-      showFloatingButton("fullscreenchange");
       scanPlaybackTarget();
       updateLayout("fullscreenchange");
       if (isDrawerOpen()) focusComposer("fullscreenchange");
     });
     bindEvent(window, "hashchange", () => {
-      showFloatingButton("hashchange");
       scanPlaybackTarget();
       scheduleLayoutUpdate("hashchange");
     });
     bindEvent(window, "popstate", () => {
-      showFloatingButton("popstate");
       scanPlaybackTarget();
       scheduleLayoutUpdate("popstate");
     });
     bindEvent(window, "jellychat-routechange", () => {
-      showFloatingButton("routechange");
       scanPlaybackTarget();
       scheduleLayoutUpdate("routechange");
     });
