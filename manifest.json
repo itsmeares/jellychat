@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## Changes - Fix self-contained JellyChat asset and API URLs behind reverse-proxy subpaths. - Add Jellyfin Desktop safe playback layout: keep native video stable, inset controls/subtitles/header/emoji overlays around the drawer. - Add release/debug fields for asset base paths, runtime shell, Desktop safe mode, and overlay inset status. ## Validation - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release",
+                "targetAbi": "10.11.0.0",
+                "version": "0.5.1",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.5.1/Jellyfin.Plugin.JellyChat_0.5.1.zip",
+                "checksum": "bc1be631c5a200078a2aa398cab1ac23",
+                "timestamp": "2026-07-02T06:19:30"
+            },
+            {
                 "changelog": "## What's new - JellyChat no longer requires the Jellyfin File Transformation plugin. - Adds self-contained JellyChat Web injection. - Serves `jellychat.css` and `jellychat.js` through JellyChat plugin asset endpoints. - Uses versioned same-origin asset URLs instead of inline CSS/JS. - Keeps normal chat, playback action logs, floating emoji reactions, and drawer layout behavior unchanged. ## Upgrade notes - File Transformation is no longer required for JellyChat v0.5.0 and later. - Older JellyChat versions before v0.5.0 required File Transformation. - Restart Jellyfin after updating JellyChat. - If the JellyChat button does not appear, check: - `/JellyChat/Assets/jellychat.js` - `/JellyChat/Assets/jellychat.css` - the browser console for JellyChat injection or asset loading logs ## Validation - Browser Jellyfin Web tested without File Transformation. - iPad Jellyfin Web tested without File Transformation. - Normal chat tested. - Playback start/pause/resume/seek logs tested. - Floating emoji reactions tested. - Drawer left/right layout tested.",
                 "targetAbi": "10.11.0.0",
                 "version": "0.5.0",
