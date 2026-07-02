@@ -45,6 +45,65 @@
   box-sizing: border-box !important;
 }
 
+html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :where(
+  .videoOsd,
+  .videoOsdContainer,
+  .videoOsdBottom,
+  .videoOsdBottom-maincontrols,
+  .videoOsdControls,
+  .osdControls,
+  .playbackControls,
+  .playerControls,
+  .nowPlayingBar,
+  .progressContainer,
+  .sliderContainer,
+  .osdProgress,
+  .videoOsdHeader,
+  .videoOsdTop,
+  .videoOsdTopControls,
+  .headerRight,
+  .headerRightItems,
+  .subtitleSync,
+  .subtitleContainer,
+  .videoSubtitles,
+  .captionContainer,
+  [class*="videoOsd"],
+  [class*="VideoOsd"],
+  [class*="osdControls"],
+  [class*="OsdControls"],
+  [class*="playbackControls"],
+  [class*="PlaybackControls"],
+  [class*="playerControls"],
+  [class*="PlayerControls"],
+  [class*="videoSubtitles"],
+  [class*="VideoSubtitles"],
+  [class*="subtitleContainer"],
+  [class*="SubtitleContainer"],
+  [class*="captionContainer"],
+  [class*="CaptionContainer"]
+) {
+  box-sizing: border-box !important;
+  left: var(--jellychat-content-left-inset) !important;
+  right: var(--jellychat-content-right-inset) !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :where(
+  .subtitleSync,
+  .subtitleContainer,
+  .videoSubtitles,
+  .captionContainer,
+  [class*="videoSubtitles"],
+  [class*="VideoSubtitles"],
+  [class*="subtitleContainer"],
+  [class*="SubtitleContainer"],
+  [class*="captionContainer"],
+  [class*="CaptionContainer"]
+) {
+  text-align: center !important;
+}
+
 #jellyChatRoot {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }

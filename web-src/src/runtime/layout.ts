@@ -52,8 +52,54 @@ type JellyChatVisibleRect = {
   width: string;
 };
 
+type RuntimeShellInfo = {
+  runtimeShell: string;
+  clientShell: string;
+  isJellyfinDesktop: boolean;
+};
+
 function debug(): Record<string, unknown> {
   return window.JellyChatDebug || {};
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function callString(value: unknown): string {
+  if (typeof value !== "function") {
+    return "";
+  }
+
+  try {
+    const result = value();
+    return typeof result === "string" ? result : "";
+  } catch {
+    return "";
+  }
+}
+
+function detectRuntimeShell(): RuntimeShellInfo {
+  const host = window as Window & Record<string, any>;
+  const appHost = host.NativeShell?.AppHost;
+  const appName = callString(appHost?.appName);
+  const layout = callString(appHost?.getDefaultLayout);
+  const jmpMode = readString(host.jmpInfo?.mode);
+  const hasNativeShell = !!host.NativeShell;
+  const hasJmpNative = !!host.jmpNative;
+  const hasMpvApi = !!host.api?.player && (typeof host.mpvVideoPlayer === "function" || !!host._mpvVideoPlayerInstance);
+  const userAgent = navigator.userAgent || readString(host.jmpInfo?.userAgent);
+  const appNameIsDesktop = appName.toLowerCase() === "jellyfin desktop";
+  const desktopBridgeSignals = [hasNativeShell, hasJmpNative, hasMpvApi, jmpMode === "desktop" || layout === "desktop"].filter(Boolean).length;
+  const isJellyfinDesktop = appNameIsDesktop
+    || desktopBridgeSignals >= 3
+    || (/jellyfin desktop/i.test(userAgent) && desktopBridgeSignals >= 1);
+
+  return {
+    runtimeShell: isJellyfinDesktop ? "jellyfin-desktop" : (hasNativeShell ? "native-shell" : "browser"),
+    clientShell: appName || jmpMode || layout || (hasNativeShell ? "native-shell" : "browser"),
+    isJellyfinDesktop
+  };
 }
 
 export function getDrawerSide(): DrawerSide {
@@ -719,6 +765,12 @@ function clearPlayerSubtitlesInset(): void {
   playerSubtitlesInsetSurfaces = [];
 }
 
+function clearPlayerOverlayInsets(): void {
+  clearPlayerControlsInset();
+  clearPlayerProgressInset();
+  clearPlayerSubtitlesInset();
+}
+
 function isVisibleLayoutElement(element: Element): boolean {
   const elementRect = rect(element);
   if (!elementRect || elementRect.width <= 0 || elementRect.height <= 0) {
@@ -994,15 +1046,27 @@ function findPlayerSubtitleSurfaces(host: Element, coveredSurfaces: Element[]): 
   return surfaces.filter((element) => !coveredSurfaces.includes(element)).slice(0, 8);
 }
 
-function applyPlayerControlsInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[]): Element[] {
-  clearPlayerControlsInset();
+function filterVideoSurfaceTargets(host: Element, surfaces: Element[], avoidVideoSurface: boolean): Element[] {
+  if (!avoidVideoSurface) {
+    return surfaces;
+  }
+
+  const video = findVideoElement(host);
+  if (!video) {
+    return surfaces;
+  }
+
+  return surfaces.filter((element) => element !== video && !element.contains(video));
+}
+
+function applyPlayerControlsInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[], avoidVideoSurface = false): Element[] {
   if (!host || !shouldInset) {
     updateTargetDebug("playerControlsTarget", []);
     clearDebugError("JellyChat layout target not found: player controls");
     return [];
   }
 
-  const surfaces = findPlayerControlsSurfaces(host, coveredSurfaces);
+  const surfaces = filterVideoSurfaceTargets(host, findPlayerControlsSurfaces(host, coveredSurfaces), avoidVideoSurface);
   surfaces.forEach((element) => applyInsetTarget(element, layoutRect, playerControlsInsetClass));
   playerControlsInsetSurfaces = surfaces;
   updateTargetDebug("playerControlsTarget", surfaces);
@@ -1014,15 +1078,14 @@ function applyPlayerControlsInset(host: Element | null, shouldInset: boolean, la
   return surfaces;
 }
 
-function applyPlayerProgressInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[]): Element[] {
-  clearPlayerProgressInset();
+function applyPlayerProgressInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[], avoidVideoSurface = false): Element[] {
   if (!host || !shouldInset) {
     updateTargetDebug("playerProgressTarget", []);
     clearDebugError("JellyChat layout target not found: player progress");
     return [];
   }
 
-  const surfaces = findPlayerProgressSurfaces(host, coveredSurfaces);
+  const surfaces = filterVideoSurfaceTargets(host, findPlayerProgressSurfaces(host, coveredSurfaces), avoidVideoSurface);
   surfaces.forEach((element) => applyInsetTarget(element, layoutRect, playerProgressInsetClass));
   playerProgressInsetSurfaces = surfaces;
   updateTargetDebug("playerProgressTarget", surfaces);
@@ -1034,15 +1097,14 @@ function applyPlayerProgressInset(host: Element | null, shouldInset: boolean, la
   return surfaces;
 }
 
-function applyPlayerSubtitlesInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[]): Element[] {
-  clearPlayerSubtitlesInset();
+function applyPlayerSubtitlesInset(host: Element | null, shouldInset: boolean, layoutRect: JellyChatLayoutRect, coveredSurfaces: Element[], avoidVideoSurface = false): Element[] {
   if (!host || !shouldInset) {
     updateTargetDebug("playerSubtitlesTarget", []);
     clearDebugError("JellyChat layout target not found: player subtitles");
     return [];
   }
 
-  const surfaces = findPlayerSubtitleSurfaces(host, coveredSurfaces);
+  const surfaces = filterVideoSurfaceTargets(host, findPlayerSubtitleSurfaces(host, coveredSurfaces), avoidVideoSurface);
   surfaces.forEach((element) => applyInsetTarget(element, layoutRect, playerSubtitlesInsetClass));
   playerSubtitlesInsetSurfaces = surfaces;
   updateTargetDebug("playerSubtitlesTarget", surfaces);
@@ -1386,21 +1448,31 @@ export function updateLayout(reason: string): void {
   const mobile = viewportWidth <= mobileLayoutMaxWidthPx;
   const hasRoomForDockedDrawer = viewportWidth >= drawerWidthPx + 360;
   const canDock = !mobile || hasRoomForDockedDrawer;
-  const mode = layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
+  const runtimeShell = detectRuntimeShell();
+  const desktopVideoSafeMode = runtimeShell.isJellyfinDesktop && drawerOpen && videoRoute && canDock;
+  const mode = desktopVideoSafeMode ? "desktop-video-safe" : layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
   const docked = isDocked(mode, drawerOpen);
-  const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock;
+  const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock && !desktopVideoSafeMode;
+  const shouldInsetPlayerOverlays = drawerOpen && videoRoute && canDock;
   const shouldInsetNormalContent = docked && drawerOpen && !videoRoute && !fullscreenActive && canDock;
-  const shouldInsetHeaderControls = shouldDockPlayerSurface || shouldInsetNormalContent;
+  const shouldInsetHeaderControls = shouldInsetPlayerOverlays || shouldInsetNormalContent;
   const mobileClassEnabled = mode === "mobile" || (fullscreenActive && mobile && !canDock);
 
   document.documentElement.style.setProperty("--jellychat-drawer-width", drawerWidthPx + "px");
+  document.documentElement.style.setProperty("--jellychat-content-left-inset", layoutRect.leftInset + "px");
+  document.documentElement.style.setProperty("--jellychat-content-right-inset", layoutRect.rightInset + "px");
+  document.documentElement.style.setProperty("--jellychat-content-width", "calc(100% - " + layoutRect.leftInset + "px - " + layoutRect.rightInset + "px)");
   updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobileClassEnabled, drawerSide);
   const layoutHost = fullscreenHost || (videoRoute ? document.body : null);
   const playerSurfaces = applyDockedLayout(layoutHost, shouldDockPlayerSurface, layoutRect);
   const coveredPlayerSurfaces = playerSurfaces.slice();
-  const playerControlSurfaces = applyPlayerControlsInset(layoutHost, shouldDockPlayerSurface, layoutRect, coveredPlayerSurfaces);
-  const playerProgressSurfaces = applyPlayerProgressInset(layoutHost, shouldDockPlayerSurface, layoutRect, coveredPlayerSurfaces.concat(playerControlSurfaces));
-  const playerSubtitleSurfaces = applyPlayerSubtitlesInset(layoutHost, shouldDockPlayerSurface, layoutRect, coveredPlayerSurfaces);
+  clearPlayerOverlayInsets();
+  const playerControlAvoidSurfaces = desktopVideoSafeMode ? [] : coveredPlayerSurfaces;
+  const playerSubtitleAvoidSurfaces = desktopVideoSafeMode ? [] : coveredPlayerSurfaces;
+  const playerControlSurfaces = applyPlayerControlsInset(layoutHost, shouldInsetPlayerOverlays, layoutRect, playerControlAvoidSurfaces, desktopVideoSafeMode);
+  const playerProgressAvoidSurfaces = desktopVideoSafeMode ? [] : coveredPlayerSurfaces.concat(playerControlSurfaces);
+  const playerProgressSurfaces = applyPlayerProgressInset(layoutHost, shouldInsetPlayerOverlays, layoutRect, playerProgressAvoidSurfaces, desktopVideoSafeMode);
+  const playerSubtitleSurfaces = applyPlayerSubtitlesInset(layoutHost, shouldInsetPlayerOverlays, layoutRect, playerSubtitleAvoidSurfaces, desktopVideoSafeMode);
   const contentSurfaces = applyNormalContentInset(shouldInsetNormalContent, layoutRect);
   const headerSurfaces = applyHeaderControlsInset(layoutHost || document.body, shouldInsetHeaderControls, layoutRect, videoRoute);
 
@@ -1409,6 +1481,7 @@ export function updateLayout(reason: string): void {
   setLayoutClass("jellychat-docked", docked);
   setLayoutClass("jellychat-mobile", mobileClassEnabled);
   setLayoutClass("jellychat-fullscreen", fullscreenActive);
+  setLayoutClass("jellychat-desktop-video-safe", desktopVideoSafeMode);
   setLayoutClass("jellychat-drawer-left", drawerSide === "left");
   setLayoutClass("jellychat-drawer-right", drawerSide === "right");
   setLayoutClass("jellychat-content-inset-found", contentSurfaces.length > 0);
@@ -1440,22 +1513,32 @@ export function updateLayout(reason: string): void {
     window.JellyChatDebug.leftInset = layoutRect.leftInset;
     window.JellyChatDebug.rightInset = layoutRect.rightInset;
     window.JellyChatDebug.lastLayoutUpdateAt = new Date().toISOString();
-    window.JellyChatDebug.layoutTargetsFound = (!shouldInsetNormalContent || contentSurfaces.length > 0) && (!shouldInsetHeaderControls || headerSurfaces.length > 0) && (!shouldDockPlayerSurface || (playerSurfaces.length > 0 || playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0));
+    const playerOverlayInsetApplied = playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0;
+    const desktopOverlayCssFallbackApplied = desktopVideoSafeMode && shouldInsetPlayerOverlays;
+    window.JellyChatDebug.runtimeShell = runtimeShell.runtimeShell;
+    window.JellyChatDebug.clientShell = runtimeShell.clientShell;
+    window.JellyChatDebug.isJellyfinDesktop = runtimeShell.isJellyfinDesktop;
+    window.JellyChatDebug.desktopVideoSafeMode = desktopVideoSafeMode;
+    window.JellyChatDebug.desktopOverlayCssFallbackApplied = desktopOverlayCssFallbackApplied;
+    window.JellyChatDebug.videoSurfaceInsetApplied = shouldDockPlayerSurface && playerSurfaces.length > 0;
+    window.JellyChatDebug.videoSurfaceResizeSuppressed = desktopVideoSafeMode;
+    window.JellyChatDebug.layoutTargetsFound = (!shouldInsetNormalContent || contentSurfaces.length > 0) && (!shouldInsetHeaderControls || headerSurfaces.length > 0) && (!shouldInsetPlayerOverlays || (playerOverlayInsetApplied || desktopOverlayCssFallbackApplied || (!desktopVideoSafeMode && playerSurfaces.length > 0)));
     window.JellyChatDebug.contentInsetApplied = shouldInsetNormalContent && contentSurfaces.length > 0;
     window.JellyChatDebug.headerControlsInsetApplied = shouldInsetHeaderControls && headerSurfaces.length > 0;
     window.JellyChatDebug.playerInsetApplied = shouldDockPlayerSurface && playerSurfaces.length > 0;
     window.JellyChatDebug.playerSurfaceInsetApplied = shouldDockPlayerSurface && playerSurfaces.length > 0;
-    window.JellyChatDebug.playerControlsInsetApplied = shouldDockPlayerSurface && playerControlSurfaces.length > 0;
-    window.JellyChatDebug.playerProgressInsetApplied = shouldDockPlayerSurface && playerProgressSurfaces.length > 0;
-    window.JellyChatDebug.playerSubtitlesInsetApplied = shouldDockPlayerSurface && playerSubtitleSurfaces.length > 0;
+    window.JellyChatDebug.playerControlsInsetApplied = shouldInsetPlayerOverlays && playerControlSurfaces.length > 0;
+    window.JellyChatDebug.playerProgressInsetApplied = shouldInsetPlayerOverlays && playerProgressSurfaces.length > 0;
+    window.JellyChatDebug.playerSubtitlesInsetApplied = shouldInsetPlayerOverlays && playerSubtitleSurfaces.length > 0;
     window.JellyChatDebug.normalContentInsetApplied = shouldInsetNormalContent && contentSurfaces.length > 0;
-    window.JellyChatDebug.controlsInsetApplied = shouldDockPlayerSurface && (playerSurfaces.length > 0 || playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0) && !!window.JellyChatDebug.controlsElementFound;
+    window.JellyChatDebug.controlsInsetApplied = shouldInsetPlayerOverlays && (playerSurfaces.length > 0 || playerOverlayInsetApplied) && !!window.JellyChatDebug.controlsElementFound;
     window.JellyChatDebug.fullscreenElementTag = tag(fullscreenHost);
     window.JellyChatDebug.fullscreenHostTag = tag(fullscreenHost);
     window.JellyChatDebug.fullscreenHostId = elementId(fullscreenHost);
     window.JellyChatDebug.fullscreenHostClass = className(fullscreenHost);
     window.JellyChatDebug.controlsOverlapAvoided = !drawerOpen
       || (shouldDockPlayerSurface && (playerSurfaces.length > 0 || playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0))
+      || (desktopVideoSafeMode && (playerOverlayInsetApplied || desktopOverlayCssFallbackApplied))
       || (mode === "fullscreen-overlay" && mobile)
       || (!fullscreenActive && docked)
       || mode === "mobile"

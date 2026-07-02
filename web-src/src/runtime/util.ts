@@ -1,4 +1,5 @@
 import type { ChatMessage, MessageGroupModel, PlaybackEventType, PlaybackTimelineItem, RoomEvent, TimelineItem } from "../types";
+import { getAssetBasePath, getInjectedAssetBaseUrl, recordInjectedAssetSource } from "./urls";
 
 export const rootId = "jellyChatRoot";
 export const buttonId = "jellyChatButton";
@@ -418,8 +419,11 @@ export function markSelfContainedAssetsLoaded(scriptSrc: string): void {
     return;
   }
 
+  recordInjectedAssetSource(scriptSrc);
   window.JellyChatDebug.injectionMode = "self-contained";
   window.JellyChatDebug.assetMode = "plugin-endpoint";
+  window.JellyChatDebug.assetBasePath = getAssetBasePath();
+  window.JellyChatDebug.injectedAssetBaseUrl = getInjectedAssetBaseUrl();
   window.JellyChatDebug.fileTransformationRequired = false;
   window.JellyChatDebug.injectedAssetVersion = resolveAssetVersion(scriptSrc);
   window.JellyChatDebug.injectionMarkerFound = findInjectionMarker();
@@ -437,7 +441,7 @@ function markStylesheetLoaded(loaded: boolean, error: string | null): void {
 }
 
 export function waitForStylesheet(): Promise<void> {
-  const link = document.querySelector<HTMLLinkElement>('link[href^="/JellyChat/Assets/jellychat.css"], link[data-jellychat-style="true"]');
+  const link = document.querySelector<HTMLLinkElement>('link[data-jellychat-style="true"], link[href*="/JellyChat/Assets/jellychat.css"]');
   if (!link) {
     markStylesheetLoaded(false, "JellyChat stylesheet link not found.");
     return Promise.resolve();

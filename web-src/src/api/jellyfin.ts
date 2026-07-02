@@ -1,12 +1,11 @@
+import { resolveJellyfinUrl } from "../runtime/urls";
+
 export async function fetchJson(path: string): Promise<unknown> {
   if (!window.ApiClient) {
     return null;
   }
 
-  const normalizedPath = path.charAt(0) === "/" ? path.slice(1) : path;
-  const url = typeof window.ApiClient.getUrl === "function"
-    ? window.ApiClient.getUrl(normalizedPath)
-    : normalizedPath;
+  const url = resolveJellyfinUrl(path);
 
   if (typeof window.ApiClient.ajax === "function") {
     return window.ApiClient.ajax({
@@ -28,10 +27,7 @@ export async function postJson(path: string, data: unknown, expectJsonResponse: 
     return null;
   }
 
-  const normalizedPath = path.charAt(0) === "/" ? path.slice(1) : path;
-  const url = typeof window.ApiClient.getUrl === "function"
-    ? window.ApiClient.getUrl(normalizedPath)
-    : normalizedPath;
+  const url = resolveJellyfinUrl(path);
 
   if (typeof window.ApiClient.ajax === "function") {
     const request: Record<string, unknown> = {

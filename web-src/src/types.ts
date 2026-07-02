@@ -133,6 +133,8 @@ export type JellyChatDebug = Record<string, unknown> & {
   reactMounted: boolean;
   injectionMode: "self-contained";
   assetMode: "plugin-endpoint";
+  assetBasePath: string;
+  injectedAssetBaseUrl: string;
   fileTransformationRequired: false;
   injectedAssetVersion: string;
   injectionMarkerFound: boolean;
@@ -226,6 +228,17 @@ export type JellyChatDebug = Record<string, unknown> & {
   drawerOpen: boolean;
   drawerSide: DrawerSide;
   drawerWidth: number;
+  runtimeShell: string;
+  clientShell: string;
+  isJellyfinDesktop: boolean;
+  layoutMode: string;
+  desktopVideoSafeMode: boolean;
+  desktopOverlayCssFallbackApplied: boolean;
+  videoSurfaceInsetApplied: boolean;
+  videoSurfaceResizeSuppressed: boolean;
+  playerControlsInsetApplied: boolean;
+  playerSubtitlesInsetApplied: boolean;
+  headerControlsInsetApplied: boolean;
   counts: Record<string, unknown>;
   status: Record<string, unknown>;
   last: Record<string, unknown>;
