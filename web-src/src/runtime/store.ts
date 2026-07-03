@@ -832,9 +832,70 @@ function resolveLocalActorName(sessions: any[] = [], currentSession: any | null 
 
 function getCurrentDeviceId(): string {
   if (!window.ApiClient) return "";
-  if (typeof window.ApiClient.deviceId === "function") return window.ApiClient.deviceId() || "";
-  if (typeof window.ApiClient._deviceId === "string") return window.ApiClient._deviceId;
-  if (window.ApiClient._serverInfo && typeof window.ApiClient._serverInfo.DeviceId === "string") return window.ApiClient._serverInfo.DeviceId;
+  const host = window as Window & Record<string, any>;
+  const candidates = [
+    callApiClientString("deviceId"),
+    callApiClientString("getDeviceId"),
+    readApiClientString("deviceId"),
+    readApiClientString("_deviceId"),
+    readApiClientString("DeviceId"),
+    readApiClientString("_serverInfo.DeviceId"),
+    readApiClientString("_serverInfo.deviceId"),
+    readApiClientString("_appInfo.DeviceId"),
+    readApiClientString("_appInfo.deviceId"),
+    readNestedString(host, "appHost.deviceId"),
+    callNestedString(host, "appHost.deviceId"),
+    readStoredDeviceId()
+  ];
+  return candidates.map((candidate) => candidate.trim()).find(Boolean) || "";
+}
+
+function callApiClientString(methodName: string): string {
+  const method = window.ApiClient && window.ApiClient[methodName];
+  if (typeof method !== "function") return "";
+  try {
+    const value = method.call(window.ApiClient);
+    return typeof value === "string" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function readApiClientString(path: string): string {
+  return readNestedString(window.ApiClient, path);
+}
+
+function callNestedString(source: any, path: string): string {
+  const value = readNestedValue(source, path);
+  if (typeof value !== "function") return "";
+  try {
+    const result = value.call(source);
+    return typeof result === "string" ? result : "";
+  } catch {
+    return "";
+  }
+}
+
+function readNestedString(source: any, path: string): string {
+  const value = readNestedValue(source, path);
+  return typeof value === "string" ? value : "";
+}
+
+function readNestedValue(source: any, path: string): any {
+  return path.split(".").filter(Boolean).reduce((current, part) => current && current[part], source);
+}
+
+function readStoredDeviceId(): string {
+  try {
+    const keys = ["deviceId", "jellyfin.deviceId", "jellyfin_device_id"];
+    for (const key of keys) {
+      const value = window.localStorage?.getItem(key) || "";
+      if (value) return value;
+    }
+  } catch {
+    // Storage may be unavailable in locked-down WebViews.
+  }
+
   return "";
 }
 
@@ -855,7 +916,7 @@ function getSessionDeviceId(session: any): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function resolveCurrentSession(sessions: any[]): CurrentSessionResolution {
+function resolveCurrentSession(sessions: any[], groups: any[] = []): CurrentSessionResolution {
   const deviceId = getCurrentDeviceId();
   const normalizedDeviceId = normalizeId(deviceId);
   const matchingUserSessions = sessions.filter(matchesCurrentUser);
@@ -873,16 +934,9 @@ function resolveCurrentSession(sessions: any[]): CurrentSessionResolution {
 
   if (normalizedDeviceId) {
     const deviceMatches = matchingUserSessions.filter((session) => normalizeId(getSessionDeviceId(session)) === normalizedDeviceId);
-    if (deviceMatches.length === 1) {
-      const session = deviceMatches[0];
-      return {
-        session,
-        sessionId: getSessionId(session),
-        deviceId: getSessionDeviceId(session) || deviceId,
-        sessionMatchCount: 1,
-        reason: "user-device-session",
-        error: null
-      };
+    const deviceResolution = resolveSessionCandidate(deviceMatches, groups, deviceId, "user-device");
+    if (deviceResolution) {
+      return deviceResolution;
     }
 
     if (deviceMatches.length > 1) {
@@ -897,16 +951,9 @@ function resolveCurrentSession(sessions: any[]): CurrentSessionResolution {
     }
   }
 
-  if (matchingUserSessions.length === 1) {
-    const session = matchingUserSessions[0];
-    return {
-      session,
-      sessionId: getSessionId(session),
-      deviceId: getSessionDeviceId(session) || deviceId,
-      sessionMatchCount: 1,
-      reason: normalizedDeviceId ? "user-session-device-missing" : "single-user-session",
-      error: null
-    };
+  const userResolution = resolveSessionCandidate(matchingUserSessions, groups, deviceId, normalizedDeviceId ? "user-session-device-missing" : "user-session");
+  if (userResolution && matchingUserSessions.length === 1) {
+    return userResolution;
   }
 
   return {
@@ -917,6 +964,56 @@ function resolveCurrentSession(sessions: any[]): CurrentSessionResolution {
     reason: "ambiguous-user-session",
     error: "Multiple sessions matched the current user and no current device match was available."
   };
+}
+
+function resolveSessionCandidate(candidates: any[], groups: any[], fallbackDeviceId: string, reasonPrefix: string): CurrentSessionResolution | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  if (candidates.length === 1) {
+    return createSessionResolution(candidates[0], candidates.length, fallbackDeviceId, reasonPrefix, null);
+  }
+
+  const withSessionGroup = candidates.filter((session) => extractSyncPlayGroupId(session));
+  if (withSessionGroup.length === 1) {
+    return createSessionResolution(withSessionGroup[0], candidates.length, fallbackDeviceId, reasonPrefix + "-syncplay-session", null);
+  }
+
+  const withGroupParticipant = groups.length > 0
+    ? candidates.filter((session) => groupsContainCurrentSession(groups, session))
+    : [];
+  if (withGroupParticipant.length === 1) {
+    return createSessionResolution(withGroupParticipant[0], candidates.length, fallbackDeviceId, reasonPrefix + "-syncplay-participant", null);
+  }
+
+  const activeCandidates = withSessionGroup.length > 0 ? withSessionGroup : withGroupParticipant;
+  if (activeCandidates.length > 1 && reasonPrefix.indexOf("user-device") === 0) {
+    return createSessionResolution(sortSessionsByActivity(activeCandidates)[0], candidates.length, fallbackDeviceId, reasonPrefix + "-latest-active-session", null);
+  }
+
+  return null;
+}
+
+function createSessionResolution(session: any, matchCount: number, fallbackDeviceId: string, reason: string, error: string | null): CurrentSessionResolution {
+  return {
+    session,
+    sessionId: getSessionId(session),
+    deviceId: getSessionDeviceId(session) || fallbackDeviceId,
+    sessionMatchCount: matchCount,
+    reason,
+    error
+  };
+}
+
+function sortSessionsByActivity(sessions: any[]): any[] {
+  return sessions.slice().sort((left, right) => getSessionActivityMs(right) - getSessionActivityMs(left));
+}
+
+function getSessionActivityMs(session: any): number {
+  const value = (session && session.LastActivityDate) || (session && session.LastPlaybackCheckIn) || "";
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function collectStringValues(value: unknown, output: string[]): void {
@@ -1124,7 +1221,7 @@ async function resolveEventPostContext(): Promise<{ senderSessionId: string; gro
   } catch (err) {
     logDebug("SyncPlay list request failed before JellyChat post", err);
   }
-  const resolution = resolveCurrentSession(sessions);
+  const resolution = resolveCurrentSession(sessions, groups);
   const currentSession = resolution.session;
   cachedCurrentSessionIds = resolution.sessionId ? [resolution.sessionId] : [];
   if (window.JellyChatDebug) {
@@ -1447,19 +1544,6 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
   }
 
   const sessions = await fetchSessions();
-  const resolution = resolveCurrentSession(sessions);
-  cachedCurrentSessionIds = resolution.sessionId ? [resolution.sessionId] : [];
-  updateSyncPlayResolutionDebug(resolution);
-  if (!resolution.session || !resolution.sessionId) {
-    return createSyncPlayContext({
-      sessionId: resolution.sessionId,
-      deviceId: resolution.deviceId,
-      unavailable: false,
-      membershipSource: resolution.reason
-    });
-  }
-
-  const groupIds = getGroupIdsForCurrentSession(resolution.session);
   let groups: any[] = [];
   let groupsUnavailable = false;
   try {
@@ -1469,6 +1553,19 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
     logDebug("SyncPlay list request failed", err);
   }
 
+  const resolution = resolveCurrentSession(sessions, groups);
+  cachedCurrentSessionIds = resolution.sessionId ? [resolution.sessionId] : [];
+  updateSyncPlayResolutionDebug(resolution);
+  if (!resolution.session || !resolution.sessionId) {
+    return createSyncPlayContext({
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      unavailable: groupsUnavailable,
+      membershipSource: groupsUnavailable ? "syncplay-list-unavailable" : resolution.reason
+    });
+  }
+
+  const groupIds = getGroupIdsForCurrentSession(resolution.session);
   if (groupIds.length > 0) {
     const preferredGroupId = groupIds[0];
     const matchingGroup = findGroupsByGroupIds(groups, groupIds)[0] || null;
