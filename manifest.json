@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "JellyChat v0.7.0 message replies and chat polish. Highlights: - Adds lightweight message replies with composer previews, quote rendering, and jump/highlight to original messages. - Adds message actions with Reply and Copy from chat bubbles and the message context menu. - Improves timestamps, grouped consecutive messages, and compact playback rows. - Adds reply/action debug fields while keeping in-memory history, self-contained injection, and existing v0.6.0 behavior. Validation: - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check",
+                "targetAbi": "10.11.0.0",
+                "version": "0.7.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.7.0/Jellyfin.Plugin.JellyChat_0.7.0.zip",
+                "checksum": "6e158192e4aa81d806de8408a3a1c228",
+                "timestamp": "2026-07-03T18:29:56"
+            },
+            {
                 "changelog": "JellyChat v0.6.0 drawer QoL and presence polish. - Mounts the JellyChat trigger into native Jellyfin header and video OSD controls when available. - Removes the old visible floating fallback trigger. - Adds closed-drawer unread chat and playback activity indicators. - Adds ephemeral typing indicators over the existing /JellyChat/Events API. - Adds resizable drawer width, background alpha preference, and drawer settings popover. - Keeps playback logs, emoji reactions, plugin ID, and self-contained injection behavior intact. - Does not add WebSocket, SSE, new ports, external services, or File Transformation.",
                 "targetAbi": "10.11.0.0",
                 "version": "0.6.0",
