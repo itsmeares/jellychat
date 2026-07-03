@@ -1,14 +1,16 @@
 import { FormEvent, KeyboardEvent, useRef, useState } from "react";
-import type { ChatActions, SyncPlayContext } from "../types";
+import type { ChatActions, ReplyTarget, SyncPlayContext } from "../types";
 import { formId, inputId, sendButtonId } from "../runtime/util";
 
 type Props = {
   actions: ChatActions;
   sending: boolean;
   syncPlay: SyncPlayContext;
+  replyTarget: ReplyTarget | null;
+  replyTargetFound: boolean;
 };
 
-export function Composer({ actions, sending, syncPlay }: Props) {
+export function Composer({ actions, sending, syncPlay, replyTarget, replyTargetFound }: Props) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const disabled = sending || !syncPlay.inGroup;
@@ -47,37 +49,57 @@ export function Composer({ actions, sending, syncPlay }: Props) {
 
     if (event.key === "Escape") {
       event.preventDefault();
+      if (replyTarget) {
+        actions.cancelReply("composer-escape");
+        return;
+      }
+
       actions.closeDrawer();
     }
   }
 
   return (
-    <form id={formId} autoComplete="off" onSubmit={submit}>
-      <textarea
-        id={inputId}
-        ref={inputRef}
-        rows={1}
-        placeholder={syncPlay.inGroup ? "Type a message" : "Join a SyncPlay group to chat"}
-        aria-label="JellyChat message"
-        wrap="soft"
-        disabled={disabled}
-        value={value}
-        onChange={(event) => {
-          setValue(event.target.value);
-          actions.noteComposerInput(event.target.value);
-          window.setTimeout(resizeInput, 0);
-        }}
-        onKeyDown={onKeyDown}
-        onKeyUp={(event) => event.stopPropagation()}
-        onFocus={() => actions.setInputFocused(true)}
-        onBlur={() => {
-          actions.stopTyping("composer-blur");
-          actions.setInputFocused(false);
-        }}
-      />
-      <button id={sendButtonId} type="submit" disabled={disabled || value.trim().length === 0}>
-        {sending ? "Sending..." : "Send"}
-      </button>
-    </form>
+    <div className="jellyChatComposerArea">
+      {replyTarget ? (
+        <div className="jellyChatComposerReply" role="status" aria-live="polite">
+          <div className="jellyChatComposerReplyText">
+            <span className="jellyChatComposerReplyLabel">Replying to {replyTarget.userName}</span>
+            <span className="jellyChatComposerReplyPreview">
+              {replyTargetFound ? replyTarget.messagePreview : replyTarget.messagePreview || "Original message unavailable"}
+            </span>
+          </div>
+          <button type="button" aria-label="Cancel reply" title="Cancel reply" onClick={() => actions.cancelReply("button")}>
+            ×
+          </button>
+        </div>
+      ) : null}
+      <form id={formId} autoComplete="off" onSubmit={submit}>
+        <textarea
+          id={inputId}
+          ref={inputRef}
+          rows={1}
+          placeholder={syncPlay.inGroup ? "Type a message" : "Join a SyncPlay group to chat"}
+          aria-label="JellyChat message"
+          wrap="soft"
+          disabled={disabled}
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value);
+            actions.noteComposerInput(event.target.value);
+            window.setTimeout(resizeInput, 0);
+          }}
+          onKeyDown={onKeyDown}
+          onKeyUp={(event) => event.stopPropagation()}
+          onFocus={() => actions.setInputFocused(true)}
+          onBlur={() => {
+            actions.stopTyping("composer-blur");
+            actions.setInputFocused(false);
+          }}
+        />
+        <button id={sendButtonId} type="submit" disabled={disabled || value.trim().length === 0}>
+          {sending ? "Sending..." : "Send"}
+        </button>
+      </form>
+    </div>
   );
 }

@@ -238,9 +238,16 @@ export function ChatDrawer({ state, actions }: Props) {
       <div id={statusId} className={state.syncPlay.inGroup ? "is-active" : ""}>
         {statusText}
       </div>
-      <MessageList timelineItems={state.timelineItems} syncPlay={state.syncPlay} typingUsers={state.typingRemoteUsers} />
+      <MessageList
+        timelineItems={state.timelineItems}
+        syncPlay={state.syncPlay}
+        typingUsers={state.typingRemoteUsers}
+        actions={actions}
+        messageActionMenu={state.messageActionMenu}
+        highlightedMessageId={state.highlightedMessageId}
+      />
       <ReactionBar actions={actions} syncPlay={state.syncPlay} />
-      <Composer actions={actions} sending={state.sending} syncPlay={state.syncPlay} />
+      <Composer actions={actions} sending={state.sending} syncPlay={state.syncPlay} replyTarget={state.replyTarget} replyTargetFound={state.replyTargetFound} />
     </aside>
   );
 }

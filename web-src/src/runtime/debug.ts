@@ -40,6 +40,15 @@ const summaryKeys = [
   "listenerCount",
   "messageCount",
   "timelineCount",
+  "replyActive",
+  "replyTargetEventId",
+  "replyTargetFound",
+  "contextMenuOpen",
+  "lastCopiedMessageId",
+  "highlightedMessageId",
+  "groupedMessageCount",
+  "messageActionMenuOpen",
+  "lastMessageAction",
   "playbackEventCount",
   "reactionEventCount",
   "reactionOverlayCount",
@@ -164,6 +173,15 @@ mapFields("events", [
   "groupCount",
   "groupingWindowMs",
   "lastGroupedAt",
+  "replyActive",
+  "replyTargetEventId",
+  "replyTargetFound",
+  "contextMenuOpen",
+  "lastCopiedMessageId",
+  "highlightedMessageId",
+  "groupedMessageCount",
+  "messageActionMenuOpen",
+  "lastMessageAction",
   "unreadChatIndicatorActive",
   "playbackActivityIndicatorActive",
   "lastUnreadEventType",
@@ -389,6 +407,15 @@ function defaultValues(): DebugRecord {
     messageCount: 0,
     groupCount: 0,
     timelineCount: 0,
+    replyActive: false,
+    replyTargetEventId: null,
+    replyTargetFound: false,
+    contextMenuOpen: false,
+    lastCopiedMessageId: null,
+    highlightedMessageId: null,
+    groupedMessageCount: 0,
+    messageActionMenuOpen: false,
+    lastMessageAction: null,
     groupingWindowMs: 5 * 60 * 1000,
     lastGroupedAt: null,
     layoutMode: "normal-docked",
@@ -529,8 +556,9 @@ export function initializeJellyChatDebug(): DebugRecord {
       timeline: topLevel.timelineCount,
       event: details.events.eventCount,
       playbackEvent: topLevel.playbackEventCount,
-      reactionEvent: topLevel.reactionEventCount,
-      reactionOverlay: topLevel.reactionOverlayCount
+    reactionEvent: topLevel.reactionEventCount,
+    reactionOverlay: topLevel.reactionOverlayCount,
+    groupedMessage: topLevel.groupedMessageCount
     };
   }
 
@@ -561,6 +589,9 @@ export function initializeJellyChatDebug(): DebugRecord {
       triggerHostFound: details.layout.triggerHostFound,
       unreadChatIndicatorActive: details.events.unreadChatIndicatorActive,
       playbackActivityIndicatorActive: details.events.playbackActivityIndicatorActive,
+      replyActive: topLevel.replyActive,
+      contextMenuOpen: topLevel.contextMenuOpen,
+      messageActionMenuOpen: topLevel.messageActionMenuOpen,
       typingRemoteCount: details.events.typingRemoteCount,
       runtimeShell: details.layout.runtimeShell,
       clientShell: details.layout.clientShell,
@@ -591,6 +622,9 @@ export function initializeJellyChatDebug(): DebugRecord {
       reactionEmoji: details.reactions.lastReactionEmoji,
       reactionSentAt: details.reactions.lastReactionSentAt,
       reactionReceivedAt: details.reactions.lastReactionReceivedAt,
+      copiedMessageId: topLevel.lastCopiedMessageId,
+      highlightedMessageId: topLevel.highlightedMessageId,
+      messageAction: topLevel.lastMessageAction,
       layoutUpdateAt: details.layout.lastLayoutUpdateAt
     };
   }
@@ -609,6 +643,15 @@ export function initializeJellyChatDebug(): DebugRecord {
     snapshot.layout.drawerWidthMax = topLevel.drawerWidthMax;
     snapshot.layout.drawerBackgroundAlpha = topLevel.drawerBackgroundAlpha;
     snapshot.layout.drawerBackgroundAlphaSource = topLevel.drawerBackgroundAlphaSource;
+    snapshot.events.replyActive = topLevel.replyActive;
+    snapshot.events.replyTargetEventId = topLevel.replyTargetEventId;
+    snapshot.events.replyTargetFound = topLevel.replyTargetFound;
+    snapshot.events.contextMenuOpen = topLevel.contextMenuOpen;
+    snapshot.events.lastCopiedMessageId = topLevel.lastCopiedMessageId;
+    snapshot.events.highlightedMessageId = topLevel.highlightedMessageId;
+    snapshot.events.groupedMessageCount = topLevel.groupedMessageCount;
+    snapshot.events.messageActionMenuOpen = topLevel.messageActionMenuOpen;
+    snapshot.events.lastMessageAction = topLevel.lastMessageAction;
     snapshot.reactions.reactionEventCount = topLevel.reactionEventCount;
     snapshot.reactions.reactionOverlayCount = topLevel.reactionOverlayCount;
     snapshot.playback.playbackEventCount = topLevel.playbackEventCount;
@@ -662,6 +705,15 @@ export function initializeJellyChatDebug(): DebugRecord {
       lastEventMergeCount: 0,
       lastEventPollAt: null,
       lastEventPostAt: null,
+      replyActive: false,
+      replyTargetEventId: null,
+      replyTargetFound: false,
+      contextMenuOpen: false,
+      lastCopiedMessageId: null,
+      highlightedMessageId: null,
+      groupedMessageCount: 0,
+      messageActionMenuOpen: false,
+      lastMessageAction: null,
       lastPlaybackEventType: null,
       lastPlaybackEventPostAt: null,
       lastPlaybackSuppressedReason: null,

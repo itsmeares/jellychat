@@ -1,7 +1,7 @@
-import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, PlaybackEventType, ReactionEvent, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
+import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, MessageActionMenuState, PlaybackEventType, ReactionEvent, ReplyTarget, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
 import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent, postTypingUpdate } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
-import { buildTimelineItems, countDebugNodes, createClientEventId, formId, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
+import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEventId, formId, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
 import { getActiveMountHost, getDrawerSide, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, updateLayout } from "./layout";
 import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
 import { addReactionOverlay, addRoomReactionOverlay, recordReactionReceived, setReactionParticipantCount } from "./reactions";
@@ -25,9 +25,21 @@ let historyEvents: RoomEvent[] = [];
 let historyMessages: ChatMessage[] = [];
 let groupedMessages: MessageGroupModel[] = [];
 let timelineItems: TimelineItem[] = [];
+let activeReplyTarget: ReplyTarget | null = null;
+let highlightedMessageId: string | null = null;
+let messageActionMenu: MessageActionMenuState = {
+  open: false,
+  message: null,
+  x: 0,
+  y: 0,
+  copiedMessageId: null,
+  feedback: ""
+};
 let lastEventGroupId = "";
 let lastSequence = 0;
 let optimisticSequence = 0;
+let copiedFeedbackTimer = 0;
+let highlightTimer = 0;
 let cachedLocalActorName = "";
 let cachedCurrentSessionIds: string[] = [];
 const localClientEventIds = new Set<string>();
@@ -74,7 +86,11 @@ let state: ChatState = {
   triggerIndicator,
   typingLocalActive: false,
   typingRemoteUsers: [],
-  typingTtlMs
+  typingTtlMs,
+  replyTarget: null,
+  replyTargetFound: false,
+  messageActionMenu,
+  highlightedMessageId: null
 };
 
 const subscribers = new Set<Subscriber>();
@@ -117,6 +133,35 @@ function updatePresenceDebug(): void {
   window.JellyChatDebug.typingTtlMs = typingTtlMs;
 }
 
+function getReplyTargetFound(): boolean {
+  return !!(activeReplyTarget && historyMessages.some((message) => message.id === activeReplyTarget?.eventId));
+}
+
+function getGroupedMessageCount(): number {
+  return timelineItems.reduce((count, item) => {
+    if (item.kind !== "messageGroup") {
+      return count;
+    }
+
+    return count + (item.group.messages.length > 1 ? item.group.messages.length : 0);
+  }, 0);
+}
+
+function updateMessageActionDebug(): void {
+  if (!window.JellyChatDebug) {
+    return;
+  }
+
+  window.JellyChatDebug.replyActive = !!activeReplyTarget;
+  window.JellyChatDebug.replyTargetEventId = activeReplyTarget?.eventId || null;
+  window.JellyChatDebug.replyTargetFound = getReplyTargetFound();
+  window.JellyChatDebug.contextMenuOpen = messageActionMenu.open;
+  window.JellyChatDebug.messageActionMenuOpen = messageActionMenu.open;
+  window.JellyChatDebug.lastCopiedMessageId = messageActionMenu.copiedMessageId;
+  window.JellyChatDebug.highlightedMessageId = highlightedMessageId;
+  window.JellyChatDebug.groupedMessageCount = getGroupedMessageCount();
+}
+
 function scheduleTypingExpiry(): void {
   if (typingExpiryTimer) {
     window.clearTimeout(typingExpiryTimer);
@@ -148,6 +193,7 @@ function pruneRemoteTypingUsers(): void {
 function emit(): void {
   pruneRemoteTypingUsers();
   const prefs = getDrawerPreferenceSnapshot();
+  const replyTargetFound = getReplyTargetFound();
   state = {
     drawerOpen: isDrawerOpen(),
     drawerSide: getDrawerSide(),
@@ -166,7 +212,14 @@ function emit(): void {
     triggerIndicator: { ...triggerIndicator },
     typingLocalActive,
     typingRemoteUsers: remoteTypingUsers.slice(),
-    typingTtlMs
+    typingTtlMs,
+    replyTarget: activeReplyTarget ? { ...activeReplyTarget } : null,
+    replyTargetFound,
+    messageActionMenu: {
+      ...messageActionMenu,
+      message: messageActionMenu.message ? { ...messageActionMenu.message } : null
+    },
+    highlightedMessageId
   };
 
   if (window.JellyChatDebug) {
@@ -182,6 +235,7 @@ function emit(): void {
     window.JellyChatDebug.drawerResizeActive = drawerResizeActive;
     window.JellyChatDebug.drawerBackgroundAlpha = prefs.alpha.alpha;
     window.JellyChatDebug.drawerBackgroundAlphaSource = prefs.alpha.source;
+    updateMessageActionDebug();
     updatePresenceDebug();
     countDebugNodes();
   }
@@ -212,6 +266,7 @@ function createRoomEvent(args: {
   positionSeconds?: number;
   itemId?: string;
   itemName?: string;
+  replyTo?: ReplyTarget | null;
   optimistic?: boolean;
 }): RoomEvent {
   const actorName = resolveEventActorName({
@@ -231,6 +286,7 @@ function createRoomEvent(args: {
     sessionId: "",
     createdAtUtc: new Date().toISOString(),
     text: args.text || "",
+    replyTo: args.replyTo || null,
     emoji: args.emoji || "",
     playbackAction: args.type.replace("playback.", ""),
     fromPositionTicks: args.fromPositionTicks ?? null,
@@ -293,6 +349,7 @@ function mergeConfirmedEvent(existing: RoomEvent, incoming: RoomEvent): RoomEven
     sequence: incoming.sequence || existing.sequence,
     createdAtUtc: incoming.createdAtUtc || existing.createdAtUtc,
     text: incoming.text || existing.text,
+    replyTo: incoming.replyTo || existing.replyTo || null,
     emoji: incoming.emoji || existing.emoji,
     fromPositionTicks: incoming.fromPositionTicks ?? existing.fromPositionTicks,
     toPositionTicks: incoming.toPositionTicks ?? existing.toPositionTicks,
@@ -639,6 +696,16 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     remoteTypingUsers = [];
     clearLocalTypingTimers();
     typingLocalActive = false;
+    activeReplyTarget = null;
+    highlightedMessageId = null;
+    messageActionMenu = {
+      open: false,
+      message: null,
+      x: 0,
+      y: 0,
+      copiedMessageId: messageActionMenu.copiedMessageId,
+      feedback: ""
+    };
     historyEvents = [];
     historyMessages = [];
     groupedMessages = [];
@@ -1079,6 +1146,158 @@ function noteLocalTyping(value: string): void {
   emit();
 }
 
+function cloneReplyTarget(replyTarget: ReplyTarget | null): ReplyTarget | null {
+  return replyTarget ? { ...replyTarget } : null;
+}
+
+function setLastMessageAction(action: string): void {
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.lastMessageAction = action;
+  }
+}
+
+function clearCopiedFeedbackLater(): void {
+  if (copiedFeedbackTimer) {
+    window.clearTimeout(copiedFeedbackTimer);
+  }
+
+  copiedFeedbackTimer = window.setTimeout(() => {
+    copiedFeedbackTimer = 0;
+    messageActionMenu = {
+      ...messageActionMenu,
+      feedback: ""
+    };
+    emit();
+  }, 1400);
+}
+
+function closeMessageActionMenu(reason: string): void {
+  if (!messageActionMenu.open) {
+    return;
+  }
+
+  messageActionMenu = {
+    ...messageActionMenu,
+    open: false,
+    message: null
+  };
+  setLastMessageAction("menu-close:" + reason);
+  emit();
+}
+
+function clearReplyTarget(reason: string): void {
+  if (!activeReplyTarget) {
+    return;
+  }
+
+  activeReplyTarget = null;
+  setLastMessageAction("reply-cancel:" + reason);
+  emit();
+}
+
+function startReplyToMessage(message: ChatMessage): void {
+  if (!message || message.optimistic) {
+    return;
+  }
+
+  activeReplyTarget = buildReplyTarget(message);
+  closeMessageActionMenu("reply");
+  setLastMessageAction("reply");
+  emit();
+  focusComposer("reply-selected");
+}
+
+function openMessageMenuForMessage(message: ChatMessage, x: number, y: number): void {
+  if (!message || message.optimistic) {
+    return;
+  }
+
+  const menuWidth = 156;
+  const menuHeight = 96;
+  const safeX = Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8));
+  const safeY = Math.max(8, Math.min(y, window.innerHeight - menuHeight - 8));
+  messageActionMenu = {
+    open: true,
+    message,
+    x: safeX,
+    y: safeY,
+    copiedMessageId: messageActionMenu.copiedMessageId,
+    feedback: ""
+  };
+  setLastMessageAction("menu-open");
+  emit();
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the textarea copy path.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  } finally {
+    textarea.remove();
+  }
+
+  return copied;
+}
+
+async function copyMessageText(message: ChatMessage): Promise<boolean> {
+  if (!message || message.optimistic) {
+    return false;
+  }
+
+  const copied = await copyTextToClipboard(message.text);
+  messageActionMenu = {
+    ...messageActionMenu,
+    open: false,
+    message: null,
+    copiedMessageId: copied ? message.id : messageActionMenu.copiedMessageId,
+    feedback: copied ? "Copied" : "Copy failed"
+  };
+  setLastMessageAction(copied ? "copy" : "copy-failed");
+  clearCopiedFeedbackLater();
+  emit();
+  return copied;
+}
+
+function setHighlightedMessage(messageId: string): void {
+  if (!messageId) {
+    return;
+  }
+
+  highlightedMessageId = messageId;
+  setLastMessageAction("jump");
+  if (highlightTimer) {
+    window.clearTimeout(highlightTimer);
+  }
+
+  highlightTimer = window.setTimeout(() => {
+    highlightTimer = 0;
+    if (highlightedMessageId === messageId) {
+      highlightedMessageId = null;
+      emit();
+    }
+  }, 1700);
+  emit();
+}
+
 function secondsToTicks(positionSeconds: number | undefined): number | undefined {
   if (positionSeconds === undefined || !Number.isFinite(positionSeconds)) {
     return undefined;
@@ -1307,6 +1526,7 @@ export const actions: ChatActions = {
       }
 
       const clientEventId = createClientEventId();
+      const replyTo = cloneReplyTarget(activeReplyTarget);
       localClientEventIds.add(clientEventId);
       const optimisticEvent = createRoomEvent({
         id: "optimistic-" + clientEventId,
@@ -1315,6 +1535,7 @@ export const actions: ChatActions = {
         userName: postContext.userName,
         clientEventId,
         text: trimmedText,
+        replyTo,
         optimistic: true
       });
       mergeHistoryEvents([optimisticEvent]);
@@ -1328,7 +1549,8 @@ export const actions: ChatActions = {
         senderSessionId: postContext.senderSessionId,
         groupId: postContext.groupId,
         participants: postContext.participants,
-        clientEventId
+        clientEventId,
+        replyTo
       });
 
       if (window.JellyChatDebug) {
@@ -1344,13 +1566,16 @@ export const actions: ChatActions = {
             groupId: result.groupId,
             userName: result.userName,
             clientEventId,
-            text: result.text
+            text: result.text,
+            replyTo: result.replyTo || replyTo
           }),
           sequence: result.sequence,
           userId: result.userId,
           createdAtUtc: result.createdAtUtc,
+          replyTo: result.replyTo || replyTo,
           optimistic: false
         }]);
+        activeReplyTarget = null;
         void refreshEventsImmediately();
         clearComposerInput();
         focusComposer("send-success");
@@ -1444,6 +1669,24 @@ export const actions: ChatActions = {
     if (window.JellyChatDebug) {
       window.JellyChatDebug.inputFocused = focused;
     }
+  },
+  startReply: (message: ChatMessage) => {
+    startReplyToMessage(message);
+  },
+  cancelReply: (reason: string) => {
+    clearReplyTarget(reason);
+  },
+  openMessageActionMenu: (message: ChatMessage, x: number, y: number) => {
+    openMessageMenuForMessage(message, x, y);
+  },
+  closeMessageActionMenu: (reason: string) => {
+    closeMessageActionMenu(reason);
+  },
+  copyMessage: async (message: ChatMessage) => {
+    return copyMessageText(message);
+  },
+  highlightMessage: (messageId: string) => {
+    setHighlightedMessage(messageId);
   }
 };
 
@@ -1585,6 +1828,18 @@ export function startRuntime(): void {
 
       if (document.querySelector(".jellyChatEmojiEditToggle.is-active")) {
         window.dispatchEvent(new Event("jellychat-exit-quick-edit"));
+        keyboardEvent.preventDefault();
+        return;
+      }
+
+      if (messageActionMenu.open) {
+        closeMessageActionMenu("escape");
+        keyboardEvent.preventDefault();
+        return;
+      }
+
+      if (activeReplyTarget) {
+        clearReplyTarget("escape");
         keyboardEvent.preventDefault();
         return;
       }

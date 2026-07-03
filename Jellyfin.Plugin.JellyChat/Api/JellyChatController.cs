@@ -32,6 +32,11 @@ public class JellyChatController : ControllerBase
     private const string SystemNoticeEventType = "system.notice";
     private const int DefaultEventLimit = 100;
     private const int MaxEventLimit = 200;
+    private const int MaxReplyEventIdLength = 128;
+    private const int MaxReplyUserIdLength = 128;
+    private const int MaxReplyUserNameLength = 80;
+    private const int MaxReplyPreviewLength = 140;
+    private const int MaxReplyCreatedAtLength = 64;
 
     private readonly ISessionManager _sessionManager;
     private readonly IUserManager _userManager;
@@ -178,6 +183,12 @@ public class JellyChatController : ControllerBase
             return false;
         }
 
+        if (!string.Equals(type, ChatMessageEventType, StringComparison.Ordinal) && request.ReplyTo is not null)
+        {
+            error = "ReplyTo is only supported for chat.message.";
+            return false;
+        }
+
         roomEvent = new JellyChatEvent
         {
             GroupId = groupId,
@@ -191,7 +202,7 @@ public class JellyChatController : ControllerBase
         switch (type)
         {
             case ChatMessageEventType:
-                return TryApplyTextEvent(request, roomEvent, "Text is required.", out error);
+                return TryApplyTextEvent(request, roomEvent, "Text is required.", allowReply: true, out error);
             case ReactionEmojiEventType:
                 return TryApplyReactionEvent(request, roomEvent, out error);
             case PlaybackStartEventType:
@@ -208,7 +219,7 @@ public class JellyChatController : ControllerBase
             case TypingUpdateEventType:
                 return TryApplyTypingEvent(request, roomEvent, out error);
             case SystemNoticeEventType:
-                return TryApplyTextEvent(request, roomEvent, "Text is required for system.notice.", out error);
+                return TryApplyTextEvent(request, roomEvent, "Text is required for system.notice.", allowReply: false, out error);
             default:
                 error = "Unsupported event type.";
                 return false;
@@ -219,6 +230,7 @@ public class JellyChatController : ControllerBase
         JellyChatEventRequest request,
         JellyChatEvent roomEvent,
         string errorMessage,
+        bool allowReply,
         out string error)
     {
         string? text = NormalizeOptionalText(request.Text);
@@ -229,7 +241,39 @@ public class JellyChatController : ControllerBase
         }
 
         roomEvent.Text = text;
+        if (allowReply && !TryApplyReplyTarget(request.ReplyTo, roomEvent, out error))
+        {
+            return false;
+        }
+
         error = string.Empty;
+        return true;
+    }
+
+    private static bool TryApplyReplyTarget(JellyChatReplyTarget? replyTo, JellyChatEvent roomEvent, out string error)
+    {
+        error = string.Empty;
+        if (replyTo is null)
+        {
+            return true;
+        }
+
+        string? eventId = NormalizeOptionalText(replyTo.EventId);
+        string? messagePreview = NormalizeOptionalText(replyTo.MessagePreview);
+        if (string.IsNullOrEmpty(eventId) || string.IsNullOrEmpty(messagePreview))
+        {
+            error = "ReplyTo requires EventId and MessagePreview.";
+            return false;
+        }
+
+        roomEvent.ReplyTo = new JellyChatReplyTarget
+        {
+            EventId = Truncate(eventId, MaxReplyEventIdLength),
+            UserId = Truncate(NormalizeOptionalText(replyTo.UserId) ?? string.Empty, MaxReplyUserIdLength),
+            UserName = Truncate(NormalizeOptionalText(replyTo.UserName) ?? "Someone", MaxReplyUserNameLength),
+            MessagePreview = Truncate(CollapseWhitespace(messagePreview), MaxReplyPreviewLength),
+            CreatedAt = Truncate(NormalizeOptionalText(replyTo.CreatedAt) ?? string.Empty, MaxReplyCreatedAtLength)
+        };
         return true;
     }
 
@@ -321,6 +365,21 @@ public class JellyChatController : ControllerBase
         }
 
         return value.Trim();
+    }
+
+    private static string CollapseWhitespace(string value)
+    {
+        return string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[..maxLength].Trim();
     }
 
     private static GroupInfoDto? ResolveTargetGroup(List<GroupInfoDto> groups, string? requestedGroupId, List<string> participants)
