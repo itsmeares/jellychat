@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using Jellyfin.Plugin.JellyChat.Infrastructure;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -94,13 +96,15 @@ public class JellyChatController : ControllerBase
         }
 
         var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
+        bool allowUserParticipantMatch = CanUseUserParticipantMatch(allSessions, userId);
+        var activeGroup = ResolveActiveSyncPlayGroup(controllingSession);
         var targetGroup = ResolveTargetGroup(visibleGroups, request.GroupId, ParseParticipantHints(request.ParticipantsCsv));
         if (targetGroup is null)
         {
             return StatusCode(StatusCodes.Status403Forbidden, "Current session is not in the requested SyncPlay group.");
         }
 
-        if (!IsActiveGroupMember(controllingSession, targetGroup))
+        if (!CanAccessTargetGroup(controllingSession, targetGroup, activeGroup, allowUserParticipantMatch))
         {
             return StatusCode(StatusCodes.Status403Forbidden, "Current session is not an active member of the SyncPlay group.");
         }
@@ -157,14 +161,60 @@ public class JellyChatController : ControllerBase
         }
 
         var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
+        bool allowUserParticipantMatch = CanUseUserParticipantMatch(allSessions, userId);
+        var activeGroup = ResolveActiveSyncPlayGroup(controllingSession);
         var targetGroup = visibleGroups.FirstOrDefault(group => group.GroupId == parsedGroupId);
-        if (targetGroup is null || !IsActiveGroupMember(controllingSession, targetGroup))
+        if (targetGroup is null || !CanAccessTargetGroup(controllingSession, targetGroup, activeGroup, allowUserParticipantMatch))
         {
             return StatusCode(StatusCodes.Status403Forbidden, "Current session is not an active member of the requested SyncPlay group.");
         }
 
         int cappedLimit = Math.Clamp(limit.GetValueOrDefault(DefaultEventLimit), 1, MaxEventLimit);
         return Ok(_eventStore.GetRecent(parsedGroupId, afterSequence, cappedLimit));
+    }
+
+    /// <summary>
+    /// Gets the caller's current JellyChat room, if the caller's session is in a SyncPlay group.
+    /// </summary>
+    /// <param name="senderSessionId">Current client session identifier.</param>
+    /// <returns>The current room state for the caller's session.</returns>
+    [HttpGet("Room")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public ActionResult<JellyChatRoomInfo> GetRoom([FromQuery] string? senderSessionId)
+    {
+        Guid userId = ResolveCurrentUserId();
+        if (userId == Guid.Empty)
+        {
+            return BadRequest("Could not resolve current user id.");
+        }
+
+        var allSessions = _sessionManager.Sessions.ToList();
+        var controllingSession = ResolveCallerSession(allSessions, userId, senderSessionId);
+        if (controllingSession is null)
+        {
+            return StatusCode(StatusCodes.Status409Conflict, "Current Jellyfin session could not be resolved.");
+        }
+
+        var activeGroup = ResolveActiveSyncPlayGroup(controllingSession);
+        if (activeGroup.LookupAvailable)
+        {
+            return Ok(CreateRoomInfo(
+                controllingSession,
+                activeGroup.Group,
+                activeGroup.Group is null ? "current-session-not-in-syncplay" : "current-session-syncplay-map",
+                exactMembership: true));
+        }
+
+        var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
+        bool allowUserParticipantMatch = CanUseUserParticipantMatch(allSessions, userId);
+        var fallbackGroup = visibleGroups.FirstOrDefault(group => IsActiveGroupMember(controllingSession, group, allowUserParticipantMatch));
+        return Ok(CreateRoomInfo(
+            controllingSession,
+            fallbackGroup,
+            fallbackGroup is null ? "current-session-not-in-syncplay" : "current-session-syncplay-list",
+            exactMembership: false));
     }
 
     private static bool TryCreateEvent(
@@ -430,7 +480,116 @@ public class JellyChatController : ControllerBase
         return groups[0];
     }
 
-    private static bool IsActiveGroupMember(SessionInfo session, GroupInfoDto group)
+    private static JellyChatRoomInfo CreateRoomInfo(SessionInfo session, GroupInfoDto? group, string membershipSource, bool exactMembership)
+    {
+        return new JellyChatRoomInfo
+        {
+            InGroup = group is not null,
+            GroupId = group?.GroupId.ToString() ?? string.Empty,
+            GroupName = group?.GroupName ?? string.Empty,
+            SessionId = session.Id,
+            DeviceId = session.DeviceId ?? string.Empty,
+            Participants = group?.Participants ?? [],
+            ExactMembership = exactMembership,
+            MembershipSource = membershipSource
+        };
+    }
+
+    private static bool CanAccessTargetGroup(SessionInfo session, GroupInfoDto targetGroup, SyncPlayGroupResolution activeGroup, bool allowUserParticipantMatch)
+    {
+        if (activeGroup.LookupAvailable)
+        {
+            return activeGroup.Group?.GroupId == targetGroup.GroupId;
+        }
+
+        return IsActiveGroupMember(session, targetGroup, allowUserParticipantMatch);
+    }
+
+    private SyncPlayGroupResolution ResolveActiveSyncPlayGroup(SessionInfo session)
+    {
+        var field = _syncPlayManager.GetType().GetField("_sessionToGroupMap", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (field is null)
+        {
+            return new SyncPlayGroupResolution(false, null);
+        }
+
+        object? map = field.GetValue(_syncPlayManager);
+        if (map is null || !TryReadSessionGroupMap(map, session.Id, out var internalGroup))
+        {
+            return new SyncPlayGroupResolution(false, null);
+        }
+
+        if (internalGroup is null)
+        {
+            return new SyncPlayGroupResolution(true, null);
+        }
+
+        var groupInfo = ReadInternalGroupInfo(internalGroup);
+        return groupInfo is null
+            ? new SyncPlayGroupResolution(false, null)
+            : new SyncPlayGroupResolution(true, groupInfo);
+    }
+
+    private static bool TryReadSessionGroupMap(object map, string sessionId, out object? internalGroup)
+    {
+        internalGroup = null;
+        if (map is not IEnumerable entries)
+        {
+            return false;
+        }
+
+        foreach (object entry in entries)
+        {
+            object? key = ReadObjectMember(entry, "Key");
+            if (!string.Equals(Convert.ToString(key, CultureInfo.InvariantCulture), sessionId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            internalGroup = ReadObjectMember(entry, "Value");
+            return true;
+        }
+
+        return true;
+    }
+
+    private static GroupInfoDto? ReadInternalGroupInfo(object internalGroup)
+    {
+        var method = internalGroup.GetType().GetMethod(
+            "GetInfo",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            types: Type.EmptyTypes,
+            modifiers: null);
+        if (method is null)
+        {
+            return null;
+        }
+
+        lock (internalGroup)
+        {
+            return method.Invoke(internalGroup, null) as GroupInfoDto;
+        }
+    }
+
+    private static object? ReadObjectMember(object? source, string memberName)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        var property = source.GetType().GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property is not null)
+        {
+            return property.GetValue(source);
+        }
+
+        var field = source.GetType().GetField(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        return field?.GetValue(source);
+    }
+
+    private static bool IsActiveGroupMember(SessionInfo session, GroupInfoDto group, bool allowUserParticipantMatch)
     {
         if (SessionHasSyncPlayGroup(session, group.GroupId))
         {
@@ -453,6 +612,17 @@ public class JellyChatController : ControllerBase
             if (participantTokens.Contains(token))
             {
                 return true;
+            }
+        }
+
+        if (allowUserParticipantMatch)
+        {
+            foreach (var token in GetUserParticipantTokens(session))
+            {
+                if (participantTokens.Contains(token))
+                {
+                    return true;
+                }
             }
         }
 
@@ -514,6 +684,11 @@ public class JellyChatController : ControllerBase
         return false;
     }
 
+    private static bool CanUseUserParticipantMatch(List<SessionInfo> sessions, Guid userId)
+    {
+        return sessions.Count(session => session.UserId == userId) == 1;
+    }
+
     private static IEnumerable<string> GetSessionSyncPlayGroupIds(SessionInfo session)
     {
         string[] paths =
@@ -543,6 +718,20 @@ public class JellyChatController : ControllerBase
             session.DeviceName,
             session.DeviceId,
             session.Client
+        }
+        .Where(static token => !string.IsNullOrWhiteSpace(token))
+        .SelectMany(static token => new[] { token!.Trim(), NormalizeParticipantToken(token) })
+        .Where(static token => !string.IsNullOrWhiteSpace(token))
+        .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> GetUserParticipantTokens(SessionInfo session)
+    {
+        string userId = session.UserId == Guid.Empty ? string.Empty : session.UserId.ToString();
+        return new[]
+        {
+            userId,
+            session.UserName
         }
         .Where(static token => !string.IsNullOrWhiteSpace(token))
         .SelectMany(static token => new[] { token!.Trim(), NormalizeParticipantToken(token) })
@@ -760,5 +949,18 @@ public class JellyChatController : ControllerBase
         }
 
         return string.Empty;
+    }
+
+    private sealed class SyncPlayGroupResolution
+    {
+        public SyncPlayGroupResolution(bool lookupAvailable, GroupInfoDto? group)
+        {
+            LookupAvailable = lookupAvailable;
+            Group = group;
+        }
+
+        public bool LookupAvailable { get; }
+
+        public GroupInfoDto? Group { get; }
     }
 }

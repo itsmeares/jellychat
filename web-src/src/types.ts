@@ -310,6 +310,7 @@ export type JellyChatDebug = Record<string, unknown> & {
   currentDeviceId: string;
   syncPlayMembershipSource: string;
   syncPlaySessionMatchCount: number;
+  syncPlayCurrentUserSessionCount: number;
   lastSyncPlayResolutionError: string | null;
   drawerOpen: boolean;
   drawerSide: DrawerSide;
