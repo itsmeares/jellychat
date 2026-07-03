@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Linq;
 using Jellyfin.Plugin.JellyChat.Infrastructure;
 using MediaBrowser.Controller.Library;
@@ -70,6 +71,8 @@ public class JellyChatController : ControllerBase
     [HttpPost("Events")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public ActionResult<JellyChatEvent> CreateEvent([FromBody, Required] JellyChatEventRequest request)
     {
         if (request is null)
@@ -84,22 +87,22 @@ public class JellyChatController : ControllerBase
         }
 
         var allSessions = _sessionManager.Sessions.ToList();
-        var controllingSession = ResolveControllingSession(allSessions, userId, request.SenderSessionId);
+        var controllingSession = ResolveCallerSession(allSessions, userId, request.SenderSessionId);
         if (controllingSession is null)
         {
-            return BadRequest("Current session not found.");
+            return StatusCode(StatusCodes.Status409Conflict, "Current Jellyfin session could not be resolved.");
         }
 
         var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
         var targetGroup = ResolveTargetGroup(visibleGroups, request.GroupId, ParseParticipantHints(request.ParticipantsCsv));
         if (targetGroup is null)
         {
-            return BadRequest("Current SyncPlay group not found.");
+            return StatusCode(StatusCodes.Status403Forbidden, "Current session is not in the requested SyncPlay group.");
         }
 
         if (!IsActiveGroupMember(controllingSession, targetGroup))
         {
-            return BadRequest("Current session is not an active member of the SyncPlay group.");
+            return StatusCode(StatusCodes.Status403Forbidden, "Current session is not an active member of the SyncPlay group.");
         }
 
         string userName = ResolveSenderName(userId, controllingSession);
@@ -115,14 +118,18 @@ public class JellyChatController : ControllerBase
     /// Gets recent events for a SyncPlay group.
     /// </summary>
     /// <param name="groupId">SyncPlay group identifier.</param>
+    /// <param name="senderSessionId">Current client session identifier.</param>
     /// <param name="afterSequence">Optional event sequence cursor.</param>
     /// <param name="limit">Optional result limit.</param>
     /// <returns>Recent event snapshots.</returns>
     [HttpGet("Events")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public ActionResult<IReadOnlyList<JellyChatEvent>> GetEvents(
         [FromQuery, Required] string groupId,
+        [FromQuery] string? senderSessionId,
         [FromQuery] long? afterSequence,
         [FromQuery] int? limit)
     {
@@ -143,16 +150,17 @@ public class JellyChatController : ControllerBase
         }
 
         var allSessions = _sessionManager.Sessions.ToList();
-        var controllingSession = ResolveControllingSession(allSessions, userId, null);
+        var controllingSession = ResolveCallerSession(allSessions, userId, senderSessionId);
         if (controllingSession is null)
         {
-            return BadRequest("Current session not found.");
+            return StatusCode(StatusCodes.Status409Conflict, "Current Jellyfin session could not be resolved.");
         }
 
         var visibleGroups = _syncPlayManager.ListGroups(controllingSession, new ListGroupsRequest());
-        if (visibleGroups.All(group => group.GroupId != parsedGroupId))
+        var targetGroup = visibleGroups.FirstOrDefault(group => group.GroupId == parsedGroupId);
+        if (targetGroup is null || !IsActiveGroupMember(controllingSession, targetGroup))
         {
-            return BadRequest("Current SyncPlay group not found.");
+            return StatusCode(StatusCodes.Status403Forbidden, "Current session is not an active member of the requested SyncPlay group.");
         }
 
         int cappedLimit = Math.Clamp(limit.GetValueOrDefault(DefaultEventLimit), 1, MaxEventLimit);
@@ -424,6 +432,11 @@ public class JellyChatController : ControllerBase
 
     private static bool IsActiveGroupMember(SessionInfo session, GroupInfoDto group)
     {
+        if (SessionHasSyncPlayGroup(session, group.GroupId))
+        {
+            return true;
+        }
+
         var participantTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var participant in group.Participants)
         {
@@ -435,7 +448,7 @@ public class JellyChatController : ControllerBase
             return false;
         }
 
-        foreach (var token in GetSessionParticipantTokens(session))
+        foreach (var token in GetStrictSessionParticipantTokens(session))
         {
             if (participantTokens.Contains(token))
             {
@@ -488,13 +501,45 @@ public class JellyChatController : ControllerBase
             .ToList();
     }
 
-    private static IEnumerable<string> GetSessionParticipantTokens(SessionInfo session)
+    private static bool SessionHasSyncPlayGroup(SessionInfo session, Guid groupId)
+    {
+        foreach (string candidate in GetSessionSyncPlayGroupIds(session))
+        {
+            if (Guid.TryParse(candidate, out var parsed) && parsed == groupId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string> GetSessionSyncPlayGroupIds(SessionInfo session)
+    {
+        string[] paths =
+        [
+            "SyncPlayGroupId",
+            "SyncPlayGroup",
+            "PlayState.SyncPlayGroupId",
+            "PlayState.SyncPlayGroup",
+            "PlayState.SyncPlayInfo.GroupId",
+            "AdditionalData.SyncPlayGroupId"
+        ];
+
+        foreach (string path in paths)
+        {
+            foreach (string value in GetObjectTextValues(ReadNestedProperty(session, path)))
+            {
+                yield return value;
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetStrictSessionParticipantTokens(SessionInfo session)
     {
         return new[]
         {
             session.Id,
-            session.UserId == Guid.Empty ? string.Empty : session.UserId.ToString(),
-            session.UserName,
             session.DeviceName,
             session.DeviceId,
             session.Client
@@ -522,6 +567,82 @@ public class JellyChatController : ControllerBase
         return new string(value.Where(char.IsLetterOrDigit).ToArray());
     }
 
+    private static object? ReadNestedProperty(object? source, string path)
+    {
+        object? current = source;
+        foreach (string part in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (current is null)
+            {
+                return null;
+            }
+
+            if (current is System.Collections.IDictionary dictionary)
+            {
+                object? matchedKey = dictionary.Keys
+                    .Cast<object>()
+                    .FirstOrDefault(candidate => string.Equals(Convert.ToString(candidate, CultureInfo.InvariantCulture), part, StringComparison.OrdinalIgnoreCase));
+                if (matchedKey is null)
+                {
+                    return null;
+                }
+
+                current = dictionary[matchedKey];
+                continue;
+            }
+
+            var property = current.GetType().GetProperties()
+                .FirstOrDefault(candidate => string.Equals(candidate.Name, part, StringComparison.OrdinalIgnoreCase));
+            if (property is null)
+            {
+                return null;
+            }
+
+            current = property.GetValue(current);
+        }
+
+        return current;
+    }
+
+    private static IEnumerable<string> GetObjectTextValues(object? value)
+    {
+        if (value is null)
+        {
+            yield break;
+        }
+
+        if (value is string text)
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                yield return text.Trim();
+            }
+
+            yield break;
+        }
+
+        if (value is Guid guid && guid != Guid.Empty)
+        {
+            yield return guid.ToString();
+            yield break;
+        }
+
+        foreach (string propertyName in new[] { "GroupId", "Id" })
+        {
+            var nested = value.GetType().GetProperties()
+                .FirstOrDefault(candidate => string.Equals(candidate.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+            if (nested is null)
+            {
+                continue;
+            }
+
+            foreach (string nestedValue in GetObjectTextValues(nested.GetValue(value)))
+            {
+                yield return nestedValue;
+            }
+        }
+    }
+
     private Guid ResolveCurrentUserId()
     {
         var userIdClaim = User.Claims.FirstOrDefault(claim => string.Equals(claim.Type, "Jellyfin-UserId", StringComparison.OrdinalIgnoreCase))?.Value;
@@ -538,28 +659,106 @@ public class JellyChatController : ControllerBase
         return Guid.Empty;
     }
 
-    private static SessionInfo? ResolveControllingSession(List<SessionInfo> sessions, Guid userId, string? preferredSessionId)
+    private SessionInfo? ResolveCallerSession(List<SessionInfo> sessions, Guid userId, string? preferredSessionId)
     {
+        string requestDeviceId = ResolveRequestDeviceId();
         if (!string.IsNullOrWhiteSpace(preferredSessionId))
         {
             var preferred = sessions.FirstOrDefault(session =>
                 string.Equals(session.Id, preferredSessionId, StringComparison.Ordinal)
                 && session.UserId == userId);
-            if (preferred is not null)
+            if (preferred is not null
+                && (string.IsNullOrWhiteSpace(requestDeviceId)
+                    || string.Equals(preferred.DeviceId, requestDeviceId, StringComparison.OrdinalIgnoreCase)))
             {
-                return preferred;
+                if (!string.IsNullOrWhiteSpace(requestDeviceId))
+                {
+                    return preferred;
+                }
+
+                return sessions.Count(session => session.UserId == userId) == 1 ? preferred : null;
+            }
+
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestDeviceId))
+        {
+            var deviceMatches = sessions
+                .Where(session => session.UserId == userId
+                    && string.Equals(session.DeviceId, requestDeviceId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (deviceMatches.Count == 1)
+            {
+                return deviceMatches[0];
+            }
+
+            if (deviceMatches.Count > 1)
+            {
+                return null;
             }
         }
 
         var fromUser = sessions
             .Where(session => session.UserId == userId)
-            .OrderByDescending(session => session.LastActivityDate)
-            .FirstOrDefault();
-        if (fromUser is not null)
+            .ToList();
+        if (fromUser.Count == 1)
         {
-            return fromUser;
+            return fromUser[0];
         }
 
         return null;
+    }
+
+    private string ResolveRequestDeviceId()
+    {
+        foreach (var claim in User.Claims)
+        {
+            if (claim.Type.Contains("DeviceId", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(claim.Value))
+            {
+                return claim.Value.Trim();
+            }
+        }
+
+        foreach (string headerName in new[] { "X-Emby-Authorization", "Authorization" })
+        {
+            string headerValue = Request.Headers[headerName].ToString();
+            string deviceId = GetAuthorizationHeaderParameter(headerValue, "DeviceId");
+            if (!string.IsNullOrWhiteSpace(deviceId))
+            {
+                return deviceId;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string GetAuthorizationHeaderParameter(string headerValue, string key)
+    {
+        if (string.IsNullOrWhiteSpace(headerValue))
+        {
+            return string.Empty;
+        }
+
+        string normalizedHeader = headerValue.Trim();
+        const string mediaBrowserPrefix = "MediaBrowser ";
+        if (normalizedHeader.StartsWith(mediaBrowserPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedHeader = normalizedHeader[mediaBrowserPrefix.Length..];
+        }
+
+        foreach (string part in normalizedHeader.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            string[] pieces = part.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (pieces.Length != 2 || !string.Equals(pieces[0], key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return pieces[1].Trim().Trim('"');
+        }
+
+        return string.Empty;
     }
 }

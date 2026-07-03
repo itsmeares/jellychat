@@ -10,7 +10,7 @@ export function ChatApp() {
   const [state, setState] = useState(getState);
   const [triggerMount, setTriggerMount] = useState<TriggerMount>(() => ({
     host: null,
-    mode: "floating-fallback",
+    mode: "native-missing",
     hostFound: false,
     selector: ""
   }));

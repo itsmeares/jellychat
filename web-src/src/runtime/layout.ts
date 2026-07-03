@@ -73,7 +73,7 @@ function callString(value: unknown): string {
   }
 }
 
-function detectRuntimeShell(): RuntimeShellInfo {
+export function detectRuntimeShell(): RuntimeShellInfo {
   const host = window as Window & Record<string, any>;
   const appHost = host.NativeShell?.AppHost;
   const appName = callString(appHost?.appName);
