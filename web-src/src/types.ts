@@ -2,8 +2,11 @@ export type SyncPlayContext = {
   inGroup: boolean;
   groupId: string;
   groupName: string;
+  sessionId: string;
+  deviceId: string;
   participantCount: number;
   unavailable: boolean;
+  membershipSource: string;
 };
 
 export type RoomEvent = {
@@ -81,7 +84,7 @@ export type TimelineItem =
   | PlaybackTimelineItem;
 
 export type DrawerSide = "right" | "left";
-export type TriggerMode = "native-header" | "native-video-osd" | "floating-fallback";
+export type TriggerMode = "native-header" | "native-video-osd" | "desktop-overlay-fallback" | "native-missing";
 
 export type TriggerIndicatorState = {
   unreadChatIndicatorActive: boolean;
@@ -303,6 +306,14 @@ export type JellyChatDebug = Record<string, unknown> & {
   messageCount: number;
   timelineCount: number;
   currentGroupId: string;
+  currentSessionId: string;
+  currentDeviceId: string;
+  syncPlayMembershipSource: string;
+  syncPlaySessionMatchCount: number;
+  syncPlayCurrentUserSessionCount: number;
+  syncPlayClientSignalSource: string;
+  syncPlayClientSignalGroupId: string;
+  lastSyncPlayResolutionError: string | null;
   drawerOpen: boolean;
   drawerSide: DrawerSide;
   drawerWidth: number;
@@ -315,6 +326,8 @@ export type JellyChatDebug = Record<string, unknown> & {
   triggerMode: TriggerMode;
   triggerHostFound: boolean;
   triggerHostSelector: string;
+  lastTriggerMountError: string | null;
+  desktopTriggerFallbackActive: boolean;
   triggerCount: number;
   unreadChatIndicatorActive: boolean;
   playbackActivityIndicatorActive: boolean;
@@ -357,6 +370,8 @@ declare global {
     ApiClient?: any;
     Dashboard?: any;
     JellyChatDebug?: JellyChatDebug;
+    Events?: any;
+    ServerNotifications?: any;
     __JELLYCHAT_LOADED__?: boolean;
     __JELLYCHAT_REFRESH_INTERVAL_ID__?: number | null;
     __JELLYCHAT_LISTENERS_BOUND__?: boolean;

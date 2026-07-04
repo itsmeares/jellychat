@@ -17,7 +17,7 @@ function prefersReducedMotion(): boolean {
 export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
   const [activityStep, setActivityStep] = useState(0);
   const activityVisible = indicator.playbackActivityIndicatorActive && !indicator.unreadChatIndicatorActive;
-  const nativeMounted = mode !== "floating-fallback";
+  const triggerClass = mode === "desktop-overlay-fallback" ? " is-desktop-overlay-trigger" : (mode === "native-missing" ? " is-native-missing" : " is-native-trigger");
 
   useEffect(() => {
     if (!activityVisible || prefersReducedMotion()) {
@@ -54,7 +54,7 @@ export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
     <button
       id={buttonId}
       type="button"
-      className={"emby-button " + markerClass + (nativeMounted ? " is-native-trigger" : " is-floating-trigger") + (isOpen ? " is-open" : "")}
+      className={"emby-button " + markerClass + triggerClass + (isOpen ? " is-open" : "")}
       data-jellychat-button="true"
       data-jellychat-trigger="true"
       data-jellychat-trigger-mode={mode}

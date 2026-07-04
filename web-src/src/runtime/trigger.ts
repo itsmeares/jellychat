@@ -1,4 +1,5 @@
 import type { TriggerMode } from "../types";
+import { detectRuntimeShell } from "./layout";
 import { buttonId, countDebugNodes, rootId } from "./util";
 
 export type TriggerMount = {
@@ -6,6 +7,7 @@ export type TriggerMount = {
   mode: TriggerMode;
   hostFound: boolean;
   selector: string;
+  error?: string | null;
 };
 
 const nativeVideoSelectors = [
@@ -42,6 +44,7 @@ const nativeHeaderSelectors = [
 ];
 
 let lastFocusedTrigger: HTMLElement | null = null;
+const desktopFallbackHostId = "jellyChatDesktopTriggerHost";
 
 function tag(element: Element | null): string {
   return element && element.tagName ? element.tagName.toLowerCase() : "";
@@ -71,10 +74,37 @@ function describeElementSelector(element: Element | null): string {
 function isJellyChatElement(element: Element | null): boolean {
   return !!(element
     && (element.id === rootId
+      || element.id === desktopFallbackHostId
       || element.id === buttonId
       || element.hasAttribute("data-jellychat-host")
       || element.hasAttribute("data-jellychat-root")
       || element.hasAttribute("data-jellychat-button")));
+}
+
+function getDesktopFallbackParent(): HTMLElement | null {
+  const fullscreenHost = document.fullscreenElement as HTMLElement | null;
+  return fullscreenHost || document.body || document.documentElement;
+}
+
+function getOrCreateDesktopFallbackHost(): HTMLElement {
+  let host = document.getElementById(desktopFallbackHostId) as HTMLElement | null;
+  const parent = getDesktopFallbackParent();
+  if (!parent) {
+    throw new Error("Desktop fallback parent not available.");
+  }
+
+  if (!host) {
+    host = document.createElement("div");
+    host.id = desktopFallbackHostId;
+    host.className = "jellyChatDesktopTriggerHost";
+    host.setAttribute("data-jellychat-host", "desktop-overlay-fallback");
+  }
+
+  if (host.parentElement !== parent) {
+    parent.appendChild(host);
+  }
+
+  return host;
 }
 
 function isWithinJellyChatElement(element: Element | null): boolean {
@@ -154,10 +184,14 @@ function updateDebug(mount: TriggerMount): void {
     return;
   }
 
+  const runtimeShell = detectRuntimeShell();
   window.JellyChatDebug.triggerMode = mount.mode;
   window.JellyChatDebug.triggerPlacement = mount.mode;
   window.JellyChatDebug.triggerHostFound = mount.hostFound;
   window.JellyChatDebug.triggerHostSelector = mount.selector;
+  window.JellyChatDebug.lastTriggerMountError = mount.error || null;
+  window.JellyChatDebug.isJellyfinDesktop = runtimeShell.isJellyfinDesktop;
+  window.JellyChatDebug.desktopTriggerFallbackActive = mount.mode === "desktop-overlay-fallback";
   window.setTimeout(countDebugNodes, 0);
 }
 
@@ -189,11 +223,38 @@ export function resolveTriggerMount(): TriggerMount {
     return mount;
   }
 
+  const runtimeShell = detectRuntimeShell();
+  if (runtimeShell.isJellyfinDesktop) {
+    try {
+      const fallbackHost = getOrCreateDesktopFallbackHost();
+      const mount = {
+        host: fallbackHost,
+        mode: "desktop-overlay-fallback" as const,
+        hostFound: true,
+        selector: "#" + desktopFallbackHostId,
+        error: null
+      };
+      updateDebug(mount);
+      return mount;
+    } catch (err) {
+      const mount = {
+        host: null,
+        mode: "native-missing" as const,
+        hostFound: false,
+        selector: "",
+        error: err instanceof Error ? err.message : "Desktop fallback trigger host failed."
+      };
+      updateDebug(mount);
+      return mount;
+    }
+  }
+
   const mount = {
     host: null,
-    mode: "floating-fallback" as const,
+    mode: "native-missing" as const,
     hostFound: false,
-    selector: ""
+    selector: "",
+    error: "No native Jellyfin trigger host found."
   };
   updateDebug(mount);
   return mount;

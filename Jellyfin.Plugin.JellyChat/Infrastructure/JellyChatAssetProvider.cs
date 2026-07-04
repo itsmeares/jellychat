@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
@@ -23,12 +25,18 @@ public sealed class JellyChatAssetProvider
     public JellyChatAssetProvider()
     {
         PluginVersion = ResolvePluginVersion();
+        AssetVersion = ResolveAssetVersion(PluginVersion);
     }
 
     /// <summary>
     /// Gets the plugin version used for cache-busting asset URLs.
     /// </summary>
     public string PluginVersion { get; }
+
+    /// <summary>
+    /// Gets the content-aware asset version used for cache-busting asset URLs.
+    /// </summary>
+    public string AssetVersion { get; }
 
     /// <summary>
     /// Opens a known JellyChat asset.
@@ -72,6 +80,34 @@ public sealed class JellyChatAssetProvider
                 assemblyVersion.Major,
                 assemblyVersion.Minor,
                 assemblyVersion.Build);
+    }
+
+    private static string ResolveAssetVersion(string pluginVersion)
+    {
+        using var hash = SHA256.Create();
+
+        foreach (JellyChatAssetDefinition asset in Assets.Values)
+        {
+            byte[] resourceNameBytes = Encoding.UTF8.GetBytes(asset.ResourceName);
+            _ = hash.TransformBlock(resourceNameBytes, 0, resourceNameBytes.Length, null, 0);
+
+            using Stream? stream = PluginAssembly.GetManifestResourceStream(asset.ResourceName);
+            if (stream is null)
+            {
+                continue;
+            }
+
+            var buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                _ = hash.TransformBlock(buffer, 0, bytesRead, null, 0);
+            }
+        }
+
+        _ = hash.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        string digest = Convert.ToHexString(hash.Hash ?? Array.Empty<byte>());
+        return string.Concat(pluginVersion, "-", digest[..Math.Min(12, digest.Length)]);
     }
 
     private sealed record JellyChatAssetDefinition(string ResourceName, string ContentType);

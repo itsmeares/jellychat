@@ -116,8 +116,11 @@ export function normalizeChatMessage(roomEvent: unknown): ChatMessage | null {
   };
 }
 
-export async function getEvents(groupId: string, afterSequence: number, limit: number, forceFull: boolean): Promise<RoomEvent[]> {
+export async function getEvents(groupId: string, senderSessionId: string, afterSequence: number, limit: number, forceFull: boolean): Promise<RoomEvent[]> {
   let path = "JellyChat/Events?groupId=" + encodeURIComponent(groupId) + "&limit=" + encodeURIComponent(String(limit));
+  if (senderSessionId) {
+    path += "&senderSessionId=" + encodeURIComponent(senderSessionId);
+  }
   if (!forceFull && afterSequence > 0) {
     path += "&afterSequence=" + encodeURIComponent(String(afterSequence));
   }

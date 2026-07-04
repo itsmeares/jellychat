@@ -1,7 +1,7 @@
 import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, MessageActionMenuState, PlaybackEventType, ReactionEvent, ReplyTarget, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
 import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent, postTypingUpdate } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
-import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEventId, formId, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
+import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEventId, formId, getValue, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
 import { getActiveMountHost, getDrawerSide, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, updateLayout } from "./layout";
 import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
 import { addReactionOverlay, addRoomReactionOverlay, recordReactionReceived, setReactionParticipantCount } from "./reactions";
@@ -15,6 +15,27 @@ type PlaybackPostRequest = {
   fromSeconds?: number;
   itemId?: string;
   itemName?: string;
+};
+
+type CurrentSessionResolution = {
+  session: any | null;
+  sessionId: string;
+  deviceId: string;
+  sessionMatchCount: number;
+  currentUserSessionCount: number;
+  reason: string;
+  error: string | null;
+};
+
+type JellyChatRoomResolution = {
+  inGroup: boolean;
+  groupId: string;
+  groupName: string;
+  sessionId: string;
+  deviceId: string;
+  participants: string[];
+  exactMembership: boolean;
+  membershipSource: string;
 };
 
 let refreshInProgress = false;
@@ -52,6 +73,10 @@ let typingIdleTimer = 0;
 let typingRefreshTimer = 0;
 let typingExpiryTimer = 0;
 let drawerResizeActive = false;
+let syncPlayClientSignalBound = false;
+let syncPlayClientSignalKnown = false;
+let syncPlayClientSignalGroup: any | null = null;
+let syncPlayClientSignalSource = "";
 let remoteTypingUsers: TypingRemoteUser[] = [];
 let triggerIndicator: TriggerIndicatorState = {
   unreadChatIndicatorActive: false,
@@ -65,8 +90,11 @@ let currentSyncPlayContext: SyncPlayContext = {
   inGroup: false,
   groupId: "",
   groupName: "",
+  sessionId: "",
+  deviceId: "",
   participantCount: 1,
-  unavailable: true
+  unavailable: true,
+  membershipSource: "startup"
 };
 let state: ChatState = {
   drawerOpen: false,
@@ -302,14 +330,23 @@ function createRoomEvent(args: {
 }
 
 function isCurrentUserEvent(event: Pick<RoomEvent, "userId" | "sessionId" | "clientEventId">): boolean {
-  const currentUserId = normalizeId(getCurrentUserId());
-  const eventUserId = normalizeId(event.userId);
-  if (currentUserId && eventUserId && currentUserId === eventUserId) {
+  if (event.clientEventId && localClientEventIds.has(event.clientEventId)) {
     return true;
   }
 
   const eventSessionId = normalizeId(event.sessionId);
-  return !!(eventSessionId && cachedCurrentSessionIds.map(normalizeId).includes(eventSessionId));
+  const currentSessionIds = cachedCurrentSessionIds.map(normalizeId).filter(Boolean);
+  if (eventSessionId && currentSessionIds.includes(eventSessionId)) {
+    return true;
+  }
+
+  if (currentSessionIds.length > 0) {
+    return false;
+  }
+
+  const currentUserId = normalizeId(getCurrentUserId());
+  const eventUserId = normalizeId(event.userId);
+  return !!(currentUserId && eventUserId && currentUserId === eventUserId);
 }
 
 function resolveEventActorName(event: Pick<RoomEvent, "userId" | "userName" | "sessionId" | "clientEventId"> & { optimistic?: boolean }, existing?: RoomEvent): string {
@@ -656,7 +693,7 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
   eventFetchInProgress = true;
   try {
     const startedAt = Date.now();
-    const events = await getEvents(currentSyncPlayContext.groupId, lastSequence, 100, shouldFetchFull);
+    const events = await getEvents(currentSyncPlayContext.groupId, currentSyncPlayContext.sessionId, lastSequence, 100, shouldFetchFull);
     if (window.JellyChatDebug) {
       window.JellyChatDebug.lastEventPollAt = new Date().toISOString();
       window.JellyChatDebug.lastEventRoundTripMs = Date.now() - startedAt;
@@ -685,10 +722,14 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     inGroup: !!context.inGroup,
     groupId: context.groupId || "",
     groupName: context.groupName || "",
+    sessionId: context.sessionId || "",
+    deviceId: context.deviceId || "",
     participantCount: Math.max(1, Math.floor(context.participantCount || 1)),
-    unavailable: !!context.unavailable
+    unavailable: !!context.unavailable,
+    membershipSource: context.membershipSource || ""
   };
   setReactionParticipantCount(currentSyncPlayContext.participantCount);
+  cachedCurrentSessionIds = currentSyncPlayContext.sessionId ? [currentSyncPlayContext.sessionId] : [];
 
   if (!currentSyncPlayContext.inGroup || groupChanged) {
     const hadTimeline = historyEvents.length > 0 || timelineItems.length > 0;
@@ -721,6 +762,12 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
       window.JellyChatDebug.optimisticEventCount = 0;
       window.JellyChatDebug.pendingOptimisticEventCount = 0;
     }
+  }
+
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.currentSessionId = currentSyncPlayContext.sessionId;
+    window.JellyChatDebug.currentDeviceId = currentSyncPlayContext.deviceId;
+    window.JellyChatDebug.syncPlayMembershipSource = currentSyncPlayContext.membershipSource;
   }
 
   emit();
@@ -801,30 +848,196 @@ function resolveLocalActorName(sessions: any[] = [], currentSession: any | null 
 
 function getCurrentDeviceId(): string {
   if (!window.ApiClient) return "";
-  if (typeof window.ApiClient.deviceId === "function") return window.ApiClient.deviceId() || "";
-  if (typeof window.ApiClient._deviceId === "string") return window.ApiClient._deviceId;
+  const host = window as Window & Record<string, any>;
+  const candidates = [
+    callApiClientString("deviceId"),
+    callApiClientString("getDeviceId"),
+    readApiClientString("deviceId"),
+    readApiClientString("_deviceId"),
+    readApiClientString("DeviceId"),
+    readApiClientString("_serverInfo.DeviceId"),
+    readApiClientString("_serverInfo.deviceId"),
+    readApiClientString("_appInfo.DeviceId"),
+    readApiClientString("_appInfo.deviceId"),
+    readNestedString(host, "appHost.deviceId"),
+    callNestedString(host, "appHost.deviceId"),
+    readStoredDeviceId()
+  ];
+  return candidates.map((candidate) => candidate.trim()).find(Boolean) || "";
+}
+
+function callApiClientString(methodName: string): string {
+  const method = window.ApiClient && window.ApiClient[methodName];
+  if (typeof method !== "function") return "";
+  try {
+    const value = method.call(window.ApiClient);
+    return typeof value === "string" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function readApiClientString(path: string): string {
+  return readNestedString(window.ApiClient, path);
+}
+
+function callNestedString(source: any, path: string): string {
+  const value = readNestedValue(source, path);
+  if (typeof value !== "function") return "";
+  try {
+    const result = value.call(source);
+    return typeof result === "string" ? result : "";
+  } catch {
+    return "";
+  }
+}
+
+function readNestedString(source: any, path: string): string {
+  const value = readNestedValue(source, path);
+  return typeof value === "string" ? value : "";
+}
+
+function readNestedValue(source: any, path: string): any {
+  return path.split(".").filter(Boolean).reduce((current, part) => current && current[part], source);
+}
+
+function readStoredDeviceId(): string {
+  try {
+    const keys = ["deviceId", "jellyfin.deviceId", "jellyfin_device_id"];
+    for (const key of keys) {
+      const value = window.localStorage?.getItem(key) || "";
+      if (value) return value;
+    }
+  } catch {
+    // Storage may be unavailable in locked-down WebViews.
+  }
+
   return "";
 }
 
 function matchesCurrentUser(session: any): boolean {
   const currentUserIds = getCurrentUserIds();
-  if (!currentUserIds.length) return true;
+  if (!currentUserIds.length) return false;
   const sessionUserId = (session && session.UserId) || (session && session.User && session.User.Id) || "";
   return currentUserIds.some((id) => normalizeId(id) === normalizeId(sessionUserId));
 }
 
-function getCurrentSessionIds(sessions: any[]): string[] {
-  return sessions.filter(matchesCurrentUser).map((session) => session && session.Id).filter((id): id is string => typeof id === "string" && id.length > 0);
+function getSessionId(session: any): string {
+  const value = session && session.Id;
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function getCurrentSession(sessions: any[]): any | null {
-  const currentDeviceId = normalizeId(getCurrentDeviceId());
+function getSessionDeviceId(session: any): string {
+  const value = (session && session.DeviceId) || (session && session.Device && session.Device.Id) || "";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function resolveCurrentSession(sessions: any[], groups: any[] = []): CurrentSessionResolution {
+  const deviceId = getCurrentDeviceId();
+  const normalizedDeviceId = normalizeId(deviceId);
   const matchingUserSessions = sessions.filter(matchesCurrentUser);
-  if (currentDeviceId) {
-    const exact = matchingUserSessions.find((session) => normalizeId(session && session.DeviceId) === currentDeviceId);
-    if (exact) return exact;
+
+  if (matchingUserSessions.length === 0) {
+    return {
+      session: null,
+      sessionId: "",
+      deviceId,
+      sessionMatchCount: 0,
+      currentUserSessionCount: 0,
+      reason: "no-current-user-session",
+      error: "No session matched the current user."
+    };
   }
-  return matchingUserSessions.length > 0 ? matchingUserSessions[0] : null;
+
+  if (normalizedDeviceId) {
+    const deviceMatches = matchingUserSessions.filter((session) => normalizeId(getSessionDeviceId(session)) === normalizedDeviceId);
+    const deviceResolution = resolveSessionCandidate(deviceMatches, groups, deviceId, "user-device", matchingUserSessions.length);
+    if (deviceResolution) {
+      return deviceResolution;
+    }
+
+    if (deviceMatches.length > 1) {
+      return {
+        session: null,
+        sessionId: "",
+        deviceId,
+        sessionMatchCount: deviceMatches.length,
+        currentUserSessionCount: matchingUserSessions.length,
+        reason: "ambiguous-device-session",
+        error: "Multiple sessions matched the current device."
+      };
+    }
+  }
+
+  const userResolution = resolveSessionCandidate(matchingUserSessions, groups, deviceId, normalizedDeviceId ? "user-session-device-missing" : "user-session", matchingUserSessions.length);
+  if (userResolution && matchingUserSessions.length === 1) {
+    return userResolution;
+  }
+
+  return {
+    session: null,
+    sessionId: "",
+    deviceId,
+    sessionMatchCount: matchingUserSessions.length,
+    currentUserSessionCount: matchingUserSessions.length,
+    reason: "ambiguous-user-session",
+    error: "Multiple sessions matched the current user and no current device match was available."
+  };
+}
+
+function resolveSessionCandidate(candidates: any[], groups: any[], fallbackDeviceId: string, reasonPrefix: string, currentUserSessionCount: number): CurrentSessionResolution | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  if (candidates.length === 1) {
+    return createSessionResolution(candidates[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix, null);
+  }
+
+  const withSessionGroup = candidates.filter((session) => extractSyncPlayGroupId(session));
+  if (withSessionGroup.length === 1) {
+    return createSessionResolution(withSessionGroup[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-syncplay-session", null);
+  }
+
+  const withGroupParticipant = groups.length > 0
+    ? candidates.filter((session) => groupsContainCurrentSession(groups, session))
+    : [];
+  if (withGroupParticipant.length === 1) {
+    return createSessionResolution(withGroupParticipant[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-syncplay-participant", null);
+  }
+
+  const activeCandidates = withSessionGroup.length > 0 ? withSessionGroup : withGroupParticipant;
+  if (activeCandidates.length > 1 && reasonPrefix.indexOf("user-device") === 0) {
+    return createSessionResolution(sortSessionsByActivity(activeCandidates)[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-latest-active-session", null);
+  }
+
+  return null;
+}
+
+function createSessionResolution(session: any, matchCount: number, currentUserSessionCount: number, fallbackDeviceId: string, reason: string, error: string | null): CurrentSessionResolution {
+  return {
+    session,
+    sessionId: getSessionId(session),
+    deviceId: getSessionDeviceId(session) || fallbackDeviceId,
+    sessionMatchCount: matchCount,
+    currentUserSessionCount,
+    reason,
+    error
+  };
+}
+
+function canUseUserParticipantMatch(resolution: CurrentSessionResolution): boolean {
+  return resolution.currentUserSessionCount === 1;
+}
+
+function sortSessionsByActivity(sessions: any[]): any[] {
+  return sessions.slice().sort((left, right) => getSessionActivityMs(right) - getSessionActivityMs(left));
+}
+
+function getSessionActivityMs(session: any): number {
+  const value = (session && session.LastActivityDate) || (session && session.LastPlaybackCheckIn) || "";
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function collectStringValues(value: unknown, output: string[]): void {
@@ -882,12 +1095,13 @@ function extractSyncPlayGroupId(session: any): string {
   return typeof groupId === "string" ? groupId : "";
 }
 
-function hasSyncPlayGroup(session: any): boolean {
-  return extractSyncPlayGroupId(session).length > 0;
-}
-
 function buildSessionsPaths(): string[] {
   const paths = ["Sessions"];
+  const currentDeviceId = getCurrentDeviceId();
+  if (currentDeviceId) {
+    const path = "Sessions?deviceId=" + encodeURIComponent(currentDeviceId);
+    if (!paths.includes(path)) paths.push(path);
+  }
   getCurrentUserIds().forEach((id) => {
     const path = "Sessions?UserId=" + encodeURIComponent(id);
     if (!paths.includes(path)) paths.push(path);
@@ -944,13 +1158,9 @@ function resolveSyncPlayGroupName(group: any): string {
   return typeof direct === "string" ? direct : "";
 }
 
-function getGroupIdsForCurrentUserSessions(sessions: any[]): string[] {
-  const groupIds: string[] = [];
-  sessions.filter(matchesCurrentUser).forEach((session) => {
-    const groupId = extractSyncPlayGroupId(session);
-    if (groupId && !groupIds.includes(groupId)) groupIds.push(groupId);
-  });
-  return groupIds;
+function getGroupIdsForCurrentSession(session: any | null): string[] {
+  const groupId = extractSyncPlayGroupId(session);
+  return groupId ? [groupId] : [];
 }
 
 function findGroupsByGroupIds(groups: any[], groupIds: string[]): any[] {
@@ -959,27 +1169,54 @@ function findGroupsByGroupIds(groups: any[], groupIds: string[]): any[] {
   return groups.filter((group) => normalizedGroupIds.includes(normalizeId(resolveSyncPlayGroupId(group))));
 }
 
-function buildCurrentIdentityTokens(sessions: any[]): string[] {
+function buildCurrentSessionIdentityTokens(session: any | null, includeUserTokens = false): string[] {
   const tokens: string[] = [];
-  getCurrentUserIds().forEach((id) => {
-    if (id && !tokens.includes(id)) tokens.push(id);
+  if (!session) {
+    return tokens;
+  }
+
+  [
+    getSessionId(session),
+    getSessionDeviceId(session),
+    session && session.DeviceName,
+    session && session.Client
+  ].forEach((value) => {
+    if (typeof value === "string" && value.trim().length > 0 && !tokens.includes(value.trim())) {
+      tokens.push(value.trim());
+    }
   });
-  const currentUserName = getCurrentUserName();
-  if (currentUserName && !tokens.includes(currentUserName)) tokens.push(currentUserName);
-  getCurrentSessionIds(sessions).forEach((sessionId) => {
-    if (sessionId && !tokens.includes(sessionId)) tokens.push(sessionId);
-  });
-  sessions.filter(matchesCurrentUser).forEach((session) => {
-    const userName = (session && session.UserName) || (session && session.User && session.User.Name) || "";
-    if (userName && !tokens.includes(userName)) tokens.push(userName);
-  });
+
+  if (includeUserTokens) {
+    [
+      session && session.UserId,
+      session && session.UserName,
+      session && session.User && session.User.Id,
+      session && session.User && session.User.Name,
+      getCurrentUserId(),
+      getCurrentUserName()
+    ].forEach((value) => {
+      if (typeof value === "string" && value.trim().length > 0 && !tokens.includes(value.trim())) {
+        tokens.push(value.trim());
+      }
+    });
+  }
+
   return tokens;
 }
 
-function groupsContainCurrentUser(groups: any[], sessions: any[]): boolean {
-  const tokens = buildCurrentIdentityTokens(sessions);
+function groupsContainCurrentSession(groups: any[], session: any | null, includeUserTokens = false): boolean {
+  const tokens = buildCurrentSessionIdentityTokens(session, includeUserTokens);
   if (tokens.length === 0) return false;
-  return groups.some((group) => tokens.some((token) => objectContainsString(group, token)));
+  return groups.some((group) => tokens.some((token) => groupContainsParticipantToken(group, token)));
+}
+
+function groupContainsParticipantToken(group: any, token: string): boolean {
+  const participants = group && group.Participants;
+  if (Array.isArray(participants)) {
+    return participants.some((participant) => objectContainsString(participant, token));
+  }
+
+  return objectContainsString(group, token);
 }
 
 function extractParticipantsFromGroups(groups: any[]): string[] {
@@ -1001,6 +1238,91 @@ function extractParticipantsFromGroups(groups: any[]): string[] {
     });
   });
   return participants;
+}
+
+function normalizeRoomResolution(response: unknown): JellyChatRoomResolution | null {
+  if (!response || typeof response !== "object") {
+    return null;
+  }
+
+  const rawParticipants = getValue(response, "Participants", "participants");
+  const participants = Array.isArray(rawParticipants)
+    ? rawParticipants.map((participant) => String(participant || "").trim()).filter(Boolean)
+    : [];
+
+  return {
+    inGroup: getValue(response, "InGroup", "inGroup") === true,
+    groupId: String(getValue(response, "GroupId", "groupId") || "").trim(),
+    groupName: String(getValue(response, "GroupName", "groupName") || "").trim(),
+    sessionId: String(getValue(response, "SessionId", "sessionId") || "").trim(),
+    deviceId: String(getValue(response, "DeviceId", "deviceId") || "").trim(),
+    participants,
+    exactMembership: getValue(response, "ExactMembership", "exactMembership") === true,
+    membershipSource: String(getValue(response, "MembershipSource", "membershipSource") || "").trim()
+  };
+}
+
+async function fetchJellyChatRoom(senderSessionId: string): Promise<JellyChatRoomResolution | null> {
+  const query = senderSessionId ? "?senderSessionId=" + encodeURIComponent(senderSessionId) : "";
+  try {
+    return normalizeRoomResolution(await fetchJson("JellyChat/Room" + query));
+  } catch (err) {
+    logDebug("JellyChat room request failed", err);
+    return null;
+  }
+}
+
+function updateSyncPlayClientSignalDebug(): void {
+  if (!window.JellyChatDebug) return;
+  window.JellyChatDebug.syncPlayClientSignalSource = syncPlayClientSignalSource;
+  window.JellyChatDebug.syncPlayClientSignalGroupId = syncPlayClientSignalGroup ? resolveSyncPlayGroupId(syncPlayClientSignalGroup) : "";
+}
+
+function getClientSyncPlayGroup(): any | null {
+  return syncPlayClientSignalKnown && syncPlayClientSignalGroup && resolveSyncPlayGroupId(syncPlayClientSignalGroup)
+    ? syncPlayClientSignalGroup
+    : null;
+}
+
+function applySyncPlayClientSignal(update: any): void {
+  const updateType = String((update && (update.Type || update.type)) || "");
+  if (!updateType) return;
+
+  if (updateType === "GroupJoined" || updateType === "GroupUpdate") {
+    const group = update && (update.Data || update.data);
+    if (group && resolveSyncPlayGroupId(group)) {
+      syncPlayClientSignalKnown = true;
+      syncPlayClientSignalGroup = group;
+      syncPlayClientSignalSource = "client-syncplay-" + updateType.toLowerCase();
+      updateSyncPlayClientSignalDebug();
+      void pollJellyChat(true);
+    }
+    return;
+  }
+
+  if (updateType === "GroupLeft" || updateType === "NotInGroup") {
+    syncPlayClientSignalKnown = true;
+    syncPlayClientSignalGroup = null;
+    syncPlayClientSignalSource = "client-syncplay-" + updateType.toLowerCase();
+    updateSyncPlayClientSignalDebug();
+    void pollJellyChat(true);
+  }
+}
+
+function installSyncPlayClientSignalListener(): void {
+  if (syncPlayClientSignalBound) return;
+  const events = window.Events;
+  const serverNotifications = window.ServerNotifications;
+  if (!events || !serverNotifications || typeof events.on !== "function") {
+    return;
+  }
+
+  events.on(serverNotifications, "SyncPlayGroupUpdate", (_event: unknown, _apiClient: unknown, update: unknown) => {
+    applySyncPlayClientSignal(update);
+  });
+  syncPlayClientSignalBound = true;
+  syncPlayClientSignalSource = "client-syncplay-listener";
+  updateSyncPlayClientSignalDebug();
 }
 
 function getGroupParticipantCount(group: any): number {
@@ -1027,15 +1349,70 @@ async function refreshEventsImmediately(): Promise<void> {
 
 async function resolveEventPostContext(): Promise<{ senderSessionId: string; groupId: string; participants: string[]; userName: string } | null> {
   const sessions = await fetchSessions();
-  const groups = normalizeGroupsResponse(await fetchJson("SyncPlay/List"));
-  const currentSession = getCurrentSession(sessions);
-  cachedCurrentSessionIds = getCurrentSessionIds(sessions);
-  const groupIds = getGroupIdsForCurrentUserSessions(sessions);
+  let groups: any[] = [];
+  try {
+    groups = normalizeGroupsResponse(await fetchJson("SyncPlay/List"));
+  } catch (err) {
+    logDebug("SyncPlay list request failed before JellyChat post", err);
+  }
+  const resolution = resolveCurrentSession(sessions, groups);
+  const currentSession = resolution.session;
+  cachedCurrentSessionIds = resolution.sessionId ? [resolution.sessionId] : [];
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.currentSessionId = resolution.sessionId;
+    window.JellyChatDebug.currentDeviceId = resolution.deviceId;
+    window.JellyChatDebug.syncPlaySessionMatchCount = resolution.sessionMatchCount;
+    window.JellyChatDebug.syncPlayCurrentUserSessionCount = resolution.currentUserSessionCount;
+    window.JellyChatDebug.lastSyncPlayResolutionError = resolution.error;
+  }
+
+  if (!currentSession || !resolution.sessionId) {
+    return null;
+  }
+
+  const clientGroup = getClientSyncPlayGroup();
+  if (clientGroup) {
+    const actor = resolveLocalActorName(sessions, currentSession);
+    return {
+      senderSessionId: resolution.sessionId,
+      groupId: resolveSyncPlayGroupId(clientGroup),
+      participants: extractParticipantsFromGroups([clientGroup]),
+      userName: actor.actorName
+    };
+  }
+
+  if (syncPlayClientSignalKnown) {
+    return null;
+  }
+
+  const room = await fetchJellyChatRoom(resolution.sessionId);
+  if (room && window.JellyChatDebug) {
+    window.JellyChatDebug.syncPlayMembershipSource = room.membershipSource || window.JellyChatDebug.syncPlayMembershipSource;
+  }
+
+  if (room?.exactMembership && !room.inGroup) {
+    return null;
+  }
+
+  if (room?.inGroup && room.groupId) {
+    const actor = resolveLocalActorName(sessions, currentSession);
+    return {
+      senderSessionId: room.sessionId || resolution.sessionId,
+      groupId: room.groupId,
+      participants: room.participants,
+      userName: actor.actorName
+    };
+  }
+
+  const groupIds = getGroupIdsForCurrentSession(currentSession);
   const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
-  const relevantGroups = groups.filter((group) => groupsContainCurrentUser([group], sessions));
-  const groupsForSend = groupsBySessionGroupIds.length > 0 ? groupsBySessionGroupIds : (relevantGroups.length > 0 ? relevantGroups : (groups.length === 1 ? [groups[0]] : []));
-  const participants = extractParticipantsFromGroups(groupsForSend.length > 0 ? groupsForSend : groups);
-  const preferredGroupId = groupIds.length > 0 ? groupIds[0] : resolveSyncPlayGroupId(groupsForSend[0] || groups[0]);
+  const allowUserParticipantMatch = canUseUserParticipantMatch(resolution);
+  const relevantGroups = groups.filter((group) => groupsContainCurrentSession([group], currentSession, allowUserParticipantMatch));
+  const groupsForSend = groupsBySessionGroupIds.length > 0 ? groupsBySessionGroupIds : relevantGroups;
+  const participants = extractParticipantsFromGroups(groupsForSend);
+  const preferredGroupId = groupIds.length > 0
+    ? groupIds[0]
+    : (resolveSyncPlayGroupId(groupsForSend[0]) || currentSyncPlayContext.groupId);
 
   if (!preferredGroupId) {
     return null;
@@ -1043,7 +1420,7 @@ async function resolveEventPostContext(): Promise<{ senderSessionId: string; gro
 
   const actor = resolveLocalActorName(sessions, currentSession);
   return {
-    senderSessionId: currentSession && currentSession.Id,
+    senderSessionId: resolution.sessionId,
     groupId: preferredGroupId,
     participants,
     userName: actor.actorName
@@ -1306,19 +1683,38 @@ function secondsToTicks(positionSeconds: number | undefined): number | undefined
   return Math.max(0, Math.round(positionSeconds * 10000000));
 }
 
+function createSyncPlayContext(args: Partial<SyncPlayContext> = {}): SyncPlayContext {
+  return {
+    inGroup: !!args.inGroup,
+    groupId: args.groupId || "",
+    groupName: args.groupName || "",
+    sessionId: args.sessionId || "",
+    deviceId: args.deviceId || getCurrentDeviceId(),
+    participantCount: Math.max(1, Math.floor(args.participantCount || 1)),
+    unavailable: !!args.unavailable,
+    membershipSource: args.membershipSource || ""
+  };
+}
+
+function updateSyncPlayResolutionDebug(resolution: CurrentSessionResolution): void {
+  if (!window.JellyChatDebug) {
+    return;
+  }
+
+  window.JellyChatDebug.currentSessionId = resolution.sessionId;
+  window.JellyChatDebug.currentDeviceId = resolution.deviceId;
+  window.JellyChatDebug.syncPlayMembershipSource = resolution.reason;
+  window.JellyChatDebug.syncPlaySessionMatchCount = resolution.sessionMatchCount;
+  window.JellyChatDebug.syncPlayCurrentUserSessionCount = resolution.currentUserSessionCount;
+  window.JellyChatDebug.lastSyncPlayResolutionError = resolution.error;
+}
+
 async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
   if (!window.ApiClient) {
-    return { inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: true };
+    return createSyncPlayContext({ unavailable: true, membershipSource: "api-client-missing" });
   }
 
   const sessions = await fetchSessions();
-  cachedCurrentSessionIds = getCurrentSessionIds(sessions);
-  const matchingUserSessions = sessions.filter(matchesCurrentUser);
-  if (matchingUserSessions.length === 0) {
-    return { inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: false };
-  }
-
-  const groupIds = getGroupIdsForCurrentUserSessions(sessions);
   let groups: any[] = [];
   let groupsUnavailable = false;
   try {
@@ -1328,32 +1724,103 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
     logDebug("SyncPlay list request failed", err);
   }
 
-  if (groupIds.length > 0 || matchingUserSessions.some(hasSyncPlayGroup)) {
-    const preferredGroupId = groupIds.length > 0 ? groupIds[0] : "";
-    const matchingGroup = findGroupsByGroupIds(groups, groupIds)[0] || null;
-    return {
+  const resolution = resolveCurrentSession(sessions, groups);
+  cachedCurrentSessionIds = resolution.sessionId ? [resolution.sessionId] : [];
+  updateSyncPlayResolutionDebug(resolution);
+  if (!resolution.session || !resolution.sessionId) {
+    return createSyncPlayContext({
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      unavailable: groupsUnavailable,
+      membershipSource: groupsUnavailable ? "syncplay-list-unavailable" : resolution.reason
+    });
+  }
+
+  const clientGroup = getClientSyncPlayGroup();
+  if (clientGroup) {
+    return createSyncPlayContext({
       inGroup: true,
-      groupId: preferredGroupId || resolveSyncPlayGroupId(matchingGroup),
+      groupId: resolveSyncPlayGroupId(clientGroup),
+      groupName: resolveSyncPlayGroupName(clientGroup),
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      participantCount: getGroupParticipantCount(clientGroup),
+      unavailable: false,
+      membershipSource: syncPlayClientSignalSource || "client-syncplay-group-update"
+    });
+  }
+
+  if (syncPlayClientSignalKnown) {
+    return createSyncPlayContext({
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      unavailable: groupsUnavailable,
+      membershipSource: syncPlayClientSignalSource || "client-syncplay-not-in-group"
+    });
+  }
+
+  const room = await fetchJellyChatRoom(resolution.sessionId);
+  if (room?.exactMembership && !room.inGroup) {
+    return createSyncPlayContext({
+      sessionId: room.sessionId || resolution.sessionId,
+      deviceId: room.deviceId || resolution.deviceId,
+      unavailable: groupsUnavailable,
+      membershipSource: room.membershipSource || "current-session-not-in-syncplay"
+    });
+  }
+
+  if (room?.inGroup && room.groupId) {
+    return createSyncPlayContext({
+      inGroup: true,
+      groupId: room.groupId,
+      groupName: room.groupName,
+      sessionId: room.sessionId || resolution.sessionId,
+      deviceId: room.deviceId || resolution.deviceId,
+      participantCount: room.participants.length || 1,
+      unavailable: false,
+      membershipSource: room.membershipSource || (room.exactMembership ? "current-session-syncplay-map" : "current-session-syncplay-list")
+    });
+  }
+
+  const groupIds = getGroupIdsForCurrentSession(resolution.session);
+  if (groupIds.length > 0) {
+    const preferredGroupId = groupIds[0];
+    const matchingGroup = findGroupsByGroupIds(groups, groupIds)[0] || null;
+    return createSyncPlayContext({
+      inGroup: true,
+      groupId: preferredGroupId,
       groupName: resolveSyncPlayGroupName(matchingGroup),
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
       participantCount: getGroupParticipantCount(matchingGroup),
-      unavailable: false
-    };
+      unavailable: false,
+      membershipSource: "current-session-syncplay-group"
+    });
   }
 
   if (groups.length > 0) {
-    const matchingGroup = groups.filter((group) => groupsContainCurrentUser([group], sessions))[0] || null;
+    const allowUserParticipantMatch = canUseUserParticipantMatch(resolution);
+    const matchingGroup = groups.filter((group) => groupsContainCurrentSession([group], resolution.session, allowUserParticipantMatch))[0] || null;
     if (matchingGroup) {
-      return {
+      return createSyncPlayContext({
         inGroup: true,
         groupId: resolveSyncPlayGroupId(matchingGroup),
         groupName: resolveSyncPlayGroupName(matchingGroup),
+        sessionId: resolution.sessionId,
+        deviceId: resolution.deviceId,
         participantCount: getGroupParticipantCount(matchingGroup),
-        unavailable: false
-      };
+        unavailable: false,
+        membershipSource: allowUserParticipantMatch ? "single-session-participant-syncplay-list" : "current-session-syncplay-list"
+      });
     }
   }
 
-  return { inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: groupsUnavailable };
+  return createSyncPlayContext({
+    sessionId: resolution.sessionId,
+    deviceId: resolution.deviceId,
+    unavailable: groupsUnavailable,
+    membershipSource: groupsUnavailable ? "syncplay-list-unavailable" : "current-session-not-in-syncplay"
+  });
 }
 
 async function refreshSyncPlayState(): Promise<void> {
@@ -1363,20 +1830,21 @@ async function refreshSyncPlayState(): Promise<void> {
     setCurrentSyncPlayContext(await resolveCurrentSyncPlayContext());
   } catch (err) {
     logDebug("Failed to refresh SyncPlay state", err);
-    setCurrentSyncPlayContext({ inGroup: false, groupId: "", groupName: "", participantCount: 1, unavailable: true });
+    setCurrentSyncPlayContext(createSyncPlayContext({ unavailable: true, membershipSource: "syncplay-refresh-error" }));
   } finally {
     refreshInProgress = false;
   }
 }
 
-export async function pollJellyChat(): Promise<void> {
+export async function pollJellyChat(force = false): Promise<void> {
+  installSyncPlayClientSignalListener();
   const now = Date.now();
   const pollIntervalMs = getEventPollIntervalMs();
   if (window.JellyChatDebug) {
     window.JellyChatDebug.eventPollIntervalMs = pollIntervalMs;
   }
 
-  if (lastPollStartedAt > 0 && now - lastPollStartedAt < pollIntervalMs) {
+  if (!force && lastPollStartedAt > 0 && now - lastPollStartedAt < pollIntervalMs) {
     return;
   }
 
@@ -1792,6 +2260,7 @@ function bindEvent(target: EventTarget | null, type: string, handler: EventListe
 export function startRuntime(): void {
   window.__jellyChatLoaded = true;
   installRouteWatcher();
+  installSyncPlayClientSignalListener();
   installPlaybackActionLogging(postLocalPlaybackEvent);
   updateLayout("start");
   pollJellyChat();
