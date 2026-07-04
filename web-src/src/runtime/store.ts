@@ -1,7 +1,7 @@
 import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, MessageActionMenuState, PlaybackEventType, ReactionEvent, ReplyTarget, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
 import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent, postTypingUpdate } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
-import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEventId, formId, getValue, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs } from "./util";
+import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEventId, formId, getValue, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs, summarizeError } from "./util";
 import { getActiveMountHost, getDrawerSide, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, updateLayout } from "./layout";
 import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
 import { addReactionOverlay, addRoomReactionOverlay, recordReactionReceived, setReactionParticipantCount } from "./reactions";
@@ -21,8 +21,12 @@ type CurrentSessionResolution = {
   session: any | null;
   sessionId: string;
   deviceId: string;
+  deviceName: string;
+  clientName: string;
   sessionMatchCount: number;
   currentUserSessionCount: number;
+  currentUserSessionIds: string[];
+  matchedSessionIds: string[];
   reason: string;
   error: string | null;
 };
@@ -768,6 +772,9 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     window.JellyChatDebug.currentSessionId = currentSyncPlayContext.sessionId;
     window.JellyChatDebug.currentDeviceId = currentSyncPlayContext.deviceId;
     window.JellyChatDebug.syncPlayMembershipSource = currentSyncPlayContext.membershipSource;
+    window.JellyChatDebug.syncPlayInGroup = currentSyncPlayContext.inGroup;
+    window.JellyChatDebug.syncPlayActiveGroupId = currentSyncPlayContext.groupId;
+    window.JellyChatDebug.syncPlayNotInRoomReason = currentSyncPlayContext.inGroup ? null : currentSyncPlayContext.membershipSource;
   }
 
   emit();
@@ -932,18 +939,39 @@ function getSessionDeviceId(session: any): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getSessionDeviceName(session: any): string {
+  const value = (session && session.DeviceName) || (session && session.Device && session.Device.Name) || "";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getSessionClientName(session: any): string {
+  const value = session && session.Client;
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getSessionIds(sessions: any[]): string[] {
+  return sessions
+    .map(getSessionId)
+    .filter(Boolean);
+}
+
 function resolveCurrentSession(sessions: any[], groups: any[] = []): CurrentSessionResolution {
   const deviceId = getCurrentDeviceId();
   const normalizedDeviceId = normalizeId(deviceId);
   const matchingUserSessions = sessions.filter(matchesCurrentUser);
+  const currentUserSessionIds = getSessionIds(matchingUserSessions);
 
   if (matchingUserSessions.length === 0) {
     return {
       session: null,
       sessionId: "",
       deviceId,
+      deviceName: "",
+      clientName: "",
       sessionMatchCount: 0,
       currentUserSessionCount: 0,
+      currentUserSessionIds: [],
+      matchedSessionIds: [],
       reason: "no-current-user-session",
       error: "No session matched the current user."
     };
@@ -951,7 +979,7 @@ function resolveCurrentSession(sessions: any[], groups: any[] = []): CurrentSess
 
   if (normalizedDeviceId) {
     const deviceMatches = matchingUserSessions.filter((session) => normalizeId(getSessionDeviceId(session)) === normalizedDeviceId);
-    const deviceResolution = resolveSessionCandidate(deviceMatches, groups, deviceId, "user-device", matchingUserSessions.length);
+    const deviceResolution = resolveSessionCandidate(deviceMatches, groups, deviceId, "user-device", matchingUserSessions.length, currentUserSessionIds);
     if (deviceResolution) {
       return deviceResolution;
     }
@@ -961,15 +989,19 @@ function resolveCurrentSession(sessions: any[], groups: any[] = []): CurrentSess
         session: null,
         sessionId: "",
         deviceId,
+        deviceName: "",
+        clientName: "",
         sessionMatchCount: deviceMatches.length,
         currentUserSessionCount: matchingUserSessions.length,
+        currentUserSessionIds,
+        matchedSessionIds: getSessionIds(deviceMatches),
         reason: "ambiguous-device-session",
         error: "Multiple sessions matched the current device."
       };
     }
   }
 
-  const userResolution = resolveSessionCandidate(matchingUserSessions, groups, deviceId, normalizedDeviceId ? "user-session-device-missing" : "user-session", matchingUserSessions.length);
+  const userResolution = resolveSessionCandidate(matchingUserSessions, groups, deviceId, normalizedDeviceId ? "user-session-device-missing" : "user-session", matchingUserSessions.length, currentUserSessionIds);
   if (userResolution && matchingUserSessions.length === 1) {
     return userResolution;
   }
@@ -978,49 +1010,57 @@ function resolveCurrentSession(sessions: any[], groups: any[] = []): CurrentSess
     session: null,
     sessionId: "",
     deviceId,
+    deviceName: "",
+    clientName: "",
     sessionMatchCount: matchingUserSessions.length,
     currentUserSessionCount: matchingUserSessions.length,
+    currentUserSessionIds,
+    matchedSessionIds: getSessionIds(matchingUserSessions),
     reason: "ambiguous-user-session",
     error: "Multiple sessions matched the current user and no current device match was available."
   };
 }
 
-function resolveSessionCandidate(candidates: any[], groups: any[], fallbackDeviceId: string, reasonPrefix: string, currentUserSessionCount: number): CurrentSessionResolution | null {
+function resolveSessionCandidate(candidates: any[], groups: any[], fallbackDeviceId: string, reasonPrefix: string, currentUserSessionCount: number, currentUserSessionIds: string[]): CurrentSessionResolution | null {
   if (candidates.length === 0) {
     return null;
   }
 
   if (candidates.length === 1) {
-    return createSessionResolution(candidates[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix, null);
+    return createSessionResolution(candidates[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix, null, getSessionIds(candidates), currentUserSessionIds);
   }
 
   const withSessionGroup = candidates.filter((session) => extractSyncPlayGroupId(session));
   if (withSessionGroup.length === 1) {
-    return createSessionResolution(withSessionGroup[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-syncplay-session", null);
+    return createSessionResolution(withSessionGroup[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-syncplay-session", null, getSessionIds(candidates), currentUserSessionIds);
   }
 
   const withGroupParticipant = groups.length > 0
     ? candidates.filter((session) => groupsContainCurrentSession(groups, session))
     : [];
   if (withGroupParticipant.length === 1) {
-    return createSessionResolution(withGroupParticipant[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-syncplay-participant", null);
+    return createSessionResolution(withGroupParticipant[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-syncplay-participant", null, getSessionIds(candidates), currentUserSessionIds);
   }
 
   const activeCandidates = withSessionGroup.length > 0 ? withSessionGroup : withGroupParticipant;
   if (activeCandidates.length > 1 && reasonPrefix.indexOf("user-device") === 0) {
-    return createSessionResolution(sortSessionsByActivity(activeCandidates)[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-latest-active-session", null);
+    return createSessionResolution(sortSessionsByActivity(activeCandidates)[0], candidates.length, currentUserSessionCount, fallbackDeviceId, reasonPrefix + "-latest-active-session", null, getSessionIds(candidates), currentUserSessionIds);
   }
 
   return null;
 }
 
-function createSessionResolution(session: any, matchCount: number, currentUserSessionCount: number, fallbackDeviceId: string, reason: string, error: string | null): CurrentSessionResolution {
+function createSessionResolution(session: any, matchCount: number, currentUserSessionCount: number, fallbackDeviceId: string, reason: string, error: string | null, matchedSessionIds: string[], currentUserSessionIds: string[]): CurrentSessionResolution {
   return {
     session,
     sessionId: getSessionId(session),
     deviceId: getSessionDeviceId(session) || fallbackDeviceId,
+    deviceName: getSessionDeviceName(session),
+    clientName: getSessionClientName(session),
     sessionMatchCount: matchCount,
     currentUserSessionCount,
+    currentUserSessionIds,
+    matchedSessionIds,
     reason,
     error
   };
@@ -1262,12 +1302,26 @@ function normalizeRoomResolution(response: unknown): JellyChatRoomResolution | n
   };
 }
 
+function updateRoomDebug(room: JellyChatRoomResolution | null, error: string | null = null): void {
+  if (!window.JellyChatDebug) return;
+  window.JellyChatDebug.syncPlayRoomInGroup = !!room?.inGroup;
+  window.JellyChatDebug.syncPlayRoomGroupId = room?.groupId || "";
+  window.JellyChatDebug.syncPlayRoomSessionId = room?.sessionId || "";
+  window.JellyChatDebug.syncPlayRoomDeviceId = room?.deviceId || "";
+  window.JellyChatDebug.syncPlayRoomExactMembership = !!room?.exactMembership;
+  window.JellyChatDebug.syncPlayRoomMembershipSource = room?.membershipSource || "";
+  window.JellyChatDebug.syncPlayRoomRequestError = error;
+}
+
 async function fetchJellyChatRoom(senderSessionId: string): Promise<JellyChatRoomResolution | null> {
   const query = senderSessionId ? "?senderSessionId=" + encodeURIComponent(senderSessionId) : "";
   try {
-    return normalizeRoomResolution(await fetchJson("JellyChat/Room" + query));
+    const room = normalizeRoomResolution(await fetchJson("JellyChat/Room" + query));
+    updateRoomDebug(room);
+    return room;
   } catch (err) {
     logDebug("JellyChat room request failed", err);
+    updateRoomDebug(null, summarizeError(err));
     return null;
   }
 }
@@ -1276,6 +1330,8 @@ function updateSyncPlayClientSignalDebug(): void {
   if (!window.JellyChatDebug) return;
   window.JellyChatDebug.syncPlayClientSignalSource = syncPlayClientSignalSource;
   window.JellyChatDebug.syncPlayClientSignalGroupId = syncPlayClientSignalGroup ? resolveSyncPlayGroupId(syncPlayClientSignalGroup) : "";
+  window.JellyChatDebug.syncPlayClientSignalKnown = syncPlayClientSignalKnown;
+  window.JellyChatDebug.syncPlayClientSignalInGroup = !!(syncPlayClientSignalGroup && resolveSyncPlayGroupId(syncPlayClientSignalGroup));
 }
 
 function getClientSyncPlayGroup(): any | null {
@@ -1355,16 +1411,13 @@ async function resolveEventPostContext(): Promise<{ senderSessionId: string; gro
   } catch (err) {
     logDebug("SyncPlay list request failed before JellyChat post", err);
   }
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.syncPlayGroupCount = groups.length;
+  }
   const resolution = resolveCurrentSession(sessions, groups);
   const currentSession = resolution.session;
   cachedCurrentSessionIds = resolution.sessionId ? [resolution.sessionId] : [];
-  if (window.JellyChatDebug) {
-    window.JellyChatDebug.currentSessionId = resolution.sessionId;
-    window.JellyChatDebug.currentDeviceId = resolution.deviceId;
-    window.JellyChatDebug.syncPlaySessionMatchCount = resolution.sessionMatchCount;
-    window.JellyChatDebug.syncPlayCurrentUserSessionCount = resolution.currentUserSessionCount;
-    window.JellyChatDebug.lastSyncPlayResolutionError = resolution.error;
-  }
+  updateSyncPlayResolutionDebug(resolution);
 
   if (!currentSession || !resolution.sessionId) {
     return null;
@@ -1703,14 +1756,27 @@ function updateSyncPlayResolutionDebug(resolution: CurrentSessionResolution): vo
 
   window.JellyChatDebug.currentSessionId = resolution.sessionId;
   window.JellyChatDebug.currentDeviceId = resolution.deviceId;
+  window.JellyChatDebug.currentDeviceName = resolution.deviceName;
+  window.JellyChatDebug.currentClientName = resolution.clientName;
+  window.JellyChatDebug.currentApiDeviceId = getCurrentDeviceId();
   window.JellyChatDebug.syncPlayMembershipSource = resolution.reason;
+  window.JellyChatDebug.syncPlayResolutionReason = resolution.reason;
+  window.JellyChatDebug.syncPlayResolutionState = resolution.sessionId ? "session-resolved" : "session-unresolved";
   window.JellyChatDebug.syncPlaySessionMatchCount = resolution.sessionMatchCount;
   window.JellyChatDebug.syncPlayCurrentUserSessionCount = resolution.currentUserSessionCount;
+  window.JellyChatDebug.syncPlayCurrentUserSessionIds = resolution.currentUserSessionIds;
+  window.JellyChatDebug.syncPlayMatchedSessionIds = resolution.matchedSessionIds;
+  window.JellyChatDebug.syncPlaySameAccountMultiClient = resolution.currentUserSessionCount > 1;
+  window.JellyChatDebug.syncPlayAmbiguousSession = !!(resolution.error && resolution.reason.indexOf("ambiguous") >= 0);
   window.JellyChatDebug.lastSyncPlayResolutionError = resolution.error;
 }
 
 async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
   if (!window.ApiClient) {
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.syncPlayResolutionState = "api-client-missing";
+      window.JellyChatDebug.lastSyncPlayResolutionError = "ApiClient missing";
+    }
     return createSyncPlayContext({ unavailable: true, membershipSource: "api-client-missing" });
   }
 
@@ -1722,6 +1788,10 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
   } catch (err) {
     groupsUnavailable = true;
     logDebug("SyncPlay list request failed", err);
+  }
+  if (window.JellyChatDebug) {
+    window.JellyChatDebug.syncPlayGroupCount = groups.length;
+    window.JellyChatDebug.syncPlayGroupsUnavailable = groupsUnavailable;
   }
 
   const resolution = resolveCurrentSession(sessions, groups);
@@ -2319,6 +2389,8 @@ export function startRuntime(): void {
     bindEvent(window, "beforeunload", () => stopLocalTyping("beforeunload"));
     bindEvent(window, "pagehide", () => stopLocalTyping("pagehide"));
     bindEvent(window, "resize", () => scheduleLayoutUpdate("resize"));
+    bindEvent(window.visualViewport || null, "resize", () => scheduleLayoutUpdate("visualViewport.resize"));
+    bindEvent(window.visualViewport || null, "scroll", () => scheduleLayoutUpdate("visualViewport.scroll"));
     bindEvent(document, "fullscreenchange", () => {
       scanPlaybackTarget();
       updateLayout("fullscreenchange");
