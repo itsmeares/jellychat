@@ -73,6 +73,10 @@ let typingIdleTimer = 0;
 let typingRefreshTimer = 0;
 let typingExpiryTimer = 0;
 let drawerResizeActive = false;
+let syncPlayClientSignalBound = false;
+let syncPlayClientSignalKnown = false;
+let syncPlayClientSignalGroup: any | null = null;
+let syncPlayClientSignalSource = "";
 let remoteTypingUsers: TypingRemoteUser[] = [];
 let triggerIndicator: TriggerIndicatorState = {
   unreadChatIndicatorActive: false,
@@ -1268,6 +1272,59 @@ async function fetchJellyChatRoom(senderSessionId: string): Promise<JellyChatRoo
   }
 }
 
+function updateSyncPlayClientSignalDebug(): void {
+  if (!window.JellyChatDebug) return;
+  window.JellyChatDebug.syncPlayClientSignalSource = syncPlayClientSignalSource;
+  window.JellyChatDebug.syncPlayClientSignalGroupId = syncPlayClientSignalGroup ? resolveSyncPlayGroupId(syncPlayClientSignalGroup) : "";
+}
+
+function getClientSyncPlayGroup(): any | null {
+  return syncPlayClientSignalKnown && syncPlayClientSignalGroup && resolveSyncPlayGroupId(syncPlayClientSignalGroup)
+    ? syncPlayClientSignalGroup
+    : null;
+}
+
+function applySyncPlayClientSignal(update: any): void {
+  const updateType = String((update && (update.Type || update.type)) || "");
+  if (!updateType) return;
+
+  if (updateType === "GroupJoined" || updateType === "GroupUpdate") {
+    const group = update && (update.Data || update.data);
+    if (group && resolveSyncPlayGroupId(group)) {
+      syncPlayClientSignalKnown = true;
+      syncPlayClientSignalGroup = group;
+      syncPlayClientSignalSource = "client-syncplay-" + updateType.toLowerCase();
+      updateSyncPlayClientSignalDebug();
+      void pollJellyChat(true);
+    }
+    return;
+  }
+
+  if (updateType === "GroupLeft" || updateType === "NotInGroup") {
+    syncPlayClientSignalKnown = true;
+    syncPlayClientSignalGroup = null;
+    syncPlayClientSignalSource = "client-syncplay-" + updateType.toLowerCase();
+    updateSyncPlayClientSignalDebug();
+    void pollJellyChat(true);
+  }
+}
+
+function installSyncPlayClientSignalListener(): void {
+  if (syncPlayClientSignalBound) return;
+  const events = window.Events;
+  const serverNotifications = window.ServerNotifications;
+  if (!events || !serverNotifications || typeof events.on !== "function") {
+    return;
+  }
+
+  events.on(serverNotifications, "SyncPlayGroupUpdate", (_event: unknown, _apiClient: unknown, update: unknown) => {
+    applySyncPlayClientSignal(update);
+  });
+  syncPlayClientSignalBound = true;
+  syncPlayClientSignalSource = "client-syncplay-listener";
+  updateSyncPlayClientSignalDebug();
+}
+
 function getGroupParticipantCount(group: any): number {
   const participants = group && group.Participants;
   return Array.isArray(participants) && participants.length > 0 ? participants.length : 1;
@@ -1310,6 +1367,21 @@ async function resolveEventPostContext(): Promise<{ senderSessionId: string; gro
   }
 
   if (!currentSession || !resolution.sessionId) {
+    return null;
+  }
+
+  const clientGroup = getClientSyncPlayGroup();
+  if (clientGroup) {
+    const actor = resolveLocalActorName(sessions, currentSession);
+    return {
+      senderSessionId: resolution.sessionId,
+      groupId: resolveSyncPlayGroupId(clientGroup),
+      participants: extractParticipantsFromGroups([clientGroup]),
+      userName: actor.actorName
+    };
+  }
+
+  if (syncPlayClientSignalKnown) {
     return null;
   }
 
@@ -1664,6 +1736,29 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
     });
   }
 
+  const clientGroup = getClientSyncPlayGroup();
+  if (clientGroup) {
+    return createSyncPlayContext({
+      inGroup: true,
+      groupId: resolveSyncPlayGroupId(clientGroup),
+      groupName: resolveSyncPlayGroupName(clientGroup),
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      participantCount: getGroupParticipantCount(clientGroup),
+      unavailable: false,
+      membershipSource: syncPlayClientSignalSource || "client-syncplay-group-update"
+    });
+  }
+
+  if (syncPlayClientSignalKnown) {
+    return createSyncPlayContext({
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      unavailable: groupsUnavailable,
+      membershipSource: syncPlayClientSignalSource || "client-syncplay-not-in-group"
+    });
+  }
+
   const room = await fetchJellyChatRoom(resolution.sessionId);
   if (room?.exactMembership && !room.inGroup) {
     return createSyncPlayContext({
@@ -1741,14 +1836,15 @@ async function refreshSyncPlayState(): Promise<void> {
   }
 }
 
-export async function pollJellyChat(): Promise<void> {
+export async function pollJellyChat(force = false): Promise<void> {
+  installSyncPlayClientSignalListener();
   const now = Date.now();
   const pollIntervalMs = getEventPollIntervalMs();
   if (window.JellyChatDebug) {
     window.JellyChatDebug.eventPollIntervalMs = pollIntervalMs;
   }
 
-  if (lastPollStartedAt > 0 && now - lastPollStartedAt < pollIntervalMs) {
+  if (!force && lastPollStartedAt > 0 && now - lastPollStartedAt < pollIntervalMs) {
     return;
   }
 
@@ -2164,6 +2260,7 @@ function bindEvent(target: EventTarget | null, type: string, handler: EventListe
 export function startRuntime(): void {
   window.__jellyChatLoaded = true;
   installRouteWatcher();
+  installSyncPlayClientSignalListener();
   installPlaybackActionLogging(postLocalPlaybackEvent);
   updateLayout("start");
   pollJellyChat();

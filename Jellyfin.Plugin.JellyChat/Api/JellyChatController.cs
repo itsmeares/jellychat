@@ -868,7 +868,7 @@ public class JellyChatController : ControllerBase
                 return sessions.Count(session => session.UserId == userId) == 1 ? preferred : null;
             }
 
-            return null;
+            return preferred is not null && sessions.Count(session => session.UserId == userId) == 1 ? preferred : null;
         }
 
         if (!string.IsNullOrWhiteSpace(requestDeviceId))

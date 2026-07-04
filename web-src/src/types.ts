@@ -311,6 +311,8 @@ export type JellyChatDebug = Record<string, unknown> & {
   syncPlayMembershipSource: string;
   syncPlaySessionMatchCount: number;
   syncPlayCurrentUserSessionCount: number;
+  syncPlayClientSignalSource: string;
+  syncPlayClientSignalGroupId: string;
   lastSyncPlayResolutionError: string | null;
   drawerOpen: boolean;
   drawerSide: DrawerSide;
@@ -368,6 +370,8 @@ declare global {
     ApiClient?: any;
     Dashboard?: any;
     JellyChatDebug?: JellyChatDebug;
+    Events?: any;
+    ServerNotifications?: any;
     __JELLYCHAT_LOADED__?: boolean;
     __JELLYCHAT_REFRESH_INTERVAL_ID__?: number | null;
     __JELLYCHAT_LISTENERS_BOUND__?: boolean;
