@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## Fixed - Restores JellyChat trigger access in Jellyfin Desktop with a Desktop-safe native-styled fallback when no suitable native control host is available. - Fixes SyncPlay room detection so JellyChat follows the current client/session instead of account-level or stale group state. - Prevents clients outside the active SyncPlay room from sending chat, typing, reaction, or playback events into another room. - Prevents stale room/history access when a client is not actually in the active SyncPlay group. - Fixes same-version browser asset caching so v0.7.1 patch rebuilds load the current JellyChat runtime. ## Validation - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check",
+                "targetAbi": "10.11.0.0",
+                "version": "0.7.1",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.7.1/Jellyfin.Plugin.JellyChat_0.7.1.zip",
+                "checksum": "a321e2d2e48f98b3b444d0b8626b27f4",
+                "timestamp": "2026-07-04T00:24:21"
+            },
+            {
                 "changelog": "JellyChat v0.7.0 message replies and chat polish. Highlights: - Adds lightweight message replies with composer previews, quote rendering, and jump/highlight to original messages. - Adds message actions with Reply and Copy from chat bubbles and the message context menu. - Improves timestamps, grouped consecutive messages, and compact playback rows. - Adds reply/action debug fields while keeping in-memory history, self-contained injection, and existing v0.6.0 behavior. Validation: - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check",
                 "targetAbi": "10.11.0.0",
                 "version": "0.7.0",
