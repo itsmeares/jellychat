@@ -196,16 +196,23 @@ Create a GitHub release tagged `v0.8.0` and attach `Jellyfin.Plugin.JellyChat_0.
 ## Troubleshooting
 
 - Chat button does not appear:
-  - Verify the user is in an active SyncPlay group.
+  - The button should mount in the Jellyfin header or video OSD. In Jellyfin Desktop, JellyChat may use its Desktop overlay fallback when native hosts are missing.
   - Restart Jellyfin after plugin deploy/update.
   - Open `/JellyChat/Assets/jellychat.js` and `/JellyChat/Assets/jellychat.css` in the same browser session and confirm both return `200`. If Jellyfin uses a subpath, include that base path.
+    - Example: `/jellyfin/JellyChat/Assets/jellychat.js`.
   - Open `/web/index.html`, view source, and confirm one `JellyChat:start` marker block is present.
   - Check the browser console for `[JellyChat] self-contained assets loaded` and other JellyChat injection or asset logs.
+  - In the browser console, run `window.JellyChatDebug.getSummary()` and check `triggerMode`, `triggerHostFound`, `triggerCandidateCount`, `lastTriggerMountError`, `rootCount`, `buttonCount`, and `desktopTriggerFallbackActive`.
 - Messages do not appear on another device:
   - Confirm both devices are in the same SyncPlay group.
   - Refresh or reopen the drawer to force an event poll.
   - Check the browser console for `[JellyChat] self-contained assets loaded` and other `[JellyChat]` logs.
-  - Check `window.JellyChatDebug.injectionMode`, `window.JellyChatDebug.assetMode`, and `window.JellyChatDebug.lastInjectionError`.
+  - Run `window.JellyChatDebug.getSummary()` and check `currentSessionId`, `currentDeviceId`, `currentClientName`, `syncPlayInGroup`, `syncPlayActiveGroupId`, `syncPlayMembershipSource`, `syncPlayCurrentUserSessionCount`, `syncPlayAmbiguousSession`, and `lastSyncPlayResolutionError`.
+  - Same-account multi-client setups need a resolved current session. If `syncPlayAmbiguousSession` is `true`, compare `syncPlayCurrentUserSessionIds`, `syncPlayMatchedSessionIds`, `currentApiDeviceId`, and `currentDeviceId` in `window.JellyChatDebug.dump().details.events`.
+- Reverse proxy or base-path installs:
+  - Confirm the asset URLs include the Jellyfin base path when needed, for example `/jellyfin/JellyChat/Assets/jellychat.css`.
+  - Run `window.JellyChatDebug.getSummary()` and check `assetBasePath`, `assetBasePathSource`, `assetBasePathError`, `injectedAssetBaseUrl`, `lastApiPath`, `lastApiUrlPath`, `lastApiUrlSource`, `lastApiUrlError`, `lastApiStatus`, and `lastApiError`.
+  - Include `window.JellyChatDebug.dump()` in bug reports when possible.
 
 ## Acknowledgements
 

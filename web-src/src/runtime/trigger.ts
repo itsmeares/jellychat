@@ -8,6 +8,13 @@ export type TriggerMount = {
   hostFound: boolean;
   selector: string;
   error?: string | null;
+  route?: string;
+  activeRootSelector?: string;
+  videoHostCandidateCount?: number;
+  headerHostCandidateCount?: number;
+  desktopFallbackHostCount?: number;
+  desktopFallbackDuplicateCount?: number;
+  desktopFallbackParentSelector?: string;
 };
 
 const nativeVideoSelectors = [
@@ -45,6 +52,9 @@ const nativeHeaderSelectors = [
 
 let lastFocusedTrigger: HTMLElement | null = null;
 const desktopFallbackHostId = "jellyChatDesktopTriggerHost";
+let lastDesktopFallbackHostCount = 0;
+let lastDesktopFallbackDuplicateCount = 0;
+let lastDesktopFallbackParentSelector = "";
 
 function tag(element: Element | null): string {
   return element && element.tagName ? element.tagName.toLowerCase() : "";
@@ -86,12 +96,28 @@ function getDesktopFallbackParent(): HTMLElement | null {
   return fullscreenHost || document.body || document.documentElement;
 }
 
+function cleanupDesktopFallbackHosts(): { host: HTMLElement | null; count: number } {
+  const hosts = Array.from(document.querySelectorAll<HTMLElement>("#" + desktopFallbackHostId + ', [data-jellychat-host="desktop-overlay-fallback"]'));
+  const preferredHost = hosts.find((host) => host.id === desktopFallbackHostId) || hosts[0] || null;
+  hosts.forEach((host) => {
+    if (host !== preferredHost) {
+      host.remove();
+    }
+  });
+
+  return { host: preferredHost, count: hosts.length };
+}
+
 function getOrCreateDesktopFallbackHost(): HTMLElement {
-  let host = document.getElementById(desktopFallbackHostId) as HTMLElement | null;
+  const cleanup = cleanupDesktopFallbackHosts();
+  let host = cleanup.host;
   const parent = getDesktopFallbackParent();
   if (!parent) {
     throw new Error("Desktop fallback parent not available.");
   }
+
+  lastDesktopFallbackDuplicateCount = Math.max(0, cleanup.count - 1);
+  lastDesktopFallbackParentSelector = describeElementSelector(parent);
 
   if (!host) {
     host = document.createElement("div");
@@ -104,6 +130,7 @@ function getOrCreateDesktopFallbackHost(): HTMLElement {
     parent.appendChild(host);
   }
 
+  lastDesktopFallbackHostCount = document.querySelectorAll("#" + desktopFallbackHostId + ', [data-jellychat-host="desktop-overlay-fallback"]').length;
   return host;
 }
 
@@ -190,34 +217,55 @@ function updateDebug(mount: TriggerMount): void {
   window.JellyChatDebug.triggerHostFound = mount.hostFound;
   window.JellyChatDebug.triggerHostSelector = mount.selector;
   window.JellyChatDebug.lastTriggerMountError = mount.error || null;
+  window.JellyChatDebug.triggerRoute = mount.route || "";
+  window.JellyChatDebug.triggerActiveRootSelector = mount.activeRootSelector || "";
+  window.JellyChatDebug.triggerVideoHostCandidateCount = mount.videoHostCandidateCount || 0;
+  window.JellyChatDebug.triggerHeaderHostCandidateCount = mount.headerHostCandidateCount || 0;
+  window.JellyChatDebug.triggerCandidateCount = (mount.videoHostCandidateCount || 0) + (mount.headerHostCandidateCount || 0);
   window.JellyChatDebug.isJellyfinDesktop = runtimeShell.isJellyfinDesktop;
   window.JellyChatDebug.desktopTriggerFallbackActive = mount.mode === "desktop-overlay-fallback";
+  window.JellyChatDebug.desktopFallbackHostCount = mount.desktopFallbackHostCount || 0;
+  window.JellyChatDebug.desktopFallbackDuplicateCount = mount.desktopFallbackDuplicateCount || 0;
+  window.JellyChatDebug.desktopFallbackParentSelector = mount.desktopFallbackParentSelector || "";
   window.setTimeout(countDebugNodes, 0);
 }
 
 export function resolveTriggerMount(): TriggerMount {
   const activeRoot = (document.fullscreenElement || document.body || document.documentElement) as ParentNode;
-  if (isVideoRoute()) {
-    const videoHost = bestHost(queryHosts(nativeVideoSelectors, activeRoot), true);
+  const route = (String(window.location.pathname || "") + String(window.location.hash || "")).trim();
+  const videoRoute = isVideoRoute();
+  const activeRootSelector = describeElementSelector(activeRoot instanceof Element ? activeRoot : null);
+  const videoHosts = videoRoute ? queryHosts(nativeVideoSelectors, activeRoot) : [];
+  const headerHosts = queryHosts(nativeHeaderSelectors, document);
+  if (videoRoute) {
+    const videoHost = bestHost(videoHosts, true);
     if (videoHost) {
       const mount = {
         host: videoHost,
         mode: "native-video-osd" as const,
         hostFound: true,
-        selector: describeElementSelector(videoHost)
+        selector: describeElementSelector(videoHost),
+        route,
+        activeRootSelector,
+        videoHostCandidateCount: videoHosts.length,
+        headerHostCandidateCount: headerHosts.length
       };
       updateDebug(mount);
       return mount;
     }
   }
 
-  const headerHost = bestHost(queryHosts(nativeHeaderSelectors, document), true);
+  const headerHost = bestHost(headerHosts, true);
   if (headerHost) {
     const mount = {
       host: headerHost,
       mode: "native-header" as const,
       hostFound: true,
-      selector: describeElementSelector(headerHost)
+      selector: describeElementSelector(headerHost),
+      route,
+      activeRootSelector,
+      videoHostCandidateCount: videoHosts.length,
+      headerHostCandidateCount: headerHosts.length
     };
     updateDebug(mount);
     return mount;
@@ -232,6 +280,13 @@ export function resolveTriggerMount(): TriggerMount {
         mode: "desktop-overlay-fallback" as const,
         hostFound: true,
         selector: "#" + desktopFallbackHostId,
+        route,
+        activeRootSelector,
+        videoHostCandidateCount: videoHosts.length,
+        headerHostCandidateCount: headerHosts.length,
+        desktopFallbackHostCount: lastDesktopFallbackHostCount,
+        desktopFallbackDuplicateCount: lastDesktopFallbackDuplicateCount,
+        desktopFallbackParentSelector: lastDesktopFallbackParentSelector,
         error: null
       };
       updateDebug(mount);
@@ -242,6 +297,10 @@ export function resolveTriggerMount(): TriggerMount {
         mode: "native-missing" as const,
         hostFound: false,
         selector: "",
+        route,
+        activeRootSelector,
+        videoHostCandidateCount: videoHosts.length,
+        headerHostCandidateCount: headerHosts.length,
         error: err instanceof Error ? err.message : "Desktop fallback trigger host failed."
       };
       updateDebug(mount);
@@ -254,6 +313,10 @@ export function resolveTriggerMount(): TriggerMount {
     mode: "native-missing" as const,
     hostFound: false,
     selector: "",
+    route,
+    activeRootSelector,
+    videoHostCandidateCount: videoHosts.length,
+    headerHostCandidateCount: headerHosts.length,
     error: "No native Jellyfin trigger host found."
   };
   updateDebug(mount);

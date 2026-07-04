@@ -1189,8 +1189,8 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   #jellyChatCloseButton,
   #jellyChatSideToggleButton,
   #jellyChatSettingsButton {
-    width: 2.45rem;
-    height: 2.45rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .jellyChatMessage {
@@ -1198,12 +1198,18 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   }
 
   .jellyChatMessageReplyButton {
-    width: 2.3rem;
-    height: 2.3rem;
+    width: 2.75rem;
+    height: 2.75rem;
     opacity: 0.66;
   }
 
   .jellyChatMessageActionMenu button {
+    min-height: 2.75rem;
+  }
+
+  #jellyChatInput,
+  #jellyChatSendButton,
+  .jellyChatSettingsActions button {
     min-height: 2.75rem;
   }
 
