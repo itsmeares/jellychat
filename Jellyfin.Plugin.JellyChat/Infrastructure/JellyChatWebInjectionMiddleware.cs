@@ -160,7 +160,7 @@ public sealed class JellyChatWebInjectionMiddleware
             return false;
         }
 
-        string version = _assetProvider.PluginVersion;
+        string version = _assetProvider.AssetVersion;
         string encodedVersion = Uri.EscapeDataString(version);
         string stylesheetUrl = BuildAssetUrl(assetPathBase, "jellychat.css", encodedVersion);
         string scriptUrl = BuildAssetUrl(assetPathBase, "jellychat.js", encodedVersion);

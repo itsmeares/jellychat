@@ -46,7 +46,7 @@ public sealed class JellyChatAssetsController : ControllerBase
         }
 
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        Response.Headers.CacheControl = string.Equals(version, _assetProvider.PluginVersion, System.StringComparison.Ordinal)
+        Response.Headers.CacheControl = string.Equals(version, _assetProvider.AssetVersion, System.StringComparison.Ordinal)
             ? "public, max-age=31536000, immutable"
             : "no-cache";
         _logger.LogDebug("Serving JellyChat asset {AssetName} from {ResourceName}.", assetName, resourceName);
