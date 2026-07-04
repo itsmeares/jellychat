@@ -45,6 +45,10 @@ function MessageActionMenu({ menu, actions }: { menu: MessageActionMenuState; ac
       return;
     }
 
+    const focusTarget = window.setTimeout(() => {
+      menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    }, 0);
+
     function closeOnOutsideClick(event: Event) {
       const target = event.target as Node | null;
       if (target && menuRef.current?.contains(target)) {
@@ -55,7 +59,10 @@ function MessageActionMenu({ menu, actions }: { menu: MessageActionMenuState; ac
     }
 
     document.addEventListener("pointerdown", closeOnOutsideClick as EventListener);
-    return () => document.removeEventListener("pointerdown", closeOnOutsideClick as EventListener);
+    return () => {
+      window.clearTimeout(focusTarget);
+      document.removeEventListener("pointerdown", closeOnOutsideClick as EventListener);
+    };
   }, [actions, menu.open]);
 
   return (
@@ -67,6 +74,13 @@ function MessageActionMenu({ menu, actions }: { menu: MessageActionMenuState; ac
           role="menu"
           aria-label="Message actions"
           style={{ left: menu.x, top: menu.y }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              actions.closeMessageActionMenu("escape");
+            }
+          }}
         >
           <button type="button" role="menuitem" onClick={() => actions.startReply(menu.message!)}>
             Reply

@@ -34,7 +34,7 @@ JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin 
 - Install folder: `JellyChat`
 - Jellyfin display name: `JellyChat`
 - Internal project path: `Jellyfin.Plugin.JellyChat`
-- Version: `0.7.0`
+- Version: `0.8.0`
 - Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
 - Framework: `net9.0`
 - Description: JellyChat drawer backed by a plugin-owned in-memory event stream, with no toast chat transport, external WebSocket server, or new ports.
@@ -157,7 +157,7 @@ Notes:
 
 ## Release Build
 
-Build the frontend assets, then publish the v0.7.0 release output:
+Build the frontend assets, then publish the v0.8.0 release output:
 
 ```bash
 cd web-src
@@ -177,10 +177,10 @@ Create the release zip from the contents of the publish directory:
 ```powershell
 $publish = "Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish"
 New-Item -ItemType Directory -Force artifacts | Out-Null
-Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/Jellyfin.Plugin.JellyChat_0.7.0.zip" -Force
+Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/Jellyfin.Plugin.JellyChat_0.8.0.zip" -Force
 ```
 
-Create a GitHub release tagged `v0.7.0` and attach `Jellyfin.Plugin.JellyChat_0.7.0.zip`. The release workflow opens a manifest update pull request with the release asset URL, checksum, timestamp, and version entry after the release is published.
+Create a GitHub release tagged `v0.8.0` and attach `Jellyfin.Plugin.JellyChat_0.8.0.zip`. The release workflow opens a manifest update pull request with the release asset URL, checksum, timestamp, and version entry after the release is published.
 
 ## Testing Checklist
 
