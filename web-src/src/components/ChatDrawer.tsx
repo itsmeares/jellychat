@@ -96,6 +96,11 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
       return;
     }
 
+    const focusTarget = window.setTimeout(() => {
+      const target = popoverRef.current?.querySelector<HTMLElement>("input, button");
+      target?.focus({ preventScroll: true });
+    }, 0);
+
     function closeOnOutsideClick(event: Event) {
       const target = event.target as Node | null;
       if (target instanceof Element && target.closest("#jellyChatSettingsButton")) {
@@ -115,6 +120,7 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
     document.addEventListener("pointerdown", closeOnOutsideClick as EventListener);
     window.addEventListener("jellychat-close-settings", closeFromEvent);
     return () => {
+      window.clearTimeout(focusTarget);
       document.removeEventListener("pointerdown", closeOnOutsideClick as EventListener);
       window.removeEventListener("jellychat-close-settings", closeFromEvent);
     };
@@ -131,6 +137,7 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
       data-jellychat-settings-popover="true"
       role="dialog"
       aria-label="JellyChat drawer settings"
+      tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -177,26 +184,8 @@ export function ChatDrawer({ state, actions }: Props) {
   const statusText = state.syncPlay.inGroup
     ? "In SyncPlay group: " + getCurrentGroupLabel()
     : "Not in a SyncPlay group";
-  const controlsRef = useRef<HTMLDivElement | null>(null);
   const controls = (
     <div className="jellyChatHeaderControls">
-      <button
-        id={closeButtonId}
-        type="button"
-        aria-label="Close JellyChat"
-        onClick={actions.closeDrawer}
-      >
-        &times;
-      </button>
-      <button
-        id={sideToggleButtonId}
-        type="button"
-        aria-label={state.drawerSide === "right" ? "Move JellyChat drawer to left" : "Move JellyChat drawer to right"}
-        title={state.drawerSide === "right" ? "Move left" : "Move right"}
-        onClick={actions.toggleDrawerSide}
-      >
-        {state.drawerSide === "right" ? "L" : "R"}
-      </button>
       <button
         id="jellyChatSettingsButton"
         type="button"
@@ -207,6 +196,33 @@ export function ChatDrawer({ state, actions }: Props) {
       >
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
           <path fill="currentColor" d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.4-2.4 1c-.8-.6-1.6-1-2.6-1.3L14 2.8h-4l-.4 2.5c-1 .3-1.8.7-2.6 1.3l-2.4-1-2 3.4 2 1.5c-.1.5-.1 1-.1 1.5s0 1 .1 1.5l-2 1.5 2 3.4 2.4-1c.8.6 1.6 1 2.6 1.3l.4 2.5h4l.4-2.5c1-.3 1.8-.7 2.6-1.3l2.4 1 2-3.4-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z" />
+        </svg>
+      </button>
+      <button
+        id={sideToggleButtonId}
+        type="button"
+        aria-label={state.drawerSide === "right" ? "Move JellyChat drawer to left" : "Move JellyChat drawer to right"}
+        title={state.drawerSide === "right" ? "Move left" : "Move right"}
+        onClick={actions.toggleDrawerSide}
+      >
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
+          <path
+            fill="currentColor"
+            d={state.drawerSide === "right"
+              ? "M14.8 6.2 9 12l5.8 5.8-1.4 1.4L6.2 12l7.2-7.2 1.4 1.4Z"
+              : "M9.2 17.8 15 12 9.2 6.2l1.4-1.4 7.2 7.2-7.2 7.2-1.4-1.4Z"}
+          />
+        </svg>
+      </button>
+      <button
+        id={closeButtonId}
+        type="button"
+        aria-label="Close JellyChat"
+        title="Close"
+        onClick={actions.closeDrawer}
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="m6.4 5 12.6 12.6-1.4 1.4L5 6.4 6.4 5Zm12.6 1.4L6.4 19 5 17.6 17.6 5 19 6.4Z" />
         </svg>
       </button>
     </div>
@@ -231,11 +247,11 @@ export function ChatDrawer({ state, actions }: Props) {
     >
       <DrawerResizeHandle state={state} actions={actions} />
       <div className={"jellyChatHeader is-" + state.drawerSide}>
-        <div ref={controlsRef}>{controls}</div>
         <h2 id={titleId}>JellyChat</h2>
+        {controls}
         <DrawerSettingsPopover state={state} actions={actions} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </div>
-      <div id={statusId} className={state.syncPlay.inGroup ? "is-active" : ""}>
+      <div id={statusId} className={state.syncPlay.inGroup ? "is-active" : ""} role="status" aria-live="polite">
         {statusText}
       </div>
       <MessageList
