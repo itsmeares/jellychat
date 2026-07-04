@@ -71,7 +71,7 @@ jobs:
       - name: Create manifest update pull request
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="release/update-manifest-${VERSION}"
+          BRANCH="automation/update-manifest-${VERSION}"
           TITLE="release: update manifest and version to ${VERSION}"
           BODY_FILE="/tmp/jellychat-release-pr-body.md"
 
