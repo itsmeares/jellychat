@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## JellyChat v0.8.0 JellyChat v0.8.0 is a focused UI/UX polish release for the existing SyncPlay chat experience. ### Highlights - Polishes the drawer header, controls, panel treatment, settings popover, resize handle, and background alpha controls. - Improves timeline readability for message spacing, reply quotes, original-message highlight, copy feedback, long wrapping, and compact playback rows. - Refines message actions, hover/focus behavior, context menu keyboard handling, and touch/long-press affordances. - Tightens native trigger, Desktop fallback trigger, active/unread/activity states, and mobile/iPad touch sizing. - Clarifies empty, not-in-room, disabled composer, and room-access states without changing backend behavior. - Adds product context documentation for future UI work. ### Scope - No backend API changes. - No plugin GUID change. - No /JellyChat/Events behavior change. - No new services, ports, WebSocket/SSE, or File Transformation fallback. ### Validation - Static UI detector passed. - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check - GitHub Actions build checks passed on PR #18.",
+                "targetAbi": "10.11.0.0",
+                "version": "0.8.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.8.0/Jellyfin.Plugin.JellyChat_0.8.0.zip",
+                "checksum": "c7200e89fe0426e007681fc038094162",
+                "timestamp": "2026-07-04T01:00:59"
+            },
+            {
                 "changelog": "## Fixed - Restores JellyChat trigger access in Jellyfin Desktop with a Desktop-safe native-styled fallback when no suitable native control host is available. - Fixes SyncPlay room detection so JellyChat follows the current client/session instead of account-level or stale group state. - Prevents clients outside the active SyncPlay room from sending chat, typing, reaction, or playback events into another room. - Prevents stale room/history access when a client is not actually in the active SyncPlay group. - Fixes same-version browser asset caching so v0.7.1 patch rebuilds load the current JellyChat runtime. ## Validation - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check",
                 "targetAbi": "10.11.0.0",
                 "version": "0.7.1",
