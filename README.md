@@ -64,7 +64,7 @@ JellyChat follows the current SyncPlay room. If you leave the room or Jellyfin c
 - **Web:** JellyChat runs inside Jellyfin Web and mounts into native header or video controls when Jellyfin exposes a suitable host.
 - **Desktop:** Jellyfin Desktop uses the same injected web client, with a Desktop-safe trigger fallback and video-control insets when needed.
 - **Tablet:** The drawer keeps touch targets large enough for iPad-sized layouts while preserving the desktop-style chat surface.
-- **Phone portrait:** JellyChat switches to a bottom sheet so chat does not compete with the video controls.
+- **Phone portrait:** JellyChat switches to a bottom sheet so chat does not interrupt screen use in main menu.
 
 Native Jellyfin clients that do not use Jellyfin Web are not separate JellyChat targets.
 
