@@ -185,6 +185,8 @@ function clearFullscreenHostClasses(element: Element | null): void {
     "jellychat-drawer-open",
     "jellychat-docked",
     "jellychat-mobile",
+    "jellychat-phone-portrait",
+    "jellychat-compact-video-status",
     "jellychat-drawer-left",
     "jellychat-drawer-right"
   );
@@ -1224,7 +1226,7 @@ function isDocked(mode: string, drawerOpen: boolean): boolean {
   return drawerOpen && (mode === "normal-docked" || mode === "fullscreen-docked");
 }
 
-function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, mode: string, mobile: boolean, drawerSide: DrawerSide, drawerWidth: number): void {
+function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, mode: string, mobile: boolean, phonePortrait: boolean, compactVideoStatus: boolean, drawerSide: DrawerSide, drawerWidth: number): void {
   if (lastFullscreenHost && lastFullscreenHost !== host) {
     clearFullscreenHostClasses(lastFullscreenHost);
   }
@@ -1237,6 +1239,8 @@ function updateFullscreenHostClasses(host: Element | null, drawerOpen: boolean, 
   setElementClass(host, "jellychat-fullscreen-docked", mode === "fullscreen-docked" && drawerOpen);
   setElementClass(host, "jellychat-docked", isDocked(mode, drawerOpen));
   setElementClass(host, "jellychat-mobile", mobile);
+  setElementClass(host, "jellychat-phone-portrait", phonePortrait);
+  setElementClass(host, "jellychat-compact-video-status", compactVideoStatus);
   setElementClass(host, "jellychat-drawer-left", drawerSide === "left");
   setElementClass(host, "jellychat-drawer-right", drawerSide === "right");
   (host as HTMLElement).style.setProperty("--jellychat-drawer-width", drawerWidth + "px");
@@ -1255,48 +1259,55 @@ export function updateLayout(reason: string): void {
   const drawerSide = layoutRect.drawerSide;
   const widthPreference = getDrawerWidthPreference();
   const videoRoute = layoutRect.isVideoRoute;
-  const viewportWidth = Math.max(
-    window.innerWidth || 0,
-    document.documentElement?.clientWidth || 0,
-    window.visualViewport?.width || 0
-  );
+  const viewportWidth = Math.floor(window.visualViewport?.width || document.documentElement?.clientWidth || window.innerWidth || 0);
+  const viewportHeight = Math.floor(window.visualViewport?.height || document.documentElement?.clientHeight || window.innerHeight || 0);
+  const phonePortrait = viewportWidth <= 700 && viewportHeight > viewportWidth;
   const mobile = viewportWidth <= mobileLayoutMaxWidthPx;
+  const compactVideoStatus = videoRoute && (phonePortrait || (mobile && viewportHeight <= 600));
   const hasRoomForDockedDrawer = viewportWidth >= widthPreference.width + 360;
-  const canDock = !mobile || hasRoomForDockedDrawer;
+  const canDock = !phonePortrait && (!mobile || hasRoomForDockedDrawer);
   const runtimeShell = detectRuntimeShell();
   const desktopVideoSafeMode = runtimeShell.isJellyfinDesktop && drawerOpen && videoRoute && canDock;
-  const mode = desktopVideoSafeMode ? "desktop-video-safe" : layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock);
+  const mode = phonePortrait ? "phone-portrait-sheet" : (desktopVideoSafeMode ? "desktop-video-safe" : layoutMode(drawerOpen, mobile, fullscreenActive, videoRoute, canDock));
   const docked = isDocked(mode, drawerOpen);
   const shouldDockPlayerSurface = drawerOpen && videoRoute && canDock && !desktopVideoSafeMode;
   const shouldInsetPlayerOverlays = drawerOpen && videoRoute && canDock;
   const shouldInsetNormalContent = docked && drawerOpen && !videoRoute && !fullscreenActive && canDock;
   const shouldInsetHeaderControls = shouldInsetPlayerOverlays || shouldInsetNormalContent;
-  const mobileClassEnabled = mode === "mobile" || (fullscreenActive && mobile && !canDock);
+  const mobileClassEnabled = phonePortrait || mode === "mobile" || (fullscreenActive && mobile && !canDock);
+  const insetLayoutRect: JellyChatLayoutRect = {
+    ...layoutRect,
+    leftInset: canDock && drawerOpen && drawerSide === "left" ? widthPreference.width : 0,
+    rightInset: canDock && drawerOpen && drawerSide === "right" ? widthPreference.width : 0,
+    drawerWidth: canDock && drawerOpen ? widthPreference.width : 0
+  };
 
   const alphaPreference = getDrawerBackgroundAlphaPreference(desktopVideoSafeMode);
   document.documentElement.style.setProperty("--jellychat-drawer-width", widthPreference.width + "px");
   document.documentElement.style.setProperty("--jellychat-drawer-background-alpha", String(alphaPreference.alpha));
-  document.documentElement.style.setProperty("--jellychat-content-left-inset", layoutRect.leftInset + "px");
-  document.documentElement.style.setProperty("--jellychat-content-right-inset", layoutRect.rightInset + "px");
-  document.documentElement.style.setProperty("--jellychat-content-width", "calc(100% - " + layoutRect.leftInset + "px - " + layoutRect.rightInset + "px)");
-  updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobileClassEnabled, drawerSide, widthPreference.width);
+  document.documentElement.style.setProperty("--jellychat-content-left-inset", insetLayoutRect.leftInset + "px");
+  document.documentElement.style.setProperty("--jellychat-content-right-inset", insetLayoutRect.rightInset + "px");
+  document.documentElement.style.setProperty("--jellychat-content-width", "calc(100% - " + insetLayoutRect.leftInset + "px - " + insetLayoutRect.rightInset + "px)");
+  updateFullscreenHostClasses(fullscreenHost, drawerOpen, mode, mobileClassEnabled, phonePortrait, compactVideoStatus, drawerSide, widthPreference.width);
   const layoutHost = fullscreenHost || (videoRoute ? document.body : null);
-  const playerSurfaces = applyDockedLayout(layoutHost, shouldDockPlayerSurface, layoutRect);
+  const playerSurfaces = applyDockedLayout(layoutHost, shouldDockPlayerSurface, insetLayoutRect);
   const coveredPlayerSurfaces = playerSurfaces.slice();
   clearPlayerOverlayInsets();
   const playerControlAvoidSurfaces = desktopVideoSafeMode ? [] : coveredPlayerSurfaces;
   const playerSubtitleAvoidSurfaces = desktopVideoSafeMode ? [] : coveredPlayerSurfaces;
-  const playerControlSurfaces = applyPlayerControlsInset(layoutHost, shouldInsetPlayerOverlays, layoutRect, playerControlAvoidSurfaces, desktopVideoSafeMode);
+  const playerControlSurfaces = applyPlayerControlsInset(layoutHost, shouldInsetPlayerOverlays, insetLayoutRect, playerControlAvoidSurfaces, desktopVideoSafeMode);
   const playerProgressAvoidSurfaces = desktopVideoSafeMode ? [] : coveredPlayerSurfaces.concat(playerControlSurfaces);
-  const playerProgressSurfaces = applyPlayerProgressInset(layoutHost, shouldInsetPlayerOverlays, layoutRect, playerProgressAvoidSurfaces, desktopVideoSafeMode);
-  const playerSubtitleSurfaces = applyPlayerSubtitlesInset(layoutHost, shouldInsetPlayerOverlays, layoutRect, playerSubtitleAvoidSurfaces, desktopVideoSafeMode);
-  const contentSurfaces = applyNormalContentInset(shouldInsetNormalContent, layoutRect);
-  const headerSurfaces = applyHeaderControlsInset(layoutHost || document.body, shouldInsetHeaderControls, layoutRect, videoRoute);
+  const playerProgressSurfaces = applyPlayerProgressInset(layoutHost, shouldInsetPlayerOverlays, insetLayoutRect, playerProgressAvoidSurfaces, desktopVideoSafeMode);
+  const playerSubtitleSurfaces = applyPlayerSubtitlesInset(layoutHost, shouldInsetPlayerOverlays, insetLayoutRect, playerSubtitleAvoidSurfaces, desktopVideoSafeMode);
+  const contentSurfaces = applyNormalContentInset(shouldInsetNormalContent, insetLayoutRect);
+  const headerSurfaces = applyHeaderControlsInset(layoutHost || document.body, shouldInsetHeaderControls, insetLayoutRect, videoRoute);
 
   setLayoutClass("jellychat-drawer-open", drawerOpen);
   setLayoutClass("jellychat-video-route", videoRoute);
   setLayoutClass("jellychat-docked", docked);
   setLayoutClass("jellychat-mobile", mobileClassEnabled);
+  setLayoutClass("jellychat-phone-portrait", phonePortrait);
+  setLayoutClass("jellychat-compact-video-status", compactVideoStatus);
   setLayoutClass("jellychat-fullscreen", fullscreenActive);
   setLayoutClass("jellychat-desktop-video-safe", desktopVideoSafeMode);
   setLayoutClass("jellychat-drawer-left", drawerSide === "left");
@@ -1321,9 +1332,12 @@ export function updateLayout(reason: string): void {
     window.JellyChatDebug.drawerBackgroundAlpha = alphaPreference.alpha;
     window.JellyChatDebug.drawerBackgroundAlphaSource = alphaPreference.source;
     window.JellyChatDebug.viewportWidth = viewportWidth;
+    window.JellyChatDebug.viewportHeight = viewportHeight;
+    window.JellyChatDebug.phonePortrait = phonePortrait;
+    window.JellyChatDebug.compactVideoStatus = compactVideoStatus;
     window.JellyChatDebug.canDock = canDock;
-    window.JellyChatDebug.leftInset = layoutRect.leftInset;
-    window.JellyChatDebug.rightInset = layoutRect.rightInset;
+    window.JellyChatDebug.leftInset = insetLayoutRect.leftInset;
+    window.JellyChatDebug.rightInset = insetLayoutRect.rightInset;
     window.JellyChatDebug.lastLayoutUpdateAt = new Date().toISOString();
     const playerOverlayInsetApplied = playerControlSurfaces.length > 0 || playerProgressSurfaces.length > 0 || playerSubtitleSurfaces.length > 0;
     const desktopOverlayCssFallbackApplied = desktopVideoSafeMode && shouldInsetPlayerOverlays;
@@ -1354,6 +1368,7 @@ export function updateLayout(reason: string): void {
       || (mode === "fullscreen-overlay" && mobile)
       || (!fullscreenActive && docked)
       || mode === "mobile"
+      || mode === "phone-portrait-sheet"
       || !videoRoute;
   }
 

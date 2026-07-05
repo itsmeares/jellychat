@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { ChatActions, MessageActionMenuState, SyncPlayContext, TimelineItem, TypingRemoteUser } from "../types";
 import { emptyStateId, messagesId } from "../runtime/util";
 import { MessageGroup } from "./MessageGroup";
@@ -7,6 +8,8 @@ import { PlaybackTimelineRow } from "./PlaybackTimelineRow";
 type Props = {
   timelineItems: TimelineItem[];
   syncPlay: SyncPlayContext;
+  statusText: string;
+  statusActive: boolean;
   typingUsers: TypingRemoteUser[];
   actions: ChatActions;
   messageActionMenu: MessageActionMenuState;
@@ -65,7 +68,7 @@ function MessageActionMenu({ menu, actions }: { menu: MessageActionMenuState; ac
     };
   }, [actions, menu.open]);
 
-  return (
+  const menuContent = (
     <>
       {menu.open && menu.message ? (
         <div
@@ -97,9 +100,12 @@ function MessageActionMenu({ menu, actions }: { menu: MessageActionMenuState; ac
       ) : null}
     </>
   );
+
+  const portalHost = (document.fullscreenElement || document.body) as Element | null;
+  return portalHost ? createPortal(menuContent, portalHost) : menuContent;
 }
 
-export function MessageList({ timelineItems, syncPlay, typingUsers, actions, messageActionMenu, highlightedMessageId }: Props) {
+export function MessageList({ timelineItems, syncPlay, statusText, statusActive, typingUsers, actions, messageActionMenu, highlightedMessageId }: Props) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottom = useRef(true);
   const originalMessageIds = getMessageIds(timelineItems);
@@ -141,6 +147,9 @@ export function MessageList({ timelineItems, syncPlay, typingUsers, actions, mes
         }
       }}
     >
+      <div className={statusActive ? "jellyChatInlineStatus is-active" : "jellyChatInlineStatus"} role="status" aria-live="polite">
+        {statusText}
+      </div>
       <div
         id={emptyStateId}
         className="jellyChatEmptyState"

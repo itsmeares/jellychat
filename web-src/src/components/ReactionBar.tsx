@@ -93,6 +93,7 @@ export function ReactionBar({ actions, syncPlay }: Props) {
   const [quick, setQuick] = useState(prefs.current.quick);
   const [favorites, setFavorites] = useState(prefs.current.favorites);
   const [recent, setRecent] = useState(prefs.current.recent);
+  const [trayOpen, setTrayOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -129,6 +130,7 @@ export function ReactionBar({ actions, syncPlay }: Props) {
     const sent = await actions.sendReaction(emoji);
     if (sent) {
       setRecent((current) => addRecentReaction(current, emoji));
+      setTrayOpen(false);
     }
   }
 
@@ -239,9 +241,31 @@ export function ReactionBar({ actions, syncPlay }: Props) {
 
   const favoriteItems = toCatalogItems(favorites);
   const recentItems = toCatalogItems(recent);
+  const reactionsClassName = [
+    "jellyChatReactions",
+    trayOpen || pickerOpen ? "is-tray-open" : ""
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className="jellyChatReactions">
+    <div className={reactionsClassName}>
+      <button
+        type="button"
+        className="jellyChatReactionTrayToggle"
+        aria-label={trayOpen || pickerOpen ? "Hide quick reactions" : "Show quick reactions"}
+        aria-expanded={trayOpen || pickerOpen}
+        disabled={disabled}
+        onClick={() => {
+          if (trayOpen || pickerOpen) {
+            closePicker();
+            setTrayOpen(false);
+            return;
+          }
+
+          setTrayOpen(true);
+        }}
+      >
+        <span aria-hidden="true">:)</span>
+      </button>
       <div className="jellyChatQuickReactions" aria-label="Quick reactions">
         {quick.map((emoji, index) => (
           <button
@@ -263,9 +287,11 @@ export function ReactionBar({ actions, syncPlay }: Props) {
           onClick={() => {
             if (pickerOpen) {
               closePicker();
+              setTrayOpen(false);
               return;
             }
 
+            setTrayOpen(true);
             setPickerOpen(true);
           }}
         >
