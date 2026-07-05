@@ -1,7 +1,7 @@
 ---
 name: "JellyChat"
 guid: "a69744cc-2281-48bf-adef-8e451a16ff71"
-version: "0.8.0"
+version: "1.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "JellyChat drawer for Jellyfin SyncPlay sessions."
@@ -14,7 +14,6 @@ owner: "itsmeares"
 artifacts:
 - "Jellyfin.Plugin.JellyChat.dll"
 changelog: >
-  Polishes the existing JellyChat drawer, timeline, message actions, native
-  trigger states, empty/disabled states, touch layouts, accessibility, and
-  reduced-motion behavior while keeping the in-memory event stream and
-  self-contained injection model unchanged.
+  Marks JellyChat as the first stable release with polished SyncPlay chat,
+  replies, reactions, playback activity, responsive Jellyfin Web layouts, and
+  self-contained plugin-owned asset injection.
