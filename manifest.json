@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## What's new - Fixes v0.9.1 mobile, tablet, desktop, and web usability regressions without redesigning the chat surface. - Adds phone portrait bottom sheet layout and keeps phone landscape video chat compact. - Collapses phone portrait quick reactions by default and reduces tablet/mobile reaction grid height. - Replaces the persistent large SyncPlay banner on compact video layouts with lower-space inline status treatment. - Fixes drawer opacity/width behavior so the panel stays dark while revealing video behind it. - Fixes settings slider drag behavior and message reply/action menu reliability. ## Validation - npm run build - dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release - git diff --check - GitHub Actions build checks passed on PR #22.",
+                "targetAbi": "10.11.0.0",
+                "version": "0.9.1",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v0.9.1/Jellyfin.Plugin.JellyChat_0.9.1.zip",
+                "checksum": "3ec4a10d62cc9f1d6012f2c92c7630ff",
+                "timestamp": "2026-07-05T08:47:22"
+            },
+            {
                 "changelog": "## What's new - Hardens native Jellyfin trigger discovery across route and DOM changes. - Improves Jellyfin Desktop fallback trigger diagnostics and cleanup. - Expands SyncPlay/session diagnostics for current client, device, group, and room state. - Adds base-path and reverse-proxy diagnostics for self-contained asset/API URL resolution. - Improves README troubleshooting notes for trigger, session, and base-path issues. - Adds small mobile/iPad compatibility polish for viewport changes and touch targets. ## Notes - No product behavior changes are intended.",
                 "targetAbi": "10.11.0.0",
                 "version": "0.9.0",
