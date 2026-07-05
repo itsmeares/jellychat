@@ -13,6 +13,17 @@ type Props = {
   actions: ChatActions;
 };
 
+type SettingsRangeProps = {
+  label: string;
+  className?: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  output: string;
+  onValue: (value: number) => void;
+};
+
 function DrawerResizeHandle({ state, actions }: Props) {
   const activePointerId = useRef<number | null>(null);
 
@@ -88,6 +99,76 @@ function DrawerResizeHandle({ state, actions }: Props) {
   );
 }
 
+function SettingsRange({ label, className = "", min, max, step, value, output, onValue }: SettingsRangeProps) {
+  const activePointerId = useRef<number | null>(null);
+
+  function quantize(nextValue: number): number {
+    const clamped = Math.min(max, Math.max(min, nextValue));
+    const stepped = Math.round((clamped - min) / step) * step + min;
+    return Math.min(max, Math.max(min, Number(stepped.toFixed(step < 1 ? 2 : 0))));
+  }
+
+  function valueFromClientX(input: HTMLInputElement, clientX: number): number {
+    const rect = input.getBoundingClientRect();
+    if (!rect.width) {
+      return value;
+    }
+
+    return quantize(min + ((clientX - rect.left) / rect.width) * (max - min));
+  }
+
+  function updateFromPointer(event: ReactPointerEvent<HTMLInputElement>) {
+    onValue(valueFromClientX(event.currentTarget, event.clientX));
+  }
+
+  function stopDrag(input: HTMLInputElement) {
+    if (activePointerId.current !== null && input.hasPointerCapture(activePointerId.current)) {
+      input.releasePointerCapture(activePointerId.current);
+    }
+    activePointerId.current = null;
+  }
+
+  return (
+    <label className={["jellyChatSetting", className].filter(Boolean).join(" ")}>
+      <span>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onPointerDown={(event) => {
+          if (event.button !== 0) {
+            return;
+          }
+
+          activePointerId.current = event.pointerId;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          event.currentTarget.focus({ preventScroll: true });
+          updateFromPointer(event);
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onPointerMove={(event) => {
+          if (activePointerId.current !== event.pointerId) {
+            return;
+          }
+
+          updateFromPointer(event);
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onPointerUp={(event) => stopDrag(event.currentTarget)}
+        onPointerCancel={(event) => stopDrag(event.currentTarget)}
+        onInput={(event) => onValue(Number(event.currentTarget.value))}
+        onChange={(event) => onValue(Number(event.currentTarget.value))}
+        onKeyDown={(event) => event.stopPropagation()}
+      />
+      <output>{output}</output>
+    </label>
+  );
+}
+
 function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open: boolean; onClose: () => void }) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -146,32 +227,27 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
         }
       }}
     >
-      <label className="jellyChatSetting">
-        <span>Width</span>
-        <input
-          type="range"
-          min={state.drawerWidthMin}
-          max={state.drawerWidthMax}
-          step="8"
-          value={state.drawerWidth}
-          onChange={(event) => actions.setDrawerWidth(Number(event.target.value), "settings")}
-        />
-        <output>{state.drawerWidth}px</output>
-      </label>
-      <label className="jellyChatSetting">
-        <span>Background</span>
-        <input
-          type="range"
-          min={drawerBackgroundAlphaMin}
-          max={drawerBackgroundAlphaMax}
-          step="0.01"
-          value={state.drawerBackgroundAlpha}
-          onChange={(event) => actions.setDrawerBackgroundAlpha(clampDrawerBackgroundAlpha(Number(event.target.value)))}
-        />
-        <output>{Math.round(state.drawerBackgroundAlpha * 100)}%</output>
-      </label>
+      <SettingsRange
+        label="Width"
+        className="is-width-setting"
+        min={state.drawerWidthMin}
+        max={state.drawerWidthMax}
+        step={8}
+        value={state.drawerWidth}
+        output={state.drawerWidth + "px"}
+        onValue={(nextValue) => actions.setDrawerWidth(nextValue, "settings")}
+      />
+      <SettingsRange
+        label="Background"
+        min={drawerBackgroundAlphaMin}
+        max={drawerBackgroundAlphaMax}
+        step={0.01}
+        value={state.drawerBackgroundAlpha}
+        output={Math.round(state.drawerBackgroundAlpha * 100) + "%"}
+        onValue={(nextValue) => actions.setDrawerBackgroundAlpha(clampDrawerBackgroundAlpha(nextValue))}
+      />
       <div className="jellyChatSettingsActions">
-        <button type="button" onClick={actions.resetDrawerWidth}>Reset width</button>
+        <button className="is-width-action" type="button" onClick={actions.resetDrawerWidth}>Reset width</button>
         <button type="button" onClick={actions.resetDrawerBackgroundAlpha}>Reset background</button>
         <button type="button" onClick={actions.resetDrawerPreferences}>Reset all</button>
       </div>
@@ -257,6 +333,8 @@ export function ChatDrawer({ state, actions }: Props) {
       <MessageList
         timelineItems={state.timelineItems}
         syncPlay={state.syncPlay}
+        statusText={statusText}
+        statusActive={state.syncPlay.inGroup}
         typingUsers={state.typingRemoteUsers}
         actions={actions}
         messageActionMenu={state.messageActionMenu}
