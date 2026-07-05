@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="840" viewBox="0 0 1440 840" role="img" aria-labelledby="title desc">
+  <title id="title">JellyChat preview placeholder</title>
+  <desc id="desc">A polished placeholder preview showing a Jellyfin video player with the JellyChat chat drawer open.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#10161d"/>
+      <stop offset="1" stop-color="#070a0e"/>
+    </linearGradient>
+    <linearGradient id="video" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#192838"/>
+      <stop offset="0.52" stop-color="#111820"/>
+      <stop offset="1" stop-color="#05070a"/>
+    </linearGradient>
+    <linearGradient id="drawer" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#1b222b"/>
+      <stop offset="1" stop-color="#11161c"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="34" flood-color="#000000" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+  <rect width="1440" height="840" fill="url(#page)"/>
+  <rect x="72" y="70" width="1296" height="700" rx="24" fill="#0d1218" stroke="#27313c" filter="url(#shadow)"/>
+  <rect x="72" y="70" width="1296" height="64" rx="24" fill="#131a22"/>
+  <rect x="72" y="110" width="1296" height="24" fill="#131a22"/>
+  <circle cx="118" cy="102" r="10" fill="#00a4dc"/>
+  <rect x="144" y="94" width="112" height="16" rx="8" fill="#e9eef5" opacity="0.92"/>
+  <rect x="1012" y="92" width="68" height="20" rx="10" fill="#27313c"/>
+  <rect x="1100" y="92" width="68" height="20" rx="10" fill="#27313c"/>
+  <circle cx="1326" cy="102" r="16" fill="#222c37"/>
+  <rect x="110" y="168" width="820" height="548" rx="18" fill="url(#video)" stroke="#25313d"/>
+  <circle cx="520" cy="410" r="54" fill="#00a4dc" opacity="0.16"/>
+  <path d="M505 382 L505 438 L552 410 Z" fill="#dff7ff" opacity="0.92"/>
+  <rect x="148" y="650" width="744" height="8" rx="4" fill="#2a3541"/>
+  <rect x="148" y="650" width="348" height="8" rx="4" fill="#00a4dc"/>
+  <rect x="148" y="680" width="38" height="14" rx="7" fill="#d9e3ec" opacity="0.86"/>
+  <rect x="206" y="680" width="96" height="14" rx="7" fill="#637285" opacity="0.65"/>
+  <rect x="804" y="680" width="88" height="14" rx="7" fill="#637285" opacity="0.65"/>
+  <rect x="954" y="168" width="376" height="548" rx="18" fill="url(#drawer)" stroke="#344250"/>
+  <rect x="984" y="196" width="112" height="22" rx="11" fill="#f4f8fb"/>
+  <rect x="984" y="228" width="220" height="14" rx="7" fill="#9baabd" opacity="0.72"/>
+  <circle cx="1286" cy="213" r="18" fill="#00a4dc" opacity="0.18"/>
+  <path d="M1277 213 h18 M1286 204 v18" stroke="#85e2ff" stroke-width="3" stroke-linecap="round"/>
+  <rect x="984" y="274" width="222" height="58" rx="14" fill="#25303a"/>
+  <rect x="1006" y="292" width="74" height="12" rx="6" fill="#f2f6fa" opacity="0.9"/>
+  <rect x="1006" y="313" width="158" height="10" rx="5" fill="#b7c4d3" opacity="0.64"/>
+  <rect x="1080" y="352" width="220" height="72" rx="16" fill="#06384a"/>
+  <rect x="1102" y="372" width="78" height="12" rx="6" fill="#e4f9ff" opacity="0.92"/>
+  <rect x="1102" y="394" width="162" height="10" rx="5" fill="#9fe8ff" opacity="0.7"/>
+  <rect x="984" y="446" width="252" height="76" rx="16" fill="#25303a"/>
+  <rect x="1006" y="467" width="96" height="12" rx="6" fill="#f2f6fa" opacity="0.88"/>
+  <rect x="1006" y="490" width="190" height="10" rx="5" fill="#b7c4d3" opacity="0.62"/>
+  <rect x="1006" y="544" width="144" height="34" rx="17" fill="#16212b" stroke="#354656"/>
+  <text x="1025" y="567" fill="#c7d4e3" font-family="Segoe UI, Arial, sans-serif" font-size="18">Looks great</text>
+  <text x="1180" y="568" fill="#9fe8ff" font-family="Segoe UI, Arial, sans-serif" font-size="20">+ react</text>
+  <rect x="984" y="640" width="264" height="42" rx="21" fill="#0c1116" stroke="#354656"/>
+  <rect x="1008" y="656" width="128" height="10" rx="5" fill="#8e9bad" opacity="0.64"/>
+  <circle cx="1278" cy="661" r="21" fill="#00a4dc"/>
+  <path d="M1270 661 h14 m-5 -5 l5 5 -5 5" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="110" y="746" width="250" height="18" rx="9" fill="#24303b" opacity="0.72"/>
+  <text x="384" y="761" fill="#93a4b7" font-family="Segoe UI, Arial, sans-serif" font-size="18">Placeholder preview - replace with a real JellyChat demo later</text>
+</svg>

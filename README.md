@@ -1,224 +1,84 @@
 # JellyChat
 
-JellyChat is a Jellyfin plugin MVP that adds a SyncPlay chat drawer to Jellyfin web clients. It uses a plugin-owned room event stream and an injected React frontend; it does not use an external WebSocket server or any new network ports.
+**Watch together. Chat in sync.**
 
-## Current MVP
+A native-feeling watch party chat for Jellyfin SyncPlay.
 
-- Adds a chat drawer for active SyncPlay sessions in the Jellyfin web client.
-- Stores recent room events in plugin-owned in-memory history, grouped by SyncPlay group.
-- Sends chat messages as `chat.message` events.
-- Supports lightweight message replies, reply quotes, jump-to-original highlighting, and copy-message actions.
-- Groups consecutive chat messages with compact timestamps and lower-emphasis playback rows.
-- Shows ephemeral typing presence through `typing.update` events.
-- Supports drawer width and background preferences in the browser.
-- Mounts the JellyChat trigger into native Jellyfin header or video OSD controls when possible.
-- Refreshes recent events through the plugin API.
-- Does not use Jellyfin toast notifications as the chat transport.
-- Does not run a separate WebSocket service.
-- Does not require opening or configuring additional ports.
-- Uses self-contained Jellyfin Web injection through JellyChat-owned middleware and asset endpoints.
-- Injects `jellychat.css` and `jellychat.js` into Jellyfin web through JellyChat-owned middleware and asset endpoints.
+![JellyChat preview](assets/demo/jellychat-preview.svg)
 
-## Current Limitations
+JellyChat adds a compact chat drawer to Jellyfin Web for people watching together in SyncPlay. It stays inside Jellyfin, uses the active SyncPlay room as the chat room, and does not require a separate chat server, WebSocket service, or extra network port.
 
-- Event history is in memory only and is lost when Jellyfin or the plugin restarts.
-- History is bounded to recent events per SyncPlay group.
-- The drawer is designed for Jellyfin web clients; native client support is not part of this MVP.
-- SyncPlay group detection depends on the session and group data exposed by the running Jellyfin server/client combination.
-- The drawer is injected into Jellyfin web and may need follow-up adjustments if Jellyfin changes its web client markup.
-- Fullscreen behavior has only a basic MVP check, not exhaustive device coverage.
+## Features
 
-## Plugin Metadata
+- SyncPlay room chat with messages, replies, copy actions, and jump-to-original highlights.
+- Floating emoji reactions for quick watch-party feedback.
+- Playback activity rows for local play, pause, seek, and start events.
+- Typing presence and unread/activity indicators while the drawer is closed.
+- Native-feeling Jellyfin trigger placement in the header or video controls when available.
+- Resizable desktop drawer with side and background preferences.
+- Phone portrait bottom sheet layout, tablet-friendly touch targets, and Jellyfin Desktop fallback behavior.
+- Self-contained Jellyfin Web injection through JellyChat-owned middleware and same-origin plugin asset endpoints.
 
-- Repo name: `JellyChat`
-- Install folder: `JellyChat`
-- Jellyfin display name: `JellyChat`
-- Internal project path: `Jellyfin.Plugin.JellyChat`
-- Version: `0.8.0`
-- Plugin ID: `a69744cc-2281-48bf-adef-8e451a16ff71`
-- Framework: `net9.0`
-- Description: JellyChat drawer backed by a plugin-owned in-memory event stream, with no toast chat transport, external WebSocket server, or new ports.
+## Installation
 
-## Prerequisites
-
-- Tested with Jellyfin 10.11.x.
-- Built against `Jellyfin.Controller` / `Jellyfin.Model` `10.11.8`.
-- Target ABI: `10.11.0.0`.
-- .NET SDK 9.0 for building.
-- JellyChat v0.5.0 and later do not require Jellyfin File Transformation.
-  - Older JellyChat versions before v0.5.0 required File Transformation for Jellyfin Web injection.
-
-## Frontend Build
-
-JellyChat's injected frontend lives in `web-src` and builds stable asset names into `Jellyfin.Plugin.JellyChat/Web`:
-
-```bash
-cd web-src
-npm install
-npm run build
-```
-
-The build emits:
+Install JellyChat through the Jellyfin plugin catalog by adding this plugin repository:
 
 ```text
-Jellyfin.Plugin.JellyChat/Web/jellychat.css
-Jellyfin.Plugin.JellyChat/Web/jellychat.js
+Dashboard -> Plugins -> Repositories -> Add
 ```
-
-`dotnet publish` runs `npm run build` only. Run `npm install` or `npm ci` as a separate setup step before publishing.
-
-At runtime, JellyChat serves those assets from same-origin plugin endpoints:
-
-```text
-/JellyChat/Assets/jellychat.css
-/JellyChat/Assets/jellychat.js
-```
-
-When Jellyfin is served behind a subpath such as `/jellyfin`, injected asset
-URLs include that base path, for example `/jellyfin/JellyChat/Assets/jellychat.js`.
-
-## Repository Install
-
-In Jellyfin, go to:
-
-```text
-Dashboard -> Plugins -> Manage Repositories -> New Repository
-```
-
-Use:
 
 ```text
 Repository Name: JellyChat
 Repository URL: https://raw.githubusercontent.com/itsmeares/jellychat/main/manifest.json
 ```
 
-Save the repository, install `JellyChat` from the plugin catalog, then restart Jellyfin.
+Save the repository, install `JellyChat` from the catalog, then restart Jellyfin.
 
-## Manual Install on Windows
+JellyChat targets Jellyfin `10.11.x` with target ABI `10.11.0.0`.
 
-From the repository root, publish the plugin:
+## Manual Install
 
-```powershell
-dotnet publish .\Jellyfin.Plugin.JellyChat\Jellyfin.Plugin.JellyChat.csproj -c Release
-```
+Use the repository install when possible. For manual installs, download the release zip from the [latest GitHub release](https://github.com/itsmeares/jellychat/releases/latest), extract it into a Jellyfin plugin folder named `JellyChat`, then restart Jellyfin.
 
-Clean the old plugin and copy the publish output into a Jellyfin plugin folder:
-
-```powershell
-$pluginFolder = "C:\ProgramData\Jellyfin\Server\plugins\JellyChat"
-$publishFolder = ".\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish"
-
-Remove-Item $pluginFolder -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $pluginFolder | Out-Null
-Copy-Item "$publishFolder\*" $pluginFolder -Recurse -Force
-```
-
-Restart Jellyfin after copying the files.
-
-For direct installs that use the local app data Jellyfin path instead:
-
-```powershell
-$pluginFolder = "$env:LOCALAPPDATA\jellyfin\plugins\JellyChat"
-$publishFolder = ".\Jellyfin.Plugin.JellyChat\bin\Release\net9.0\publish"
-
-Remove-Item $pluginFolder -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $pluginFolder | Out-Null
-Copy-Item "$publishFolder\*" $pluginFolder -Recurse -Force
-```
-
-Use the plugin directory for your Jellyfin server data path.
-
-## Local Development Deploy
-
-From repository root:
-
-```bash
-./scripts/deploy-dev.sh
-```
-
-What it does:
-
-- Publishes the solution in Debug.
-- Copies publish output to Jellyfin plugin directory.
-
-Environment overrides:
-
-```bash
-JELLYFIN_DATA_DIR="$HOME/Library/Application Support/jellyfin" \
-PLUGIN_DIR="$HOME/Library/Application Support/jellyfin/plugins/JellyChat" \
-./scripts/deploy-dev.sh
-```
-
-Notes:
-
-- `PLUGIN_DIR` takes precedence over `JELLYFIN_DATA_DIR`.
-- Default `JELLYFIN_DATA_DIR` is `$HOME/Library/Application Support/jellyfin`.
-- Restart Jellyfin after deploy.
-
-## Release Build
-
-Build the frontend assets, then publish the v0.8.0 release output:
-
-```bash
-cd web-src
-npm run build
-cd ..
-dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
-```
-
-The publish output is written to:
+Common plugin folder locations include:
 
 ```text
-Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
+Windows: C:\ProgramData\Jellyfin\Server\plugins\JellyChat
+Linux:   /var/lib/jellyfin/plugins/JellyChat
+macOS:   ~/.local/share/jellyfin/plugins/JellyChat
 ```
 
-Create the release zip from the contents of the publish directory:
+Use the plugin directory for your Jellyfin server data path if it differs.
 
-```powershell
-$publish = "Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish"
-New-Item -ItemType Directory -Force artifacts | Out-Null
-Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/Jellyfin.Plugin.JellyChat_0.8.0.zip" -Force
-```
+## Usage
 
-Create a GitHub release tagged `v0.8.0` and attach `Jellyfin.Plugin.JellyChat_0.8.0.zip`. The release workflow opens a manifest update pull request with the release asset URL, checksum, timestamp, and version entry after the release is published.
+1. Start playback in Jellyfin Web.
+2. Join or create a SyncPlay group.
+3. Open JellyChat from the Jellyfin header or video controls.
+4. Send messages, reply to recent messages, react with emoji, and keep watching.
 
-## Testing Checklist
+JellyChat follows the current SyncPlay room. If you leave the room or Jellyfin cannot resolve the current session, the composer explains that chat is waiting for an active SyncPlay group.
 
-- Desktop to iPad SyncPlay chat.
-- iPad to desktop SyncPlay chat.
-- SyncPlay group detection before and after joining a group.
-- Message send from the drawer.
-- Message reply, quote jump/highlight, and copy-message actions.
-- Message history refresh on the other client.
-- Drawer behavior on the video player page.
-- Basic fullscreen check with the drawer open and closed.
+## Client Behavior
 
-## Troubleshooting
+- **Web:** JellyChat runs inside Jellyfin Web and mounts into native header or video controls when Jellyfin exposes a suitable host.
+- **Desktop:** Jellyfin Desktop uses the same injected web client, with a Desktop-safe trigger fallback and video-control insets when needed.
+- **Tablet:** The drawer keeps touch targets large enough for iPad-sized layouts while preserving the desktop-style chat surface.
+- **Phone portrait:** JellyChat switches to a bottom sheet so chat does not compete with the video controls.
 
-- Chat button does not appear:
-  - The button should mount in the Jellyfin header or video OSD. In Jellyfin Desktop, JellyChat may use its Desktop overlay fallback when native hosts are missing.
-  - Restart Jellyfin after plugin deploy/update.
-  - Open `/JellyChat/Assets/jellychat.js` and `/JellyChat/Assets/jellychat.css` in the same browser session and confirm both return `200`. If Jellyfin uses a subpath, include that base path.
-    - Example: `/jellyfin/JellyChat/Assets/jellychat.js`.
-  - Open `/web/index.html`, view source, and confirm one `JellyChat:start` marker block is present.
-  - Check the browser console for `[JellyChat] self-contained assets loaded` and other JellyChat injection or asset logs.
-  - In the browser console, run `window.JellyChatDebug.getSummary()` and check `triggerMode`, `triggerHostFound`, `triggerCandidateCount`, `lastTriggerMountError`, `rootCount`, `buttonCount`, and `desktopTriggerFallbackActive`.
-- Messages do not appear on another device:
-  - Confirm both devices are in the same SyncPlay group.
-  - Refresh or reopen the drawer to force an event poll.
-  - Check the browser console for `[JellyChat] self-contained assets loaded` and other `[JellyChat]` logs.
-  - Run `window.JellyChatDebug.getSummary()` and check `currentSessionId`, `currentDeviceId`, `currentClientName`, `syncPlayInGroup`, `syncPlayActiveGroupId`, `syncPlayMembershipSource`, `syncPlayCurrentUserSessionCount`, `syncPlayAmbiguousSession`, and `lastSyncPlayResolutionError`.
-  - Same-account multi-client setups need a resolved current session. If `syncPlayAmbiguousSession` is `true`, compare `syncPlayCurrentUserSessionIds`, `syncPlayMatchedSessionIds`, `currentApiDeviceId`, and `currentDeviceId` in `window.JellyChatDebug.dump().details.events`.
-- Reverse proxy or base-path installs:
-  - Confirm the asset URLs include the Jellyfin base path when needed, for example `/jellyfin/JellyChat/Assets/jellychat.css`.
-  - Run `window.JellyChatDebug.getSummary()` and check `assetBasePath`, `assetBasePathSource`, `assetBasePathError`, `injectedAssetBaseUrl`, `lastApiPath`, `lastApiUrlPath`, `lastApiUrlSource`, `lastApiUrlError`, `lastApiStatus`, and `lastApiError`.
-  - Include `window.JellyChatDebug.dump()` in bug reports when possible.
+Native Jellyfin clients that do not use Jellyfin Web are not separate JellyChat targets.
+
+## Documentation
+
+- [Development](docs/development.md): repo layout, frontend build, .NET publish, local deploy, and debug commands.
+- [Release](docs/release.md): version bump, build, zip packaging, GitHub release asset, and manifest update flow.
+- [Troubleshooting](docs/troubleshooting.md): missing button, cross-device messages, SyncPlay resolution, reverse proxy/base-path checks, and `window.JellyChatDebug`.
 
 ## Acknowledgements
 
 JellyChat started as a fork of [AbhayVAshokan/jellyfin-syncplay-chat](https://github.com/AbhayVAshokan/jellyfin-syncplay-chat), the original Syncplay Chat plugin for Jellyfin.
 
-This project has since been renamed, refactored, and extended with a plugin-owned room event backend, a React/Vite injected frontend, JellyChat internal plugin identity, and additional Jellyfin web layout work.
+This project has since been renamed, refactored, and extended with a JellyChat-owned room event backend, a React/Vite injected frontend, self-contained Jellyfin Web injection, and Jellyfin Web layout work for desktop, tablet, and phone viewing.
 
 Thanks to the original Syncplay Chat project for providing the starting point.
 
