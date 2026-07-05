@@ -59,11 +59,14 @@ Use the plugin directory for your Jellyfin server data path if it differs.
 
 JellyChat follows the current SyncPlay room. If you leave the room or Jellyfin cannot resolve the current session, the composer explains that chat is waiting for an active SyncPlay group.
 
-## Client Behavior
+## Client Behavior and Compatibility
+
+### All of the clients below are tested and supported by JellyChat
 
 - **Web:** JellyChat runs inside Jellyfin Web and mounts into native header or video controls when Jellyfin exposes a suitable host.
 - **Desktop:** Jellyfin Desktop uses the same injected web client, with a Desktop-safe trigger fallback and video-control insets when needed.
 - **Tablet:** The drawer keeps touch targets large enough for iPad-sized layouts while preserving the desktop-style chat surface.
+- **Phone landscape:** The drawer uses the compact mobile side layout so chat stays accessible without taking over the player.
 - **Phone portrait:** JellyChat switches to a bottom sheet so chat does not interrupt screen use in main menu.
 
 Native Jellyfin clients that do not use Jellyfin Web are not separate JellyChat targets.
