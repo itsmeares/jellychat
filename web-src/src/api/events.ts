@@ -149,7 +149,6 @@ export async function postChatMessage(args: {
   groupId: string;
   senderSessionId: string;
   text: string;
-  participants: string[];
   clientEventId?: string;
   replyTo?: ReplyTarget | null;
 }): Promise<ChatMessage | null> {
@@ -158,8 +157,7 @@ export async function postChatMessage(args: {
     SenderSessionId: args.senderSessionId || "",
     Type: "chat.message",
     Text: args.text,
-    ClientEventId: args.clientEventId || createClientEventId(),
-    ParticipantsCsv: args.participants.join(",")
+    ClientEventId: args.clientEventId || createClientEventId()
   };
 
   if (args.replyTo) {
@@ -182,7 +180,6 @@ export async function postPlaybackEvent(args: {
   groupId: string;
   senderSessionId: string;
   type: PlaybackEventType;
-  participants: string[];
   fromPositionTicks?: number;
   toPositionTicks?: number;
   itemId?: string;
@@ -194,8 +191,7 @@ export async function postPlaybackEvent(args: {
     SenderSessionId: args.senderSessionId || "",
     Type: args.type,
     PlaybackAction: args.type.replace("playback.", ""),
-    ClientEventId: args.clientEventId || createClientEventId(),
-    ParticipantsCsv: args.participants.join(",")
+    ClientEventId: args.clientEventId || createClientEventId()
   };
 
   if (typeof args.fromPositionTicks === "number") {
@@ -222,7 +218,6 @@ export async function postEmojiReaction(args: {
   groupId: string;
   senderSessionId: string;
   emoji: string;
-  participants: string[];
   itemId?: string;
   itemName?: string;
   positionSeconds?: number;
@@ -233,8 +228,7 @@ export async function postEmojiReaction(args: {
     SenderSessionId: args.senderSessionId || "",
     Type: "reaction.emoji",
     Emoji: args.emoji,
-    ClientEventId: args.clientEventId || createClientEventId(),
-    ParticipantsCsv: args.participants.join(",")
+    ClientEventId: args.clientEventId || createClientEventId()
   };
 
   if (args.itemId) {
@@ -257,7 +251,6 @@ export async function postTypingUpdate(args: {
   groupId: string;
   senderSessionId: string;
   isTyping: boolean;
-  participants: string[];
   clientEventId?: string;
 }): Promise<RoomEvent | null> {
   const normalized = normalizePostResponse(await postJson("JellyChat/Events", {
@@ -265,8 +258,7 @@ export async function postTypingUpdate(args: {
     SenderSessionId: args.senderSessionId || "",
     Type: "typing.update",
     IsTyping: args.isTyping,
-    ClientEventId: args.clientEventId || createClientEventId(),
-    ParticipantsCsv: args.participants.join(",")
+    ClientEventId: args.clientEventId || createClientEventId()
   }, true));
 
   return normalized ? normalizeRoomEvent(normalized) : null;

@@ -11,6 +11,7 @@ JellyChat adds a compact chat drawer to Jellyfin Web for people watching togethe
 ## Features
 
 - SyncPlay room chat with messages, replies, copy actions, and jump-to-original highlights.
+- Optional per-room password protection with automatic owner handoff when the current owner leaves.
 - Floating emoji reactions for quick watch-party feedback.
 - Playback activity rows for local play, pause, seek, and start events.
 - Typing presence and unread/activity indicators while the drawer is closed.
@@ -58,6 +59,8 @@ Use the plugin directory for your Jellyfin server data path if it differs.
 4. Send messages, reply to recent messages, react with emoji, and keep watching.
 
 JellyChat follows the current SyncPlay room. If you leave the room or Jellyfin cannot resolve the current session, the composer explains that chat is waiting for an active SyncPlay group.
+
+The user who creates the SyncPlay group owns its JellyChat room. The owner can enable, change, or explicitly disable a room password from JellyChat settings. Protection applies only to JellyChat; locked users can continue using SyncPlay. Access is granted per Jellyfin session, so another device using the same account must unlock separately. When the owner leaves, ownership passes to the earliest remaining room participant. All room settings and history are discarded when the final participant leaves.
 
 ## Client Behavior and Compatibility
 

@@ -44,6 +44,25 @@ window.JellyChatDebug.getSummary().status
 
 Check `currentGroupId`, `syncPlayInGroup`, `syncPlayActiveGroupId`, `syncPlayResolutionState`, `lastApiStatus`, and `lastApiError`.
 
+## JellyChat Room Locked
+
+A JellyChat room password does not block SyncPlay membership or playback. If the lock screen remains after submitting the password:
+
+- Confirm the password with the current room owner.
+- Confirm this browser session is still in the expected SyncPlay group.
+- Unlock each device separately, even when the devices use the same Jellyfin account.
+- Ask the current owner to change or explicitly disable protection if the password is no longer available.
+
+Leaving and rejoining revokes that session's previous access. If the final SyncPlay participant leaves, the room is destroyed; a later group starts with fresh ownership, access, password, and history state.
+
+Useful console check:
+
+```js
+window.JellyChatDebug.getSummary().status
+```
+
+Check `roomPasswordProtected`, `roomAuthorized`, `roomIsOwner`, `lastApiStatus`, and `lastApiError`. Debug output contains access flags only, not the room password or recoverable password data.
+
 ## SyncPlay And Session Resolution
 
 Same-account multi-device setups can expose more than one Jellyfin session for the same user. JellyChat tries to resolve the current client from available session and device signals.

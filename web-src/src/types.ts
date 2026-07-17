@@ -7,6 +7,24 @@ export type SyncPlayContext = {
   participantCount: number;
   unavailable: boolean;
   membershipSource: string;
+  accessResolved: boolean;
+  passwordProtected: boolean;
+  authorized: boolean;
+  isOwner: boolean;
+};
+
+export type RoomAccessInfo = {
+  inGroup: boolean;
+  groupId: string;
+  groupName: string;
+  sessionId: string;
+  deviceId: string;
+  participants: string[];
+  exactMembership: boolean;
+  membershipSource: string;
+  passwordProtected: boolean;
+  authorized: boolean;
+  isOwner: boolean;
 };
 
 export type RoomEvent = {
@@ -151,6 +169,14 @@ export type ChatActions = {
   closeMessageActionMenu: (reason: string) => void;
   copyMessage: (message: ChatMessage) => Promise<boolean>;
   highlightMessage: (messageId: string) => void;
+  unlockRoom: (password: string) => Promise<RoomActionResult>;
+  setRoomPassword: (password: string) => Promise<RoomActionResult>;
+  disableRoomPassword: () => Promise<RoomActionResult>;
+};
+
+export type RoomActionResult = {
+  success: boolean;
+  message: string;
 };
 
 export type MessageActionMenuState = {

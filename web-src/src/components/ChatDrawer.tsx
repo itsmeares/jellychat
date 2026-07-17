@@ -7,6 +7,7 @@ import { clampDrawerBackgroundAlpha, drawerBackgroundAlphaMax, drawerBackgroundA
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { ReactionBar } from "./ReactionBar";
+import { LockedRoom } from "./LockedRoom";
 
 type Props = {
   state: ChatState;
@@ -171,6 +172,40 @@ function SettingsRange({ label, className = "", min, max, step, value, output, o
 
 function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open: boolean; onClose: () => void }) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState("");
+
+  useEffect(() => {
+    setPassword("");
+    setPasswordFeedback("");
+  }, [state.syncPlay.groupId, state.syncPlay.isOwner, state.syncPlay.passwordProtected]);
+
+  async function submitPassword() {
+    if (!password || passwordBusy) {
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordFeedback("");
+    const result = await actions.setRoomPassword(password);
+    setPassword("");
+    setPasswordBusy(false);
+    setPasswordFeedback(result.message);
+  }
+
+  async function disablePassword() {
+    if (passwordBusy) {
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordFeedback("");
+    const result = await actions.disableRoomPassword();
+    setPassword("");
+    setPasswordBusy(false);
+    setPasswordFeedback(result.message);
+  }
 
   useEffect(() => {
     if (!open) {
@@ -246,6 +281,40 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
         output={Math.round(state.drawerBackgroundAlpha * 100) + "%"}
         onValue={(nextValue) => actions.setDrawerBackgroundAlpha(clampDrawerBackgroundAlpha(nextValue))}
       />
+      {state.syncPlay.inGroup && state.syncPlay.accessResolved && state.syncPlay.isOwner ? (
+        <section className="jellyChatRoomPasswordSettings" aria-labelledby="jellyChatRoomPasswordHeading">
+          <h3 id="jellyChatRoomPasswordHeading">Room privacy</h3>
+          <p>{state.syncPlay.passwordProtected ? "Password protection is enabled." : "Add a password for this JellyChat room."}</p>
+          <label>
+            <span>{state.syncPlay.passwordProtected ? "New password" : "Password"}</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              disabled={passwordBusy}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void submitPassword();
+                }
+              }}
+            />
+          </label>
+          <div className="jellyChatRoomPasswordActions">
+            <button type="button" disabled={passwordBusy || password.length === 0} onClick={() => void submitPassword()}>
+              {state.syncPlay.passwordProtected ? "Change password" : "Enable protection"}
+            </button>
+            {state.syncPlay.passwordProtected ? (
+              <button className="is-disable-password" type="button" disabled={passwordBusy} onClick={() => void disablePassword()}>
+                Disable protection
+              </button>
+            ) : null}
+          </div>
+          {passwordFeedback ? <div className="jellyChatRoomFeedback" role="status" aria-live="polite">{passwordFeedback}</div> : null}
+        </section>
+      ) : null}
       <div className="jellyChatSettingsActions">
         <button className="is-width-action" type="button" onClick={actions.resetDrawerWidth}>Reset width</button>
         <button type="button" onClick={actions.resetDrawerBackgroundAlpha}>Reset background</button>
@@ -257,9 +326,18 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
 
 export function ChatDrawer({ state, actions }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const statusText = state.syncPlay.inGroup
-    ? "In SyncPlay group: " + getCurrentGroupLabel()
-    : "Not in a SyncPlay group";
+  const checkingAccess = state.syncPlay.inGroup && !state.syncPlay.accessResolved;
+  const roomLocked = state.syncPlay.inGroup
+    && state.syncPlay.accessResolved
+    && state.syncPlay.passwordProtected
+    && !state.syncPlay.authorized;
+  const statusText = checkingAccess
+    ? "Checking JellyChat room access"
+    : roomLocked
+      ? "JellyChat room is locked"
+      : state.syncPlay.inGroup
+        ? "In SyncPlay group: " + getCurrentGroupLabel()
+        : "Not in a SyncPlay group";
   const controls = (
     <div className="jellyChatHeaderControls">
       <button
@@ -327,21 +405,31 @@ export function ChatDrawer({ state, actions }: Props) {
         {controls}
         <DrawerSettingsPopover state={state} actions={actions} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </div>
-      <div id={statusId} className={state.syncPlay.inGroup ? "is-active" : ""} role="status" aria-live="polite">
+      <div id={statusId} className={state.syncPlay.inGroup && state.syncPlay.authorized ? "is-active" : ""} role="status" aria-live="polite">
         {statusText}
       </div>
-      <MessageList
-        timelineItems={state.timelineItems}
-        syncPlay={state.syncPlay}
-        statusText={statusText}
-        statusActive={state.syncPlay.inGroup}
-        typingUsers={state.typingRemoteUsers}
-        actions={actions}
-        messageActionMenu={state.messageActionMenu}
-        highlightedMessageId={state.highlightedMessageId}
-      />
-      <ReactionBar actions={actions} syncPlay={state.syncPlay} />
-      <Composer actions={actions} sending={state.sending} syncPlay={state.syncPlay} replyTarget={state.replyTarget} replyTargetFound={state.replyTargetFound} />
+      {checkingAccess || roomLocked ? (
+        <LockedRoom
+          key={state.syncPlay.groupId + ":" + state.syncPlay.sessionId}
+          actions={actions}
+          checking={checkingAccess}
+        />
+      ) : (
+        <>
+          <MessageList
+            timelineItems={state.timelineItems}
+            syncPlay={state.syncPlay}
+            statusText={statusText}
+            statusActive={state.syncPlay.inGroup && state.syncPlay.authorized}
+            typingUsers={state.typingRemoteUsers}
+            actions={actions}
+            messageActionMenu={state.messageActionMenu}
+            highlightedMessageId={state.highlightedMessageId}
+          />
+          <ReactionBar actions={actions} syncPlay={state.syncPlay} />
+          <Composer actions={actions} sending={state.sending} syncPlay={state.syncPlay} replyTarget={state.replyTarget} replyTargetFound={state.replyTargetFound} />
+        </>
+      )}
     </aside>
   );
 }

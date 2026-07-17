@@ -34,8 +34,8 @@ function updateDebug(reason?: string): void {
   }
 }
 
-function emit(): void {
-  updateDebug();
+function emit(reason?: string): void {
+  updateDebug(reason);
   const snapshot = overlays.slice();
   subscribers.forEach((subscriber) => subscriber(snapshot));
 }
@@ -71,6 +71,15 @@ export function subscribeReactionOverlays(subscriber: Subscriber): () => void {
   subscribers.add(subscriber);
   subscriber(overlays.slice());
   return () => subscribers.delete(subscriber);
+}
+
+export function clearReactionOverlays(): void {
+  if (overlays.length === 0) {
+    return;
+  }
+
+  overlays = [];
+  emit("room-access-cleared");
 }
 
 export function setReactionParticipantCount(count: number): void {

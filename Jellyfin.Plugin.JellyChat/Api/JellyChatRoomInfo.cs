@@ -46,4 +46,19 @@ public sealed class JellyChatRoomInfo
     /// Gets or sets the source used to resolve membership.
     /// </summary>
     public string MembershipSource { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the room requires a password.
+    /// </summary>
+    public bool PasswordProtected { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the caller may access JellyChat room content.
+    /// </summary>
+    public bool Authorized { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the caller is the current JellyChat room owner.
+    /// </summary>
+    public bool IsOwner { get; set; }
 }
