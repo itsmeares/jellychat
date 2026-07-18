@@ -44,61 +44,76 @@ export async function fetchJson(path: string): Promise<unknown> {
   return null;
 }
 
-export async function postJson(path: string, data: unknown, expectJsonResponse: boolean): Promise<unknown> {
+async function sendJson(method: "POST" | "PUT" | "DELETE", path: string, data: unknown, expectJsonResponse: boolean): Promise<unknown> {
   if (!window.ApiClient) {
     const url = resolveJellyfinUrl(path);
-    recordApiRequestDebug("POST", path, url);
-    recordApiResultDebug("POST", path, url, null, "ApiClient missing");
+    recordApiRequestDebug(method, path, url);
+    recordApiResultDebug(method, path, url, null, "ApiClient missing");
     return null;
   }
 
   const url = resolveJellyfinUrl(path);
-  recordApiRequestDebug("POST", path, url);
+  recordApiRequestDebug(method, path, url);
 
   try {
     if (typeof window.ApiClient.ajax === "function") {
       const request: Record<string, unknown> = {
-        type: "POST",
+        type: method,
         url,
-        contentType: "application/json; charset=utf-8",
-        data: JSON.stringify(data || {})
+        contentType: "application/json; charset=utf-8"
       };
+
+      if (method !== "DELETE" || data !== null) {
+        request.data = JSON.stringify(data || {});
+      }
 
       if (expectJsonResponse) {
         request.dataType = "json";
       }
 
       const response = await window.ApiClient.ajax(request);
-      recordApiResultDebug("POST", path, url, null);
+      recordApiResultDebug(method, path, url, null);
       return response;
     }
 
     if (typeof window.fetch === "function") {
       const response = await window.fetch(url, {
-        method: "POST",
+        method,
         headers: {
           "Content-Type": "application/json; charset=utf-8"
         },
-        body: JSON.stringify(data || {})
+        body: method === "DELETE" && data === null ? undefined : JSON.stringify(data || {})
       });
 
       if (!response.ok) {
         const error = new Error("HTTP " + response.status) as Error & { status?: number };
         error.status = response.status;
-        recordApiResultDebug("POST", path, url, response.status, error);
+        recordApiResultDebug(method, path, url, response.status, error);
         throw error;
       }
 
-      recordApiResultDebug("POST", path, url, response.status);
+      recordApiResultDebug(method, path, url, response.status);
       if (expectJsonResponse) {
         return response.json();
       }
     }
   } catch (err) {
-    recordApiResultDebug("POST", path, url, getErrorStatus(err), err);
+    recordApiResultDebug(method, path, url, getErrorStatus(err), err);
     throw err;
   }
 
-  recordApiResultDebug("POST", path, url, null, "API POST request method missing");
+  recordApiResultDebug(method, path, url, null, "API request method missing");
   return null;
+}
+
+export async function postJson(path: string, data: unknown, expectJsonResponse: boolean): Promise<unknown> {
+  return sendJson("POST", path, data, expectJsonResponse);
+}
+
+export async function putJson(path: string, data: unknown, expectJsonResponse: boolean): Promise<unknown> {
+  return sendJson("PUT", path, data, expectJsonResponse);
+}
+
+export async function deleteJson(path: string, expectJsonResponse: boolean): Promise<unknown> {
+  return sendJson("DELETE", path, null, expectJsonResponse);
 }

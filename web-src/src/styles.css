@@ -467,6 +467,8 @@ body.jellychat-mobile .jellyChatResizeHandle,
   background: rgba(18, 21, 26, 0.98);
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.34);
   color: var(--jellychat-text);
+  max-height: min(34rem, calc(100dvh - 5rem));
+  overflow-y: auto;
 }
 
 html.jellychat-drawer-left .jellyChatSettingsPopover {
@@ -517,6 +519,94 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   border-color: rgba(0, 164, 220, 0.58);
   background: rgba(0, 164, 220, 0.16);
   color: #d8f4ff;
+}
+
+.jellyChatRoomPasswordSettings {
+  margin: 0.78rem 0;
+  padding: 0.78rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.jellyChatRoomPasswordSettings h3 {
+  margin: 0 0 0.24rem;
+  color: #eef3f8;
+  font-size: 0.88rem;
+  line-height: 1.2rem;
+}
+
+.jellyChatRoomPasswordSettings p {
+  margin: 0 0 0.65rem;
+  color: #aeb8c6;
+  font-size: 0.78rem;
+  line-height: 1.15rem;
+}
+
+.jellyChatRoomPasswordSettings label,
+.jellyChatLockedRoom label {
+  display: grid;
+  gap: 0.3rem;
+  color: #d8dee8;
+  font-size: 0.78rem;
+}
+
+.jellyChatRoomPasswordSettings input,
+.jellyChatLockedRoom input {
+  width: 100%;
+  min-width: 0;
+  height: 2.2rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.48rem;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  padding: 0.42rem 0.58rem;
+  font: inherit;
+}
+
+.jellyChatRoomPasswordSettings input:focus,
+.jellyChatLockedRoom input:focus {
+  border-color: rgba(0, 164, 220, 0.72);
+  outline: 2px solid rgba(0, 164, 220, 0.42);
+  outline-offset: 1px;
+}
+
+.jellyChatRoomPasswordActions {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.55rem;
+}
+
+.jellyChatRoomPasswordActions button,
+.jellyChatLockedRoom button {
+  min-height: 2.2rem;
+  border: 1px solid rgba(0, 164, 220, 0.58);
+  border-radius: 0.48rem;
+  background: rgba(0, 164, 220, 0.18);
+  color: #d8f4ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.jellyChatRoomPasswordActions .is-disable-password {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #d8dee8;
+}
+
+.jellyChatRoomPasswordActions button:disabled,
+.jellyChatLockedRoom button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.jellyChatRoomFeedback {
+  margin-top: 0.48rem;
+  color: #b9c4d2;
+  font-size: 0.76rem;
+  line-height: 1.05rem;
 }
 
 #jellyChatStatus {
@@ -590,6 +680,63 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   font-size: 0.92rem;
   line-height: 1.35rem;
   text-wrap: pretty;
+}
+
+.jellyChatLockedRoom {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem 1.15rem;
+  color: var(--jellychat-text-soft);
+  text-align: center;
+}
+
+.jellyChatLockedRoomIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 0.72rem;
+  border: 1px solid rgba(0, 164, 220, 0.34);
+  border-radius: 50%;
+  background: rgba(0, 164, 220, 0.1);
+  color: #9ddbf2;
+}
+
+.jellyChatLockedRoom h3 {
+  margin: 0;
+  color: #eef3f8;
+  font-size: 1rem;
+  line-height: 1.35rem;
+}
+
+.jellyChatLockedRoom > p {
+  max-width: 18rem;
+  margin: 0.4rem 0 0.85rem;
+  color: #aeb8c6;
+  font-size: 0.82rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.jellyChatLockedRoom form {
+  width: min(18rem, 100%);
+  text-align: left;
+}
+
+.jellyChatLockedRoomControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.jellyChatLockedRoomControls button {
+  padding: 0.4rem 0.78rem;
 }
 
 .jellyChatMessageGroup {
@@ -1294,7 +1441,11 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
 
   #jellyChatInput,
   #jellyChatSendButton,
-  .jellyChatSettingsActions button {
+  .jellyChatSettingsActions button,
+  .jellyChatRoomPasswordActions button,
+  .jellyChatLockedRoom button,
+  .jellyChatRoomPasswordSettings input,
+  .jellyChatLockedRoom input {
     min-height: 2.75rem;
   }
 
@@ -1376,6 +1527,14 @@ body.jellychat-phone-portrait #jellyChatDrawer.is-open,
 
 .jellychat-phone-portrait #jellyChatMessages {
   padding: 0.72rem 0.82rem 0.74rem;
+}
+
+.jellychat-phone-portrait .jellyChatLockedRoom {
+  padding: 1rem 0.82rem calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.jellychat-phone-portrait .jellyChatLockedRoom > p {
+  margin-bottom: 0.65rem;
 }
 
 .jellychat-phone-portrait .jellyChatInlineStatus {

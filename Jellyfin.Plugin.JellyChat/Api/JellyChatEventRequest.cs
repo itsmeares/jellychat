@@ -74,9 +74,4 @@ public class JellyChatEventRequest
     /// Gets or sets the sender session identifier from the web client.
     /// </summary>
     public string? SenderSessionId { get; set; }
-
-    /// <summary>
-    /// Gets or sets comma-separated participant hints from SyncPlay group payloads.
-    /// </summary>
-    public string? ParticipantsCsv { get; set; }
 }

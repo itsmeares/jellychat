@@ -5,8 +5,9 @@ JellyChat is a Jellyfin server plugin with an injected React frontend for Jellyf
 ## Repo Layout
 
 - `Jellyfin.Plugin.JellyChat/`: .NET plugin project, API controllers, plugin configuration, embedded web assets, and Jellyfin Web injection middleware.
-- `Jellyfin.Plugin.JellyChat/Api/`: `/JellyChat/Events` room event API and `/JellyChat/Assets/*` asset API.
-- `Jellyfin.Plugin.JellyChat/Infrastructure/`: in-memory event store, asset provider, and web injection startup/middleware.
+- `Jellyfin.Plugin.JellyChat/Api/`: room access, `/JellyChat/Events`, and `/JellyChat/Assets/*` APIs.
+- `Jellyfin.Plugin.JellyChat/Infrastructure/`: in-memory room state, authoritative SyncPlay resolution, asset provider, and web injection startup/middleware.
+- `Jellyfin.Plugin.JellyChat.Tests/`: room lifecycle, ownership, password, and access-control tests.
 - `Jellyfin.Plugin.JellyChat/Web/`: generated `jellychat.css` and `jellychat.js` served by the plugin.
 - `web-src/`: React/Vite/TypeScript source for the injected Jellyfin Web client.
 - `scripts/deploy-dev.sh`: local debug publish and plugin-folder copy helper.
@@ -109,6 +110,7 @@ Useful asset and API checks from an authenticated Jellyfin browser session:
 ```text
 /JellyChat/Assets/jellychat.css
 /JellyChat/Assets/jellychat.js
+/JellyChat/Room
 /JellyChat/Events
 ```
 
@@ -129,5 +131,16 @@ Room activity uses the plugin-owned event API:
 GET  /JellyChat/Events
 POST /JellyChat/Events
 ```
+
+Room metadata and password actions use:
+
+```text
+GET    /JellyChat/Room
+POST   /JellyChat/Room/Unlock
+PUT    /JellyChat/Room/Password
+DELETE /JellyChat/Room/Password
+```
+
+Room ownership, password hashes, session access grants, join order, history, typing state, and other temporary room data stay in memory. They are reconciled against authenticated Jellyfin sessions and authoritative SyncPlay membership. The final participant leaving destroys the complete JellyChat room state. API responses expose only the protection, current-session access, and current-user ownership flags needed by the frontend; they never return the password or its hash.
 
 Jellyfin SyncPlay still owns playback synchronization. JellyChat only uses SyncPlay room/session data to decide which chat room the current client belongs to.

@@ -15,6 +15,8 @@ public class JellyChatWebInjectionRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         serviceCollection.AddSingleton<JellyChatEventStore>();
+        serviceCollection.AddSingleton<JellyChatSyncPlayStateResolver>();
+        serviceCollection.AddHostedService<JellyChatRoomLifecycleService>();
         serviceCollection.AddSingleton<JellyChatAssetProvider>();
         serviceCollection.AddSingleton<IStartupFilter, JellyChatWebInjectionStartupFilter>();
     }

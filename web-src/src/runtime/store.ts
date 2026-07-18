@@ -1,10 +1,11 @@
-import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, MessageActionMenuState, PlaybackEventType, ReactionEvent, ReplyTarget, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
+import type { ChatActions, ChatMessage, ChatState, MessageGroupModel, MessageActionMenuState, PlaybackEventType, ReactionEvent, ReplyTarget, RoomAccessInfo, RoomEvent, SyncPlayContext, TimelineItem, TriggerIndicatorState, TypingRemoteUser } from "../types";
 import { getEvents, normalizeChatMessage, postChatMessage, postEmojiReaction, postPlaybackEvent, postTypingUpdate } from "../api/events";
 import { fetchJson } from "../api/jellyfin";
+import { disableRoomPassword, normalizeRoomAccessInfo, setRoomPassword, unlockRoom } from "../api/room";
 import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEventId, formId, getValue, groupingWindowMs, groupMessages, inputId, isUsableDisplayName, logDebug, normalizeId, recordError, refreshIntervalMs, summarizeError } from "./util";
 import { getActiveMountHost, getDrawerSide, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, updateLayout } from "./layout";
 import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
-import { addReactionOverlay, addRoomReactionOverlay, recordReactionReceived, setReactionParticipantCount } from "./reactions";
+import { addReactionOverlay, addRoomReactionOverlay, clearReactionOverlays, recordReactionReceived, setReactionParticipantCount } from "./reactions";
 import { getDrawerBackgroundAlphaPreference, getDrawerWidthPreference, resetDrawerBackgroundAlpha as resetStoredDrawerBackgroundAlpha, resetDrawerPreferences as resetStoredDrawerPreferences, resetDrawerWidth as resetStoredDrawerWidth, saveDrawerBackgroundAlpha, saveDrawerWidth } from "./preferences";
 import { restoreTriggerFocus } from "./trigger";
 
@@ -31,21 +32,11 @@ type CurrentSessionResolution = {
   error: string | null;
 };
 
-type JellyChatRoomResolution = {
-  inGroup: boolean;
-  groupId: string;
-  groupName: string;
-  sessionId: string;
-  deviceId: string;
-  participants: string[];
-  exactMembership: boolean;
-  membershipSource: string;
-};
-
 let refreshInProgress = false;
 let sendInProgress = false;
 let eventFetchInProgress = false;
 let lastPollStartedAt = 0;
+let roomContextGeneration = 0;
 let historyEvents: RoomEvent[] = [];
 let historyMessages: ChatMessage[] = [];
 let groupedMessages: MessageGroupModel[] = [];
@@ -98,7 +89,11 @@ let currentSyncPlayContext: SyncPlayContext = {
   deviceId: "",
   participantCount: 1,
   unavailable: true,
-  membershipSource: "startup"
+  membershipSource: "startup",
+  accessResolved: false,
+  passwordProtected: false,
+  authorized: false,
+  isOwner: false
 };
 let state: ChatState = {
   drawerOpen: false,
@@ -127,6 +122,24 @@ let state: ChatState = {
 
 const subscribers = new Set<Subscriber>();
 const slowPollIntervalMs = 2000;
+
+function isForbiddenError(error: unknown): boolean {
+  return !!(error && typeof error === "object" && (error as { status?: unknown }).status === 403);
+}
+
+function invalidateRoomAccess(reason: string): void {
+  if (!currentSyncPlayContext.inGroup) {
+    return;
+  }
+
+  setCurrentSyncPlayContext(createSyncPlayContext({
+    ...currentSyncPlayContext,
+    accessResolved: false,
+    authorized: false,
+    membershipSource: reason
+  }));
+  void refreshSyncPlayState();
+}
 
 function getNextOptimisticSequence(): number {
   optimisticSequence = Math.max(optimisticSequence + 1, lastSequence + 1);
@@ -682,9 +695,17 @@ function recordClosedDrawerIndicators(events: RoomEvent[], skipHistory: boolean)
 }
 
 async function fetchChatEvents(forceFull: boolean): Promise<void> {
-  if (eventFetchInProgress || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+  if (eventFetchInProgress
+    || !currentSyncPlayContext.inGroup
+    || !currentSyncPlayContext.groupId
+    || !currentSyncPlayContext.accessResolved
+    || !currentSyncPlayContext.authorized) {
     return;
   }
+
+  const requestGeneration = roomContextGeneration;
+  const requestGroupId = currentSyncPlayContext.groupId;
+  const requestSessionId = currentSyncPlayContext.sessionId;
 
   let shouldFetchFull = forceFull;
   if (lastEventGroupId !== currentSyncPlayContext.groupId) {
@@ -697,7 +718,13 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
   eventFetchInProgress = true;
   try {
     const startedAt = Date.now();
-    const events = await getEvents(currentSyncPlayContext.groupId, currentSyncPlayContext.sessionId, lastSequence, 100, shouldFetchFull);
+    const events = await getEvents(requestGroupId, requestSessionId, lastSequence, 100, shouldFetchFull);
+    if (requestGeneration !== roomContextGeneration
+      || requestGroupId !== currentSyncPlayContext.groupId
+      || requestSessionId !== currentSyncPlayContext.sessionId
+      || !currentSyncPlayContext.authorized) {
+      return;
+    }
     if (window.JellyChatDebug) {
       window.JellyChatDebug.lastEventPollAt = new Date().toISOString();
       window.JellyChatDebug.lastEventRoundTripMs = Date.now() - startedAt;
@@ -713,6 +740,9 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
       emit();
     }
   } catch (err) {
+    if (isForbiddenError(err)) {
+      invalidateRoomAccess("event-access-rejected");
+    }
     logDebug("Failed to fetch JellyChat events", err);
   } finally {
     eventFetchInProgress = false;
@@ -722,6 +752,15 @@ async function fetchChatEvents(forceFull: boolean): Promise<void> {
 function setCurrentSyncPlayContext(context: SyncPlayContext): void {
   const wasInGroup = currentSyncPlayContext.inGroup;
   const groupChanged = context.groupId !== currentSyncPlayContext.groupId;
+  const sessionChanged = context.sessionId !== currentSyncPlayContext.sessionId;
+  const accessChanged = context.accessResolved !== currentSyncPlayContext.accessResolved
+    || context.authorized !== currentSyncPlayContext.authorized
+    || context.passwordProtected !== currentSyncPlayContext.passwordProtected
+    || context.isOwner !== currentSyncPlayContext.isOwner;
+  const mustClearProtectedState = !context.inGroup || groupChanged || sessionChanged || !context.accessResolved || !context.authorized;
+  if (groupChanged || sessionChanged || accessChanged) {
+    roomContextGeneration += 1;
+  }
   currentSyncPlayContext = {
     inGroup: !!context.inGroup,
     groupId: context.groupId || "",
@@ -730,12 +769,16 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     deviceId: context.deviceId || "",
     participantCount: Math.max(1, Math.floor(context.participantCount || 1)),
     unavailable: !!context.unavailable,
-    membershipSource: context.membershipSource || ""
+    membershipSource: context.membershipSource || "",
+    accessResolved: !!context.accessResolved,
+    passwordProtected: !!context.passwordProtected,
+    authorized: !!context.authorized,
+    isOwner: !!context.isOwner
   };
   setReactionParticipantCount(currentSyncPlayContext.participantCount);
   cachedCurrentSessionIds = currentSyncPlayContext.sessionId ? [currentSyncPlayContext.sessionId] : [];
 
-  if (!currentSyncPlayContext.inGroup || groupChanged) {
+  if (mustClearProtectedState) {
     const hadTimeline = historyEvents.length > 0 || timelineItems.length > 0;
     clearTriggerIndicators();
     remoteTypingUsers = [];
@@ -748,7 +791,7 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
       message: null,
       x: 0,
       y: 0,
-      copiedMessageId: messageActionMenu.copiedMessageId,
+      copiedMessageId: null,
       feedback: ""
     };
     historyEvents = [];
@@ -759,12 +802,22 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     optimisticSequence = 0;
     lastEventGroupId = currentSyncPlayContext.groupId;
     seenReactionEventKeys.clear();
+    localClientEventIds.clear();
+    clearReactionOverlays();
     if (window.JellyChatDebug) {
       if (hadTimeline) {
         window.JellyChatDebug.lastTimelineClearedAt = new Date().toISOString();
       }
       window.JellyChatDebug.optimisticEventCount = 0;
       window.JellyChatDebug.pendingOptimisticEventCount = 0;
+      window.JellyChatDebug.lastOptimisticClientEventId = null;
+      window.JellyChatDebug.lastOptimisticActorName = null;
+      window.JellyChatDebug.lastConfirmedClientEventId = null;
+      window.JellyChatDebug.lastCopiedMessageId = null;
+      window.JellyChatDebug.lastReactionEmoji = null;
+      window.JellyChatDebug.lastReactionSentAt = null;
+      window.JellyChatDebug.lastReactionReceivedAt = null;
+      window.JellyChatDebug.lastReactionClientEventId = null;
     }
   }
 
@@ -775,10 +828,13 @@ function setCurrentSyncPlayContext(context: SyncPlayContext): void {
     window.JellyChatDebug.syncPlayInGroup = currentSyncPlayContext.inGroup;
     window.JellyChatDebug.syncPlayActiveGroupId = currentSyncPlayContext.groupId;
     window.JellyChatDebug.syncPlayNotInRoomReason = currentSyncPlayContext.inGroup ? null : currentSyncPlayContext.membershipSource;
+    window.JellyChatDebug.roomPasswordProtected = currentSyncPlayContext.passwordProtected;
+    window.JellyChatDebug.roomAuthorized = currentSyncPlayContext.authorized;
+    window.JellyChatDebug.roomIsOwner = currentSyncPlayContext.isOwner;
   }
 
   emit();
-  if (!wasInGroup && currentSyncPlayContext.inGroup && isDrawerOpen()) {
+  if (!wasInGroup && currentSyncPlayContext.inGroup && currentSyncPlayContext.authorized && isDrawerOpen()) {
     focusComposer("group-joined");
   }
 }
@@ -1280,29 +1336,7 @@ function extractParticipantsFromGroups(groups: any[]): string[] {
   return participants;
 }
 
-function normalizeRoomResolution(response: unknown): JellyChatRoomResolution | null {
-  if (!response || typeof response !== "object") {
-    return null;
-  }
-
-  const rawParticipants = getValue(response, "Participants", "participants");
-  const participants = Array.isArray(rawParticipants)
-    ? rawParticipants.map((participant) => String(participant || "").trim()).filter(Boolean)
-    : [];
-
-  return {
-    inGroup: getValue(response, "InGroup", "inGroup") === true,
-    groupId: String(getValue(response, "GroupId", "groupId") || "").trim(),
-    groupName: String(getValue(response, "GroupName", "groupName") || "").trim(),
-    sessionId: String(getValue(response, "SessionId", "sessionId") || "").trim(),
-    deviceId: String(getValue(response, "DeviceId", "deviceId") || "").trim(),
-    participants,
-    exactMembership: getValue(response, "ExactMembership", "exactMembership") === true,
-    membershipSource: String(getValue(response, "MembershipSource", "membershipSource") || "").trim()
-  };
-}
-
-function updateRoomDebug(room: JellyChatRoomResolution | null, error: string | null = null): void {
+function updateRoomDebug(room: RoomAccessInfo | null, error: string | null = null): void {
   if (!window.JellyChatDebug) return;
   window.JellyChatDebug.syncPlayRoomInGroup = !!room?.inGroup;
   window.JellyChatDebug.syncPlayRoomGroupId = room?.groupId || "";
@@ -1311,12 +1345,26 @@ function updateRoomDebug(room: JellyChatRoomResolution | null, error: string | n
   window.JellyChatDebug.syncPlayRoomExactMembership = !!room?.exactMembership;
   window.JellyChatDebug.syncPlayRoomMembershipSource = room?.membershipSource || "";
   window.JellyChatDebug.syncPlayRoomRequestError = error;
+  window.JellyChatDebug.roomPasswordProtected = !!room?.passwordProtected;
+  window.JellyChatDebug.roomAuthorized = !!room?.authorized;
+  window.JellyChatDebug.roomIsOwner = !!room?.isOwner;
 }
 
-async function fetchJellyChatRoom(senderSessionId: string): Promise<JellyChatRoomResolution | null> {
+function removeOptimisticEvent(clientEventId: string): void {
+  if (!clientEventId) {
+    return;
+  }
+
+  historyEvents = historyEvents.filter((event) => event.clientEventId !== clientEventId || !event.optimistic);
+  localClientEventIds.delete(clientEventId);
+  deriveTimelineFromHistory();
+  emit();
+}
+
+async function fetchJellyChatRoom(senderSessionId: string): Promise<RoomAccessInfo | null> {
   const query = senderSessionId ? "?senderSessionId=" + encodeURIComponent(senderSessionId) : "";
   try {
-    const room = normalizeRoomResolution(await fetchJson("JellyChat/Room" + query));
+    const room = normalizeRoomAccessInfo(await fetchJson("JellyChat/Room" + query));
     updateRoomDebug(room);
     return room;
   } catch (err) {
@@ -1324,6 +1372,31 @@ async function fetchJellyChatRoom(senderSessionId: string): Promise<JellyChatRoo
     updateRoomDebug(null, summarizeError(err));
     return null;
   }
+}
+
+function applyRoomAccessInfo(room: RoomAccessInfo): boolean {
+  if (!room.inGroup
+    || !room.groupId
+    || room.groupId !== currentSyncPlayContext.groupId
+    || (room.sessionId && room.sessionId !== currentSyncPlayContext.sessionId)) {
+    return false;
+  }
+
+  setCurrentSyncPlayContext(createSyncPlayContext({
+    inGroup: true,
+    groupId: room.groupId,
+    groupName: room.groupName || currentSyncPlayContext.groupName,
+    sessionId: room.sessionId || currentSyncPlayContext.sessionId,
+    deviceId: room.deviceId || currentSyncPlayContext.deviceId,
+    participantCount: room.participants.length || currentSyncPlayContext.participantCount,
+    unavailable: false,
+    membershipSource: room.membershipSource || currentSyncPlayContext.membershipSource,
+    accessResolved: true,
+    passwordProtected: room.passwordProtected,
+    authorized: room.authorized,
+    isOwner: room.isOwner
+  }));
+  return true;
 }
 
 function updateSyncPlayClientSignalDebug(): void {
@@ -1387,13 +1460,13 @@ function getGroupParticipantCount(group: any): number {
 }
 
 function getEventPollIntervalMs(): number {
-  return isDrawerOpen() && currentSyncPlayContext.inGroup && currentSyncPlayContext.groupId
+  return isDrawerOpen() && currentSyncPlayContext.inGroup && currentSyncPlayContext.groupId && currentSyncPlayContext.authorized
     ? refreshIntervalMs
     : slowPollIntervalMs;
 }
 
 async function refreshEventsImmediately(): Promise<void> {
-  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId || !currentSyncPlayContext.authorized) {
     return;
   }
 
@@ -1404,6 +1477,12 @@ async function refreshEventsImmediately(): Promise<void> {
 }
 
 async function resolveEventPostContext(): Promise<{ senderSessionId: string; groupId: string; participants: string[]; userName: string } | null> {
+  if (!currentSyncPlayContext.inGroup
+    || !currentSyncPlayContext.accessResolved
+    || !currentSyncPlayContext.authorized) {
+    return null;
+  }
+
   const sessions = await fetchSessions();
   let groups: any[] = [];
   try {
@@ -1423,59 +1502,24 @@ async function resolveEventPostContext(): Promise<{ senderSessionId: string; gro
     return null;
   }
 
-  const clientGroup = getClientSyncPlayGroup();
-  if (clientGroup) {
-    const actor = resolveLocalActorName(sessions, currentSession);
-    return {
-      senderSessionId: resolution.sessionId,
-      groupId: resolveSyncPlayGroupId(clientGroup),
-      participants: extractParticipantsFromGroups([clientGroup]),
-      userName: actor.actorName
-    };
-  }
-
-  if (syncPlayClientSignalKnown) {
-    return null;
-  }
-
   const room = await fetchJellyChatRoom(resolution.sessionId);
-  if (room && window.JellyChatDebug) {
-    window.JellyChatDebug.syncPlayMembershipSource = room.membershipSource || window.JellyChatDebug.syncPlayMembershipSource;
+  if (room) {
+    applyRoomAccessInfo(room);
   }
-
-  if (room?.exactMembership && !room.inGroup) {
+  if (!room?.inGroup || !room.groupId || !room.authorized) {
     return null;
   }
 
-  if (room?.inGroup && room.groupId) {
-    const actor = resolveLocalActorName(sessions, currentSession);
-    return {
-      senderSessionId: room.sessionId || resolution.sessionId,
-      groupId: room.groupId,
-      participants: room.participants,
-      userName: actor.actorName
-    };
-  }
-
-  const groupIds = getGroupIdsForCurrentSession(currentSession);
-  const groupsBySessionGroupIds = findGroupsByGroupIds(groups, groupIds);
-  const allowUserParticipantMatch = canUseUserParticipantMatch(resolution);
-  const relevantGroups = groups.filter((group) => groupsContainCurrentSession([group], currentSession, allowUserParticipantMatch));
-  const groupsForSend = groupsBySessionGroupIds.length > 0 ? groupsBySessionGroupIds : relevantGroups;
-  const participants = extractParticipantsFromGroups(groupsForSend);
-  const preferredGroupId = groupIds.length > 0
-    ? groupIds[0]
-    : (resolveSyncPlayGroupId(groupsForSend[0]) || currentSyncPlayContext.groupId);
-
-  if (!preferredGroupId) {
+  if (room.groupId !== currentSyncPlayContext.groupId
+    || (room.sessionId && room.sessionId !== currentSyncPlayContext.sessionId)) {
     return null;
   }
 
   const actor = resolveLocalActorName(sessions, currentSession);
   return {
-    senderSessionId: resolution.sessionId,
-    groupId: preferredGroupId,
-    participants,
+    senderSessionId: room.sessionId || resolution.sessionId,
+    groupId: room.groupId,
+    participants: room.participants,
     userName: actor.actorName
   };
 }
@@ -1493,7 +1537,7 @@ function clearLocalTypingTimers(): void {
 }
 
 async function postLocalTypingState(isTyping: boolean, reason: string): Promise<void> {
-  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId) {
+  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.groupId || !currentSyncPlayContext.authorized) {
     return;
   }
 
@@ -1509,7 +1553,6 @@ async function postLocalTypingState(isTyping: boolean, reason: string): Promise<
       groupId: postContext.groupId,
       senderSessionId: postContext.senderSessionId,
       isTyping,
-      participants: postContext.participants,
       clientEventId
     });
     if (window.JellyChatDebug) {
@@ -1552,7 +1595,7 @@ function stopLocalTyping(reason: string): void {
 }
 
 function noteLocalTyping(value: string): void {
-  if (!currentSyncPlayContext.inGroup || !isDrawerOpen() || sendInProgress) {
+  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.authorized || !isDrawerOpen() || sendInProgress) {
     stopLocalTyping("typing-disabled");
     return;
   }
@@ -1626,6 +1669,10 @@ function clearReplyTarget(reason: string): void {
 }
 
 function startReplyToMessage(message: ChatMessage): void {
+  if (!currentSyncPlayContext.authorized) {
+    return;
+  }
+
   if (!message || message.optimistic) {
     return;
   }
@@ -1638,6 +1685,10 @@ function startReplyToMessage(message: ChatMessage): void {
 }
 
 function openMessageMenuForMessage(message: ChatMessage, x: number, y: number): void {
+  if (!currentSyncPlayContext.authorized) {
+    return;
+  }
+
   if (!message || message.optimistic) {
     return;
   }
@@ -1689,6 +1740,10 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
 }
 
 async function copyMessageText(message: ChatMessage): Promise<boolean> {
+  if (!currentSyncPlayContext.authorized) {
+    return false;
+  }
+
   if (!message || message.optimistic) {
     return false;
   }
@@ -1708,6 +1763,10 @@ async function copyMessageText(message: ChatMessage): Promise<boolean> {
 }
 
 function setHighlightedMessage(messageId: string): void {
+  if (!currentSyncPlayContext.authorized) {
+    return;
+  }
+
   if (!messageId) {
     return;
   }
@@ -1745,7 +1804,11 @@ function createSyncPlayContext(args: Partial<SyncPlayContext> = {}): SyncPlayCon
     deviceId: args.deviceId || getCurrentDeviceId(),
     participantCount: Math.max(1, Math.floor(args.participantCount || 1)),
     unavailable: !!args.unavailable,
-    membershipSource: args.membershipSource || ""
+    membershipSource: args.membershipSource || "",
+    accessResolved: !!args.accessResolved,
+    passwordProtected: !!args.passwordProtected,
+    authorized: !!args.authorized,
+    isOwner: !!args.isOwner
   };
 }
 
@@ -1806,36 +1869,14 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
     });
   }
 
-  const clientGroup = getClientSyncPlayGroup();
-  if (clientGroup) {
-    return createSyncPlayContext({
-      inGroup: true,
-      groupId: resolveSyncPlayGroupId(clientGroup),
-      groupName: resolveSyncPlayGroupName(clientGroup),
-      sessionId: resolution.sessionId,
-      deviceId: resolution.deviceId,
-      participantCount: getGroupParticipantCount(clientGroup),
-      unavailable: false,
-      membershipSource: syncPlayClientSignalSource || "client-syncplay-group-update"
-    });
-  }
-
-  if (syncPlayClientSignalKnown) {
-    return createSyncPlayContext({
-      sessionId: resolution.sessionId,
-      deviceId: resolution.deviceId,
-      unavailable: groupsUnavailable,
-      membershipSource: syncPlayClientSignalSource || "client-syncplay-not-in-group"
-    });
-  }
-
   const room = await fetchJellyChatRoom(resolution.sessionId);
   if (room?.exactMembership && !room.inGroup) {
     return createSyncPlayContext({
       sessionId: room.sessionId || resolution.sessionId,
       deviceId: room.deviceId || resolution.deviceId,
       unavailable: groupsUnavailable,
-      membershipSource: room.membershipSource || "current-session-not-in-syncplay"
+      membershipSource: room.membershipSource || "current-session-not-in-syncplay",
+      accessResolved: true
     });
   }
 
@@ -1848,7 +1889,35 @@ async function resolveCurrentSyncPlayContext(): Promise<SyncPlayContext> {
       deviceId: room.deviceId || resolution.deviceId,
       participantCount: room.participants.length || 1,
       unavailable: false,
-      membershipSource: room.membershipSource || (room.exactMembership ? "current-session-syncplay-map" : "current-session-syncplay-list")
+      membershipSource: room.membershipSource || "current-session-syncplay-map",
+      accessResolved: true,
+      passwordProtected: room.passwordProtected,
+      authorized: room.authorized,
+      isOwner: room.isOwner
+    });
+  }
+
+  const clientGroup = getClientSyncPlayGroup();
+  if (clientGroup) {
+    return createSyncPlayContext({
+      inGroup: true,
+      groupId: resolveSyncPlayGroupId(clientGroup),
+      groupName: resolveSyncPlayGroupName(clientGroup),
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      participantCount: getGroupParticipantCount(clientGroup),
+      unavailable: false,
+      membershipSource: syncPlayClientSignalSource || "client-syncplay-group-update",
+      accessResolved: false
+    });
+  }
+
+  if (syncPlayClientSignalKnown) {
+    return createSyncPlayContext({
+      sessionId: resolution.sessionId,
+      deviceId: resolution.deviceId,
+      unavailable: groupsUnavailable,
+      membershipSource: syncPlayClientSignalSource || "client-syncplay-not-in-group"
     });
   }
 
@@ -1921,7 +1990,7 @@ export async function pollJellyChat(force = false): Promise<void> {
   lastPollStartedAt = now;
   await refreshSyncPlayState();
   scanPlaybackTarget();
-  if (currentSyncPlayContext.inGroup && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
+  if (currentSyncPlayContext.inGroup && currentSyncPlayContext.authorized && (isDrawerOpen() || currentSyncPlayContext.groupId)) {
     await fetchChatEvents(false);
   }
 }
@@ -1943,7 +2012,7 @@ function clearComposerInput(): void {
 export function focusComposer(reason: string): void {
   const focus = () => {
     const input = document.getElementById(inputId) as HTMLTextAreaElement | null;
-    if (!input || input.disabled || !currentSyncPlayContext.inGroup || !isDrawerOpen()) return;
+    if (!input || input.disabled || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.authorized || !isDrawerOpen()) return;
     try {
       input.focus({ preventScroll: true });
     } catch {
@@ -2048,7 +2117,7 @@ export const actions: ChatActions = {
   sendMessage: async (text: string) => {
     const trimmedText = text.trim();
     if (!trimmedText || sendInProgress) return false;
-    if (!currentSyncPlayContext.inGroup) {
+    if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.authorized) {
       logDebug("Send blocked because the current session is not in a SyncPlay group.");
       emit();
       return false;
@@ -2056,6 +2125,7 @@ export const actions: ChatActions = {
 
     sendInProgress = true;
     emit();
+    let pendingClientEventId = "";
     try {
       const postContext = await resolveEventPostContext();
       if (!postContext) {
@@ -2063,7 +2133,9 @@ export const actions: ChatActions = {
         return false;
       }
 
+      const postGeneration = roomContextGeneration;
       const clientEventId = createClientEventId();
+      pendingClientEventId = clientEventId;
       const replyTo = cloneReplyTarget(activeReplyTarget);
       localClientEventIds.add(clientEventId);
       const optimisticEvent = createRoomEvent({
@@ -2086,10 +2158,14 @@ export const actions: ChatActions = {
         text: trimmedText,
         senderSessionId: postContext.senderSessionId,
         groupId: postContext.groupId,
-        participants: postContext.participants,
         clientEventId,
         replyTo
       });
+
+      if (postGeneration !== roomContextGeneration || !currentSyncPlayContext.authorized) {
+        removeOptimisticEvent(clientEventId);
+        return false;
+      }
 
       if (window.JellyChatDebug) {
         window.JellyChatDebug.lastEventPostAt = new Date().toISOString();
@@ -2117,12 +2193,20 @@ export const actions: ChatActions = {
         void refreshEventsImmediately();
         clearComposerInput();
         focusComposer("send-success");
+        pendingClientEventId = "";
         return true;
       }
 
       logDebug("Failed to send SyncPlay chat message.");
+      removeOptimisticEvent(clientEventId);
+      pendingClientEventId = "";
       return false;
     } catch (err) {
+      removeOptimisticEvent(pendingClientEventId);
+      pendingClientEventId = "";
+      if (isForbiddenError(err)) {
+        invalidateRoomAccess("event-post-rejected");
+      }
       logDebug("Failed to send SyncPlay chat message", err);
       return false;
     } finally {
@@ -2133,35 +2217,8 @@ export const actions: ChatActions = {
   },
   sendReaction: async (emoji: string) => {
     const normalizedEmoji = emoji.trim();
-    if (!normalizedEmoji || !currentSyncPlayContext.inGroup) {
+    if (!normalizedEmoji || !currentSyncPlayContext.inGroup || !currentSyncPlayContext.authorized) {
       return false;
-    }
-
-    const clientEventId = createClientEventId();
-    localClientEventIds.add(clientEventId);
-    seenReactionEventKeys.add(clientEventId);
-    const playback = getCurrentPlaybackSnapshot();
-    const positionSeconds = typeof playback.positionSeconds === "number" && Number.isFinite(playback.positionSeconds)
-      ? playback.positionSeconds
-      : undefined;
-    const localReaction: ReactionEvent = {
-      emoji: normalizedEmoji,
-      clientEventId,
-      userId: getCurrentUserId(),
-      userName: "",
-      groupId: currentSyncPlayContext.groupId,
-      itemId: playback.itemId || "",
-      itemName: playback.itemName || "",
-      positionSeconds: positionSeconds ?? null,
-      createdAtUtc: new Date().toISOString()
-    };
-    addReactionOverlay(localReaction);
-    if (window.JellyChatDebug) {
-      const now = new Date().toISOString();
-      window.JellyChatDebug.reactionEventCount = Number(window.JellyChatDebug.reactionEventCount || 0) + 1;
-      window.JellyChatDebug.lastReactionEmoji = normalizedEmoji;
-      window.JellyChatDebug.lastReactionSentAt = now;
-      window.JellyChatDebug.lastReactionClientEventId = clientEventId;
     }
 
     try {
@@ -2171,18 +2228,49 @@ export const actions: ChatActions = {
         return false;
       }
 
+      const postGeneration = roomContextGeneration;
+      const clientEventId = createClientEventId();
+      localClientEventIds.add(clientEventId);
+      seenReactionEventKeys.add(clientEventId);
+      const playback = getCurrentPlaybackSnapshot();
+      const positionSeconds = typeof playback.positionSeconds === "number" && Number.isFinite(playback.positionSeconds)
+        ? playback.positionSeconds
+        : undefined;
+      const localReaction: ReactionEvent = {
+        emoji: normalizedEmoji,
+        clientEventId,
+        userId: getCurrentUserId(),
+        userName: "",
+        groupId: postContext.groupId,
+        itemId: playback.itemId || "",
+        itemName: playback.itemName || "",
+        positionSeconds: positionSeconds ?? null,
+        createdAtUtc: new Date().toISOString()
+      };
+      addReactionOverlay(localReaction);
+      if (window.JellyChatDebug) {
+        const now = new Date().toISOString();
+        window.JellyChatDebug.reactionEventCount = Number(window.JellyChatDebug.reactionEventCount || 0) + 1;
+        window.JellyChatDebug.lastReactionEmoji = normalizedEmoji;
+        window.JellyChatDebug.lastReactionSentAt = now;
+        window.JellyChatDebug.lastReactionClientEventId = clientEventId;
+      }
+
       setReactionParticipantCount(Math.max(1, postContext.participants.length || currentSyncPlayContext.participantCount));
 
       const result = await postEmojiReaction({
         emoji: normalizedEmoji,
         senderSessionId: postContext.senderSessionId,
         groupId: postContext.groupId,
-        participants: postContext.participants,
         itemId: playback.itemId,
         itemName: playback.itemName,
         positionSeconds,
         clientEventId
       });
+      if (postGeneration !== roomContextGeneration || !currentSyncPlayContext.authorized) {
+        clearReactionOverlays();
+        return false;
+      }
       if (window.JellyChatDebug) {
         window.JellyChatDebug.lastEventPostAt = new Date().toISOString();
       }
@@ -2194,8 +2282,13 @@ export const actions: ChatActions = {
       }
 
       logDebug("Failed to send emoji reaction.");
+      clearReactionOverlays();
       return false;
     } catch (err) {
+      clearReactionOverlays();
+      if (isForbiddenError(err)) {
+        invalidateRoomAccess("reaction-post-rejected");
+      }
       logDebug("Failed to send emoji reaction", err);
       return false;
     }
@@ -2225,14 +2318,61 @@ export const actions: ChatActions = {
   },
   highlightMessage: (messageId: string) => {
     setHighlightedMessage(messageId);
+  },
+  unlockRoom: async (password: string) => {
+    try {
+      const room = await unlockRoom(currentSyncPlayContext.sessionId, password);
+      if (!room || !applyRoomAccessInfo(room) || !room.authorized) {
+        return { success: false, message: "Incorrect password." };
+      }
+
+      await fetchChatEvents(true);
+      return { success: true, message: "Room unlocked." };
+    } catch {
+      return { success: false, message: "Incorrect password." };
+    }
+  },
+  setRoomPassword: async (password: string) => {
+    if (!password || !currentSyncPlayContext.isOwner) {
+      return { success: false, message: password ? "Only the room owner can manage the password." : "Enter a password." };
+    }
+
+    const wasProtected = currentSyncPlayContext.passwordProtected;
+    try {
+      const room = await setRoomPassword(currentSyncPlayContext.sessionId, password);
+      if (!room || !applyRoomAccessInfo(room)) {
+        return { success: false, message: "Could not update room password." };
+      }
+
+      return { success: true, message: wasProtected ? "Password protection updated." : "Password protection enabled." };
+    } catch {
+      return { success: false, message: "Could not update room password." };
+    }
+  },
+  disableRoomPassword: async () => {
+    if (!currentSyncPlayContext.isOwner) {
+      return { success: false, message: "Only the room owner can manage the password." };
+    }
+
+    try {
+      const room = await disableRoomPassword(currentSyncPlayContext.sessionId);
+      if (!room || !applyRoomAccessInfo(room)) {
+        return { success: false, message: "Could not disable password protection." };
+      }
+
+      return { success: true, message: "Password protection disabled." };
+    } catch {
+      return { success: false, message: "Could not disable password protection." };
+    }
   }
 };
 
 export async function postLocalPlaybackEvent(request: PlaybackPostRequest): Promise<boolean> {
-  if (!currentSyncPlayContext.inGroup) {
+  if (!currentSyncPlayContext.inGroup || !currentSyncPlayContext.authorized) {
     return false;
   }
 
+  let pendingClientEventId = "";
   try {
     const postContext = await resolveEventPostContext();
     if (!postContext) {
@@ -2240,7 +2380,9 @@ export async function postLocalPlaybackEvent(request: PlaybackPostRequest): Prom
       return false;
     }
 
+    const postGeneration = roomContextGeneration;
     const clientEventId = createClientEventId();
+    pendingClientEventId = clientEventId;
     localClientEventIds.add(clientEventId);
     const fromPositionTicks = secondsToTicks(request.fromSeconds);
     const toPositionTicks = secondsToTicks(request.positionSeconds);
@@ -2266,13 +2408,17 @@ export async function postLocalPlaybackEvent(request: PlaybackPostRequest): Prom
       type: request.type,
       senderSessionId: postContext.senderSessionId,
       groupId: postContext.groupId,
-      participants: postContext.participants,
       fromPositionTicks,
       toPositionTicks,
       itemId: request.itemId,
       itemName: request.itemName,
       clientEventId
     });
+
+    if (postGeneration !== roomContextGeneration || !currentSyncPlayContext.authorized) {
+      removeOptimisticEvent(clientEventId);
+      return false;
+    }
 
     if (result && result.id) {
       if (window.JellyChatDebug) {
@@ -2283,12 +2429,19 @@ export async function postLocalPlaybackEvent(request: PlaybackPostRequest): Prom
         window.JellyChatDebug.playbackEventCount = Number(window.JellyChatDebug.playbackEventCount || 0) + 1;
       }
       mergeHistoryEvents([result]);
+      pendingClientEventId = "";
       void refreshEventsImmediately();
       return true;
     }
 
+    removeOptimisticEvent(clientEventId);
+    pendingClientEventId = "";
     return false;
   } catch (err) {
+    removeOptimisticEvent(pendingClientEventId);
+    if (isForbiddenError(err)) {
+      invalidateRoomAccess("playback-post-rejected");
+    }
     logDebug("Failed to send playback event", err);
     return false;
   }
