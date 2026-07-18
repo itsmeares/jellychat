@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { ChatActions, ChatState } from "../types";
 import { closeButtonId, drawerId, sideToggleButtonId, statusId, titleId } from "../runtime/util";
@@ -326,6 +326,7 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
 
 export function ChatDrawer({ state, actions }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const checkingAccess = state.syncPlay.inGroup && !state.syncPlay.accessResolved;
   const roomLocked = state.syncPlay.inGroup
     && state.syncPlay.accessResolved
@@ -403,7 +404,7 @@ export function ChatDrawer({ state, actions }: Props) {
       <div className={"jellyChatHeader is-" + state.drawerSide}>
         <h2 id={titleId}>JellyChat</h2>
         {controls}
-        <DrawerSettingsPopover state={state} actions={actions} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <DrawerSettingsPopover state={state} actions={actions} open={settingsOpen} onClose={closeSettings} />
       </div>
       <div id={statusId} className={state.syncPlay.inGroup && state.syncPlay.authorized ? "is-active" : ""} role="status" aria-live="polite">
         {statusText}
