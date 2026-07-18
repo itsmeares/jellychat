@@ -1,7 +1,7 @@
 ---
 name: "JellyChat"
 guid: "a69744cc-2281-48bf-adef-8e451a16ff71"
-version: "1.1.0.0"
+version: "1.2.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "JellyChat drawer for Jellyfin SyncPlay sessions."
@@ -14,7 +14,5 @@ owner: "itsmeares"
 artifacts:
 - "Jellyfin.Plugin.JellyChat.dll"
 changelog: >
-  Adds room password protection with automatic owner handoff and session-scoped
-  access. Cleans up temporary room state when sessions end, hardens password and
-  membership changes against concurrency races, and keeps the password field
-  focused during room polling.
+  Adds custom appearance colors, server-wide custom CSS, and an in-page color
+  picker for personalizing JellyChat.
