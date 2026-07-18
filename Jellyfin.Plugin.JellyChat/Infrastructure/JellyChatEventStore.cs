@@ -19,6 +19,20 @@ public class JellyChatEventStore
     private static readonly TimeSpan TypingEventTtl = TimeSpan.FromSeconds(6);
     private readonly Dictionary<Guid, GroupRoomState> _rooms = [];
     private readonly object _syncLock = new object();
+    private readonly Func<string, byte[], byte[]> _passwordHasher;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JellyChatEventStore"/> class.
+    /// </summary>
+    public JellyChatEventStore()
+        : this(HashPassword)
+    {
+    }
+
+    internal JellyChatEventStore(Func<string, byte[], byte[]> passwordHasher)
+    {
+        _passwordHasher = passwordHasher;
+    }
 
     internal void ReconcileActiveRooms(IReadOnlyList<JellyChatSyncPlayRoomSnapshot> activeRooms)
     {
@@ -42,7 +56,7 @@ public class JellyChatEventStore
         lock (_syncLock)
         {
             var state = ReconcileRoomLocked(room);
-            return CreateAccessState(state, sessionId, userId);
+            return CreateAccessState(state, room, sessionId, userId);
         }
     }
 
@@ -54,7 +68,7 @@ public class JellyChatEventStore
         lock (_syncLock)
         {
             var state = ReconcileRoomLocked(room);
-            if (!TryAuthorizeContentAccess(state, roomEvent.SessionId, roomEvent.UserId))
+            if (!TryAuthorizeContentAccess(state, room, roomEvent.SessionId, roomEvent.UserId))
             {
                 storedEvent = new JellyChatEvent();
                 return false;
@@ -108,7 +122,7 @@ public class JellyChatEventStore
         lock (_syncLock)
         {
             var state = ReconcileRoomLocked(room);
-            if (!TryAuthorizeContentAccess(state, sessionId, userId))
+            if (!TryAuthorizeContentAccess(state, room, sessionId, userId))
             {
                 events = [];
                 return false;
@@ -134,32 +148,82 @@ public class JellyChatEventStore
         string password,
         out JellyChatRoomAccessState accessState)
     {
+        GroupRoomState passwordState;
+        byte[] passwordSalt;
+        byte[] expectedHash;
+        long passwordRevision;
         lock (_syncLock)
         {
             var state = ReconcileRoomLocked(room);
-            if (!IsActiveParticipant(state, sessionId, userId))
+            if (!IsActiveParticipant(state, room, sessionId, userId))
             {
-                accessState = CreateAccessState(state, sessionId, userId);
+                accessState = CreateAccessState(state, room, sessionId, userId);
                 return false;
             }
 
             if (!state.PasswordProtected || IsOwner(state, userId))
             {
                 state.AuthorizedSessions.Add(sessionId);
-                accessState = CreateAccessState(state, sessionId, userId);
+                accessState = CreateAccessState(state, room, sessionId, userId);
                 return true;
             }
 
-            byte[] submittedHash = HashPassword(password, state.PasswordSalt!);
-            bool matched = CryptographicOperations.FixedTimeEquals(submittedHash, state.PasswordHash!);
-            CryptographicOperations.ZeroMemory(submittedHash);
-            if (matched)
-            {
-                state.AuthorizedSessions.Add(sessionId);
-            }
+            passwordState = state;
+            passwordSalt = state.PasswordSalt!.ToArray();
+            expectedHash = state.PasswordHash!.ToArray();
+            passwordRevision = state.PasswordRevision;
+        }
 
-            accessState = CreateAccessState(state, sessionId, userId);
-            return matched;
+        byte[]? submittedHash = null;
+        try
+        {
+            submittedHash = _passwordHasher(password, passwordSalt);
+            lock (_syncLock)
+            {
+                if (!_rooms.TryGetValue(room.GroupId, out var currentState)
+                    || !ReferenceEquals(currentState, passwordState))
+                {
+                    accessState = NoAccessState();
+                    return false;
+                }
+
+                if (!IsActiveParticipant(currentState, room, sessionId, userId))
+                {
+                    accessState = CreateAccessState(currentState, room, sessionId, userId);
+                    return false;
+                }
+
+                if (!currentState.PasswordProtected || IsOwner(currentState, userId))
+                {
+                    currentState.AuthorizedSessions.Add(sessionId);
+                    accessState = CreateAccessState(currentState, room, sessionId, userId);
+                    return true;
+                }
+
+                if (currentState.PasswordRevision != passwordRevision)
+                {
+                    accessState = CreateAccessState(currentState, room, sessionId, userId);
+                    return false;
+                }
+
+                bool matched = CryptographicOperations.FixedTimeEquals(submittedHash, expectedHash);
+                if (matched)
+                {
+                    currentState.AuthorizedSessions.Add(sessionId);
+                }
+
+                accessState = CreateAccessState(currentState, room, sessionId, userId);
+                return matched;
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(passwordSalt);
+            CryptographicOperations.ZeroMemory(expectedHash);
+            if (submittedHash is not null)
+            {
+                CryptographicOperations.ZeroMemory(submittedHash);
+            }
         }
     }
 
@@ -175,30 +239,73 @@ public class JellyChatEventStore
             lock (_syncLock)
             {
                 var currentState = ReconcileRoomLocked(room);
-                accessState = CreateAccessState(currentState, sessionId, userId);
+                accessState = CreateAccessState(currentState, room, sessionId, userId);
                 return false;
             }
         }
 
-        byte[] salt = RandomNumberGenerator.GetBytes(PasswordSaltLength);
-        byte[] hash = HashPassword(password, salt);
+        GroupRoomState passwordState;
+        long passwordRevision;
         lock (_syncLock)
         {
             var state = ReconcileRoomLocked(room);
-            if (!IsActiveParticipant(state, sessionId, userId) || !IsOwner(state, userId))
+            if (!IsActiveParticipant(state, room, sessionId, userId) || !IsOwner(state, userId))
             {
-                CryptographicOperations.ZeroMemory(hash);
-                CryptographicOperations.ZeroMemory(salt);
-                accessState = CreateAccessState(state, sessionId, userId);
+                accessState = CreateAccessState(state, room, sessionId, userId);
                 return false;
             }
 
-            ClearPassword(state);
-            state.PasswordSalt = salt;
-            state.PasswordHash = hash;
-            AuthorizeOwnerSessions(state);
-            accessState = CreateAccessState(state, sessionId, userId);
-            return true;
+            passwordState = state;
+            passwordRevision = state.PasswordRevision;
+        }
+
+        byte[] salt = RandomNumberGenerator.GetBytes(PasswordSaltLength);
+        byte[]? hash = null;
+        bool passwordStored = false;
+        try
+        {
+            hash = _passwordHasher(password, salt);
+            lock (_syncLock)
+            {
+                if (!_rooms.TryGetValue(room.GroupId, out var currentState)
+                    || !ReferenceEquals(currentState, passwordState))
+                {
+                    accessState = NoAccessState();
+                    return false;
+                }
+
+                if (!IsActiveParticipant(currentState, room, sessionId, userId) || !IsOwner(currentState, userId))
+                {
+                    accessState = CreateAccessState(currentState, room, sessionId, userId);
+                    return false;
+                }
+
+                if (currentState.PasswordRevision != passwordRevision)
+                {
+                    accessState = CreateAccessState(currentState, room, sessionId, userId);
+                    return false;
+                }
+
+                ClearPassword(currentState);
+                currentState.PasswordSalt = salt;
+                currentState.PasswordHash = hash;
+                currentState.PasswordRevision += 1;
+                passwordStored = true;
+                AuthorizeOwnerSessions(currentState);
+                accessState = CreateAccessState(currentState, room, sessionId, userId);
+                return true;
+            }
+        }
+        finally
+        {
+            if (!passwordStored)
+            {
+                CryptographicOperations.ZeroMemory(salt);
+                if (hash is not null)
+                {
+                    CryptographicOperations.ZeroMemory(hash);
+                }
+            }
         }
     }
 
@@ -211,14 +318,15 @@ public class JellyChatEventStore
         lock (_syncLock)
         {
             var state = ReconcileRoomLocked(room);
-            if (!IsActiveParticipant(state, sessionId, userId) || !IsOwner(state, userId))
+            if (!IsActiveParticipant(state, room, sessionId, userId) || !IsOwner(state, userId))
             {
-                accessState = CreateAccessState(state, sessionId, userId);
+                accessState = CreateAccessState(state, room, sessionId, userId);
                 return false;
             }
 
             ClearPassword(state);
-            accessState = CreateAccessState(state, sessionId, userId);
+            state.PasswordRevision += 1;
+            accessState = CreateAccessState(state, room, sessionId, userId);
             return true;
         }
     }
@@ -273,17 +381,26 @@ public class JellyChatEventStore
 
         state.GroupName = room.GroupName;
         var activeSessionIds = room.Participants.Select(static participant => participant.SessionId).ToHashSet(StringComparer.Ordinal);
-        foreach (string departedSessionId in state.Participants.Keys.Where(sessionId => !activeSessionIds.Contains(sessionId)).ToList())
+        var replacedSessionIds = room.Participants
+            .Where(participant => state.Participants.TryGetValue(participant.SessionId, out var existing)
+                && (existing.UserId != participant.UserId
+                    || !ReferenceEquals(existing.MembershipIdentity, participant.MembershipIdentity)))
+            .Select(static participant => participant.SessionId)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (string departedSessionId in state.Participants.Keys
+            .Where(sessionId => !activeSessionIds.Contains(sessionId) || replacedSessionIds.Contains(sessionId))
+            .ToList())
         {
             state.Participants.Remove(departedSessionId);
             state.AuthorizedSessions.Remove(departedSessionId);
             state.TypingBySession.Remove(departedSessionId);
         }
 
+        TransferOwnershipIfNeeded(state);
+
         foreach (var participant in room.Participants)
         {
-            if (state.Participants.TryGetValue(participant.SessionId, out var existing)
-                && existing.UserId == participant.UserId)
+            if (state.Participants.TryGetValue(participant.SessionId, out var existing))
             {
                 existing.UserName = participant.UserName;
                 continue;
@@ -296,6 +413,7 @@ public class JellyChatEventStore
                 participant.SessionId,
                 participant.UserId,
                 participant.UserName,
+                participant.MembershipIdentity,
                 state.NextJoinOrder);
         }
 
@@ -305,13 +423,7 @@ public class JellyChatEventStore
             return state;
         }
 
-        if (state.OwnerUserId == Guid.Empty || !state.Participants.Values.Any(participant => participant.UserId == state.OwnerUserId))
-        {
-            state.OwnerUserId = state.Participants.Values
-                .OrderBy(static participant => participant.JoinOrder)
-                .Select(static participant => participant.UserId)
-                .First();
-        }
+        TransferOwnershipIfNeeded(state);
 
         AuthorizeOwnerSessions(state);
         return state;
@@ -325,9 +437,27 @@ public class JellyChatEventStore
         }
     }
 
-    private static bool TryAuthorizeContentAccess(GroupRoomState state, string sessionId, Guid userId)
+    private static void TransferOwnershipIfNeeded(GroupRoomState state)
     {
-        if (!IsActiveParticipant(state, sessionId, userId))
+        if (state.OwnerUserId != Guid.Empty
+            && state.Participants.Values.Any(participant => participant.UserId == state.OwnerUserId))
+        {
+            return;
+        }
+
+        state.OwnerUserId = state.Participants.Values
+            .OrderBy(static participant => participant.JoinOrder)
+            .Select(static participant => participant.UserId)
+            .FirstOrDefault();
+    }
+
+    private static bool TryAuthorizeContentAccess(
+        GroupRoomState state,
+        JellyChatSyncPlayRoomSnapshot room,
+        string sessionId,
+        Guid userId)
+    {
+        if (!IsActiveParticipant(state, room, sessionId, userId))
         {
             return false;
         }
@@ -341,9 +471,19 @@ public class JellyChatEventStore
         return state.AuthorizedSessions.Contains(sessionId);
     }
 
-    private static bool IsActiveParticipant(GroupRoomState state, string sessionId, Guid userId)
+    private static bool IsActiveParticipant(
+        GroupRoomState state,
+        JellyChatSyncPlayRoomSnapshot room,
+        string sessionId,
+        Guid userId)
     {
-        return state.Participants.TryGetValue(sessionId, out var participant) && participant.UserId == userId;
+        var roomParticipant = room.Participants.FirstOrDefault(participant =>
+            string.Equals(participant.SessionId, sessionId, StringComparison.Ordinal)
+            && participant.UserId == userId);
+        return roomParticipant is not null
+            && state.Participants.TryGetValue(sessionId, out var participant)
+            && participant.UserId == userId
+            && ReferenceEquals(participant.MembershipIdentity, roomParticipant.MembershipIdentity);
     }
 
     private static bool IsOwner(GroupRoomState state, Guid userId)
@@ -351,13 +491,24 @@ public class JellyChatEventStore
         return userId != Guid.Empty && state.OwnerUserId == userId;
     }
 
-    private static JellyChatRoomAccessState CreateAccessState(GroupRoomState state, string sessionId, Guid userId)
+    private static JellyChatRoomAccessState CreateAccessState(
+        GroupRoomState state,
+        JellyChatSyncPlayRoomSnapshot room,
+        string sessionId,
+        Guid userId)
     {
-        bool isOwner = IsActiveParticipant(state, sessionId, userId) && IsOwner(state, userId);
+        bool isActiveParticipant = IsActiveParticipant(state, room, sessionId, userId);
+        bool isOwner = isActiveParticipant && IsOwner(state, userId);
         return new JellyChatRoomAccessState(
             state.PasswordProtected,
-            !state.PasswordProtected || isOwner || state.AuthorizedSessions.Contains(sessionId),
+            isActiveParticipant
+                && (!state.PasswordProtected || isOwner || state.AuthorizedSessions.Contains(sessionId)),
             isOwner);
+    }
+
+    private static JellyChatRoomAccessState NoAccessState()
+    {
+        return new JellyChatRoomAccessState(false, false, false);
     }
 
     private static void PruneTyping(GroupRoomState state)
@@ -436,6 +587,8 @@ public class JellyChatEventStore
 
         public byte[]? PasswordHash { get; set; }
 
+        public long PasswordRevision { get; set; }
+
         public bool PasswordProtected => PasswordHash is not null && PasswordSalt is not null;
 
         public Dictionary<string, RoomParticipantState> Participants { get; } = new(StringComparer.Ordinal);
@@ -449,11 +602,12 @@ public class JellyChatEventStore
 
     private sealed class RoomParticipantState
     {
-        public RoomParticipantState(string sessionId, Guid userId, string userName, long joinOrder)
+        public RoomParticipantState(string sessionId, Guid userId, string userName, object membershipIdentity, long joinOrder)
         {
             SessionId = sessionId;
             UserId = userId;
             UserName = userName;
+            MembershipIdentity = membershipIdentity;
             JoinOrder = joinOrder;
         }
 
@@ -462,6 +616,8 @@ public class JellyChatEventStore
         public Guid UserId { get; }
 
         public string UserName { get; set; }
+
+        public object MembershipIdentity { get; }
 
         public long JoinOrder { get; }
     }

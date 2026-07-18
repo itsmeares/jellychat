@@ -280,6 +280,11 @@ public class JellyChatController : ControllerBase
 
         if (!_eventStore.TrySetPassword(room, session.Id, userId, request.Password, out var accessState))
         {
+            if (accessState.IsOwner)
+            {
+                return StatusCode(StatusCodes.Status409Conflict, "Room password changed while the request was being processed.");
+            }
+
             return StatusCode(StatusCodes.Status403Forbidden, "Only the current JellyChat room owner can manage the password.");
         }
 

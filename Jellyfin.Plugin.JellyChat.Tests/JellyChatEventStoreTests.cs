@@ -1,5 +1,7 @@
 using Jellyfin.Plugin.JellyChat.Api;
 using Jellyfin.Plugin.JellyChat.Infrastructure;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Jellyfin.Plugin.JellyChat.Tests;
 
@@ -116,6 +118,254 @@ public sealed class JellyChatEventStoreTests
     }
 
     [Fact]
+    public void LeaveAndRejoinBetweenReconciliationsRevokesGrantAndMovesJoinOrder()
+    {
+        var store = new JellyChatEventStore();
+        var groupId = Guid.NewGuid();
+        var ownerMembership = new object();
+        var oldSecondMembership = new object();
+        var newSecondMembership = new object();
+        var thirdMembership = new object();
+        var room = CreateRoom(
+            groupId,
+            Member("owner-session", OwnerUserId, ownerMembership),
+            Member("second-session", SecondUserId, oldSecondMembership),
+            Member("third-session", ThirdUserId, thirdMembership));
+        Assert.True(store.TryGetRecent(room, "second-session", SecondUserId, null, 100, out _));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+
+        room = CreateRoom(
+            groupId,
+            Member("owner-session", OwnerUserId, ownerMembership),
+            Member("second-session", SecondUserId, newSecondMembership),
+            Member("third-session", ThirdUserId, thirdMembership));
+        Assert.False(store.ReconcileRoom(room, "second-session", SecondUserId).Authorized);
+
+        room = CreateRoom(
+            groupId,
+            Member("second-session", SecondUserId, newSecondMembership),
+            Member("third-session", ThirdUserId, thirdMembership));
+        Assert.True(store.ReconcileRoom(room, "third-session", ThirdUserId).IsOwner);
+        Assert.False(store.ReconcileRoom(room, "second-session", SecondUserId).IsOwner);
+    }
+
+    [Fact]
+    public void OwnerLeaveAndRejoinBetweenReconciliationsTransfersOwnership()
+    {
+        var store = new JellyChatEventStore();
+        var groupId = Guid.NewGuid();
+        var oldOwnerMembership = new object();
+        var newOwnerMembership = new object();
+        var secondMembership = new object();
+        var room = CreateRoom(
+            groupId,
+            Member("owner-session", OwnerUserId, oldOwnerMembership),
+            Member("second-session", SecondUserId, secondMembership));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+
+        room = CreateRoom(
+            groupId,
+            Member("owner-session", OwnerUserId, newOwnerMembership),
+            Member("second-session", SecondUserId, secondMembership));
+
+        Assert.True(store.ReconcileRoom(room, "second-session", SecondUserId).IsOwner);
+        var rejoinedOwnerAccess = store.ReconcileRoom(room, "owner-session", OwnerUserId);
+        Assert.False(rejoinedOwnerAccess.IsOwner);
+        Assert.False(rejoinedOwnerAccess.Authorized);
+    }
+
+    [Fact]
+    public async Task PasswordHashingDoesNotHoldSharedRoomLock()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using var hashingStarted = new ManualResetEventSlim();
+        using var releaseHashing = new ManualResetEventSlim();
+        bool blockHashing = false;
+        var store = new JellyChatEventStore((password, salt) =>
+        {
+            if (blockHashing && string.Equals(password, "secret", StringComparison.Ordinal))
+            {
+                hashingStarted.Set();
+                if (!releaseHashing.Wait(TimeSpan.FromSeconds(5), cancellationToken))
+                {
+                    throw new TimeoutException("Test password hashing was not released.");
+                }
+            }
+
+            return TestHash(password, salt);
+        });
+        var lockedRoom = CreateRoom(("owner-session", OwnerUserId), ("locked-session", SecondUserId));
+        Assert.True(store.TrySetPassword(lockedRoom, "owner-session", OwnerUserId, "secret", out _));
+        var otherRoom = CreateRoom(("other-owner", ThirdUserId));
+        blockHashing = true;
+
+        Task<bool> unlockTask = Task.Run(() => store.TryUnlock(
+            lockedRoom,
+            "locked-session",
+            SecondUserId,
+            "secret",
+            out _), cancellationToken);
+        try
+        {
+            Assert.True(hashingStarted.Wait(TimeSpan.FromSeconds(2), cancellationToken));
+            Task<bool> otherRoomWrite = Task.Run(() => store.TryAddOrGet(
+                otherRoom,
+                CreateEvent(otherRoom.GroupId, "other-owner", ThirdUserId, "chat.message"),
+                out _), cancellationToken);
+            Task reconciliation = Task.Run(
+                () => store.ReconcileActiveRooms([lockedRoom, otherRoom]),
+                cancellationToken);
+            Task concurrentOperations = Task.WhenAll(otherRoomWrite, reconciliation);
+            Task completed = await Task.WhenAny(concurrentOperations, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken));
+            Assert.Same(concurrentOperations, completed);
+            await concurrentOperations;
+            Assert.True(await otherRoomWrite);
+        }
+        finally
+        {
+            releaseHashing.Set();
+        }
+
+        Assert.True(await unlockTask);
+    }
+
+    [Fact]
+    public async Task ConcurrentPasswordChangeRejectsStaleUnlock()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using var hashingStarted = new ManualResetEventSlim();
+        using var releaseHashing = new ManualResetEventSlim();
+        bool blockOldPassword = false;
+        var store = new JellyChatEventStore((password, salt) =>
+        {
+            if (blockOldPassword && string.Equals(password, "old-password", StringComparison.Ordinal))
+            {
+                hashingStarted.Set();
+                if (!releaseHashing.Wait(TimeSpan.FromSeconds(5), cancellationToken))
+                {
+                    throw new TimeoutException("Test password hashing was not released.");
+                }
+            }
+
+            return TestHash(password, salt);
+        });
+        var room = CreateRoom(("owner-session", OwnerUserId), ("locked-session", SecondUserId));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "old-password", out _));
+        blockOldPassword = true;
+
+        Task<(bool Unlocked, JellyChatRoomAccessState Access)> staleUnlock = Task.Run(() =>
+        {
+            bool unlocked = store.TryUnlock(room, "locked-session", SecondUserId, "old-password", out var access);
+            return (unlocked, access);
+        }, cancellationToken);
+        Assert.True(hashingStarted.Wait(TimeSpan.FromSeconds(2), cancellationToken));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "new-password", out _));
+        releaseHashing.Set();
+
+        var staleResult = await staleUnlock;
+        Assert.False(staleResult.Unlocked);
+        Assert.False(staleResult.Access.Authorized);
+        Assert.True(store.TryUnlock(room, "locked-session", SecondUserId, "new-password", out var currentAccess));
+        Assert.True(currentAccess.Authorized);
+    }
+
+    [Fact]
+    public async Task ConcurrentPasswordManagementDoesNotOverwriteNewerChange()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using var hashingStarted = new ManualResetEventSlim();
+        using var releaseHashing = new ManualResetEventSlim();
+        var store = new JellyChatEventStore((password, salt) =>
+        {
+            if (string.Equals(password, "slow-password", StringComparison.Ordinal))
+            {
+                hashingStarted.Set();
+                if (!releaseHashing.Wait(TimeSpan.FromSeconds(5), cancellationToken))
+                {
+                    throw new TimeoutException("Test password hashing was not released.");
+                }
+            }
+
+            return TestHash(password, salt);
+        });
+        var room = CreateRoom(("owner-session", OwnerUserId), ("locked-session", SecondUserId));
+
+        Task<bool> slowChange = Task.Run(() => store.TrySetPassword(
+            room,
+            "owner-session",
+            OwnerUserId,
+            "slow-password",
+            out _), cancellationToken);
+        Assert.True(hashingStarted.Wait(TimeSpan.FromSeconds(2), cancellationToken));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "new-password", out _));
+        releaseHashing.Set();
+
+        Assert.False(await slowChange);
+        Assert.False(store.TryUnlock(room, "locked-session", SecondUserId, "slow-password", out _));
+        Assert.True(store.TryUnlock(room, "locked-session", SecondUserId, "new-password", out _));
+    }
+
+    [Fact]
+    public async Task ConcurrentRoomDestructionRejectsUnlockWithoutResurrectingRoom()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using var hashingStarted = new ManualResetEventSlim();
+        using var releaseHashing = new ManualResetEventSlim();
+        bool blockHashing = false;
+        var store = new JellyChatEventStore((password, salt) =>
+        {
+            if (blockHashing)
+            {
+                hashingStarted.Set();
+                if (!releaseHashing.Wait(TimeSpan.FromSeconds(5), cancellationToken))
+                {
+                    throw new TimeoutException("Test password hashing was not released.");
+                }
+            }
+
+            return TestHash(password, salt);
+        });
+        var groupId = Guid.NewGuid();
+        var room = CreateRoom(groupId, ("owner-session", OwnerUserId), ("locked-session", SecondUserId));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+        blockHashing = true;
+
+        Task<bool> unlockTask = Task.Run(() => store.TryUnlock(
+            room,
+            "locked-session",
+            SecondUserId,
+            "secret",
+            out _), cancellationToken);
+        Assert.True(hashingStarted.Wait(TimeSpan.FromSeconds(2), cancellationToken));
+        store.ReconcileActiveRooms([]);
+        releaseHashing.Set();
+        Assert.False(await unlockTask);
+
+        var freshRoom = CreateRoom(groupId, ("fresh-session", ThirdUserId));
+        var freshAccess = store.ReconcileRoom(freshRoom, "fresh-session", ThirdUserId);
+        Assert.True(freshAccess.IsOwner);
+        Assert.False(freshAccess.PasswordProtected);
+    }
+
+    [Fact]
+    public void PasswordManagementRejectsInvalidCallerBeforeHashing()
+    {
+        int hashCount = 0;
+        var store = new JellyChatEventStore((password, salt) =>
+        {
+            Interlocked.Increment(ref hashCount);
+            return TestHash(password, salt);
+        });
+        var room = CreateRoom(("owner-session", OwnerUserId), ("second-session", SecondUserId));
+
+        Assert.False(store.TrySetPassword(room, "second-session", SecondUserId, "secret", out _));
+        Assert.False(store.TrySetPassword(room, "missing-session", OwnerUserId, "secret", out _));
+        Assert.Equal(0, hashCount);
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+        Assert.Equal(1, hashCount);
+    }
+
+    [Fact]
     public void LockedSessionCannotReadOrWriteAnyEventType()
     {
         var store = new JellyChatEventStore();
@@ -175,7 +425,30 @@ public sealed class JellyChatEventStoreTests
             participants.Select(participant => new JellyChatSyncPlayParticipant(
                 participant.SessionId,
                 participant.UserId,
-                "User " + participant.UserId.ToString("N")[..4])).ToList());
+                "User " + participant.UserId.ToString("N")[..4],
+                participant.SessionId)).ToList());
+    }
+
+    private static JellyChatSyncPlayRoomSnapshot CreateRoom(Guid groupId, params TestMember[] participants)
+    {
+        return new JellyChatSyncPlayRoomSnapshot(
+            groupId,
+            "Test room",
+            participants.Select(participant => new JellyChatSyncPlayParticipant(
+                participant.SessionId,
+                participant.UserId,
+                "User " + participant.UserId.ToString("N")[..4],
+                participant.MembershipIdentity)).ToList());
+    }
+
+    private static TestMember Member(string sessionId, Guid userId, object membershipIdentity)
+    {
+        return new TestMember(sessionId, userId, membershipIdentity);
+    }
+
+    private static byte[] TestHash(string password, byte[] salt)
+    {
+        return SHA256.HashData(Encoding.UTF8.GetBytes(password).Concat(salt).ToArray());
     }
 
     private static JellyChatEvent CreateEvent(Guid groupId, string sessionId, Guid userId, string type)
@@ -191,4 +464,6 @@ public sealed class JellyChatEventStoreTests
             ClientEventId = Guid.NewGuid().ToString("N")
         };
     }
+
+    private sealed record TestMember(string SessionId, Guid UserId, object MembershipIdentity);
 }

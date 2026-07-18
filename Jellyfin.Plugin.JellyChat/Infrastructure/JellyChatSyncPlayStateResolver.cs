@@ -135,7 +135,7 @@ public sealed class JellyChatSyncPlayStateResolver
                 Guid userId = rawUserId is Guid parsedUserId ? parsedUserId : Guid.Empty;
                 if (!string.IsNullOrWhiteSpace(sessionId) && userId != Guid.Empty)
                 {
-                    participants.Add(new JellyChatSyncPlayParticipant(sessionId, userId, userName));
+                    participants.Add(new JellyChatSyncPlayParticipant(sessionId, userId, userName, participant));
                 }
             }
 

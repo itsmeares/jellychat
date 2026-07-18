@@ -38,6 +38,22 @@ jobs:
       - name: Verify Frontend Assets
         run: git diff --exit-code -- Jellyfin.Plugin.JellyChat/Web/jellychat.js Jellyfin.Plugin.JellyChat/Web/jellychat.css
 
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Run JellyChat Tests
+        run: dotnet test Jellyfin.Plugin.JellyChat.Tests/Jellyfin.Plugin.JellyChat.Tests.csproj -c Release
+
   call:
-    needs: frontend
+    needs:
+      - frontend
+      - tests
     uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master
