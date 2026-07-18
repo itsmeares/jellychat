@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JellyChat</title>
+</head>
+<body>
+    <div id="JellyChatConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+        <style>
+            #JellyChatConfigPage .jellyChatColorControl {
+                display: flex;
+                align-items: center;
+                gap: .75em;
+            }
+
+            #JellyChatConfigPage .jellyChatColorControl .emby-input {
+                flex: 1;
+                min-width: 0;
+            }
+
+            #JellyChatConfigPage .jellyChatColorSwatch {
+                width: 3.5em;
+                height: 2.5em;
+                min-width: 3.5em;
+                margin: 0;
+                padding: .2em;
+                overflow: hidden;
+                cursor: pointer;
+                border: 1px solid rgba(255, 255, 255, .24);
+                border-radius: .35em;
+                background-color: #b5b5b5;
+                background-image: linear-gradient(45deg, #d5d5d5 25%, transparent 25%), linear-gradient(-45deg, #d5d5d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d5d5d5 75%), linear-gradient(-45deg, transparent 75%, #d5d5d5 75%);
+                background-position: 0 0, 0 .35em, .35em -.35em, -.35em 0;
+                background-size: .7em .7em;
+            }
+
+            #JellyChatConfigPage .jellyChatColorSwatch:hover {
+                border-color: rgba(255, 255, 255, .55);
+            }
+
+            #JellyChatConfigPage .jellyChatColorSwatch:focus-visible {
+                outline: 2px solid #00a4dc;
+                outline-offset: 2px;
+            }
+
+            #JellyChatConfigPage .jellyChatColorSwatchFill {
+                display: block;
+                width: 100%;
+                height: 100%;
+                border-radius: .2em;
+                pointer-events: none;
+            }
+
+            .jellyChatConfigColorPopover[hidden] {
+                display: none;
+            }
+
+            .jellyChatConfigColorPopover {
+                position: fixed;
+                z-index: 1200;
+                width: min(17em, calc(100vw - 1em));
+                max-height: calc(100vh - 1em);
+                box-sizing: border-box;
+                padding: .85em;
+                overflow-y: auto;
+                color: #fff;
+                background: #202020;
+                border: 1px solid rgba(255, 255, 255, .2);
+                border-radius: .35em;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, .45);
+            }
+
+            .jellyChatConfigColorHeading {
+                margin: 0 0 .7em;
+                font-size: 1.05em;
+            }
+
+            .jellyChatConfigColorSv {
+                position: relative;
+                width: 100%;
+                height: 9.5em;
+                overflow: hidden;
+                touch-action: none;
+                cursor: crosshair;
+                border-radius: .25em;
+                background-color: hsl(var(--jellychat-picker-hue, 0), 100%, 50%);
+                background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+            }
+
+            .jellyChatConfigColorSv:focus-visible {
+                outline: 2px solid #00a4dc;
+                outline-offset: 2px;
+            }
+
+            .jellyChatConfigColorSvMarker {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: .8em;
+                height: .8em;
+                box-sizing: border-box;
+                border: 2px solid #fff;
+                border-radius: 50%;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+            }
+
+            .jellyChatConfigColorSliderRow {
+                margin-top: .65em;
+            }
+
+            .jellyChatConfigColorSliderLabel {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: .25em;
+                font-size: .9em;
+            }
+
+            .jellyChatConfigColorRange {
+                width: 100%;
+                height: .75em;
+                margin: .35em 0;
+                padding: 0;
+                cursor: pointer;
+                appearance: none;
+                -webkit-appearance: none;
+                border: 0;
+                border-radius: .4em;
+            }
+
+            .jellyChatConfigColorRange:focus-visible {
+                outline: 2px solid #00a4dc;
+                outline-offset: 3px;
+            }
+
+            .jellyChatConfigColorHue {
+                background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+            }
+
+            .jellyChatConfigColorAlpha {
+                background-color: #b5b5b5;
+                background-image: linear-gradient(to right, transparent, var(--jellychat-picker-alpha-color, #f00)), linear-gradient(45deg, #d5d5d5 25%, transparent 25%), linear-gradient(-45deg, #d5d5d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d5d5d5 75%), linear-gradient(-45deg, transparent 75%, #d5d5d5 75%);
+                background-position: 0 0, 0 0, 0 .3em, .3em -.3em, -.3em 0;
+                background-size: 100% 100%, .6em .6em, .6em .6em, .6em .6em, .6em .6em;
+            }
+
+            .jellyChatConfigColorRange::-webkit-slider-runnable-track {
+                height: .75em;
+                background: transparent;
+            }
+
+            .jellyChatConfigColorRange::-webkit-slider-thumb {
+                width: 1.1em;
+                height: 1.1em;
+                margin-top: -.18em;
+                appearance: none;
+                -webkit-appearance: none;
+                border: 2px solid #fff;
+                border-radius: 50%;
+                background: #202020;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+            }
+
+            .jellyChatConfigColorRange::-moz-range-track {
+                height: .75em;
+                background: transparent;
+                border: 0;
+            }
+
+            .jellyChatConfigColorRange::-moz-range-thumb {
+                width: .85em;
+                height: .85em;
+                border: 2px solid #fff;
+                border-radius: 50%;
+                background: #202020;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+            }
+
+            .jellyChatConfigColorValueRow {
+                display: flex;
+                align-items: flex-end;
+                gap: .65em;
+                margin-top: .7em;
+            }
+
+            .jellyChatConfigColorPreview {
+                position: relative;
+                width: 2.5em;
+                height: 2.5em;
+                flex: 0 0 2.5em;
+                overflow: hidden;
+                border: 1px solid rgba(255, 255, 255, .24);
+                border-radius: .25em;
+                background-color: #b5b5b5;
+                background-image: linear-gradient(45deg, #d5d5d5 25%, transparent 25%), linear-gradient(-45deg, #d5d5d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d5d5d5 75%), linear-gradient(-45deg, transparent 75%, #d5d5d5 75%);
+                background-position: 0 0, 0 .35em, .35em -.35em, -.35em 0;
+                background-size: .7em .7em;
+            }
+
+            .jellyChatConfigColorPreviewFill {
+                position: absolute;
+                inset: 0;
+            }
+
+            .jellyChatConfigColorHexContainer {
+                flex: 1;
+                min-width: 0;
+                margin-bottom: 0;
+            }
+
+            .jellyChatConfigColorActions {
+                display: flex;
+                justify-content: flex-end;
+                gap: .5em;
+                margin-top: .85em;
+            }
+        </style>
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="JellyChatConfigForm">
+                    <section aria-labelledby="JellyChatAppearanceHeading">
+                        <h2 id="JellyChatAppearanceHeading">Appearance</h2>
+                        <p>Set server-wide JellyChat colors. Leave any value empty to use the JellyChat default.</p>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatAccentColor">Accent color</label>
+                            <div class="jellyChatColorControl">
+                                <button id="JellyChatAccentColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose accent color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
+                                <input id="JellyChatAccentColor" type="text" is="emby-input" autocomplete="off" placeholder="#00a4dc">
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatDrawerBackgroundColor">Drawer background color</label>
+                            <div class="jellyChatColorControl">
+                                <button id="JellyChatDrawerBackgroundColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose drawer background color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
+                                <input id="JellyChatDrawerBackgroundColor" type="text" is="emby-input" autocomplete="off" placeholder="#101317">
+                            </div>
+                            <div class="fieldDescription">Per-client Background % continues to control drawer opacity.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatPanelBackgroundColor">Panel/input background color</label>
+                            <div class="jellyChatColorControl">
+                                <button id="JellyChatPanelBackgroundColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose panel and input background color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
+                                <input id="JellyChatPanelBackgroundColor" type="text" is="emby-input" autocomplete="off" placeholder="#16191e">
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatBorderColor">Border color</label>
+                            <div class="jellyChatColorControl">
+                                <button id="JellyChatBorderColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose border color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
+                                <input id="JellyChatBorderColor" type="text" is="emby-input" autocomplete="off" placeholder="rgba(255, 255, 255, 0.12)">
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatTextColor">Text color</label>
+                            <div class="jellyChatColorControl">
+                                <button id="JellyChatTextColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose text color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
+                                <input id="JellyChatTextColor" type="text" is="emby-input" autocomplete="off" placeholder="#f6f8fb">
+                            </div>
+                            <div class="fieldDescription">Accepts CSS colors including hex, rgb(), rgba(), hsl(), and CSS variables.</div>
+                        </div>
+
+                        <div style="display:flex;flex-wrap:wrap;gap:.75em;margin:1.5em 0">
+                            <button id="JellyChatResetColors" is="emby-button" type="button" class="raised emby-button">Reset colors</button>
+                        </div>
+                    </section>
+
+                    <section aria-labelledby="JellyChatCustomCssHeading">
+                        <h2 id="JellyChatCustomCssHeading">Advanced custom CSS</h2>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatCustomCss">Custom CSS</label>
+                            <textarea id="JellyChatCustomCss" is="emby-input" rows="14" spellcheck="false" style="width:100%;box-sizing:border-box;font-family:monospace;resize:vertical"></textarea>
+                            <div class="fieldDescription">Raw CSS is loaded after JellyChat styles and color overrides. JellyChat-specific selectors such as <code>#jellyChatDrawer</code> and <code>.jellyChatComposer</code> are recommended.</div>
+                        </div>
+                        <button id="JellyChatResetCustomCss" is="emby-button" type="button" class="raised emby-button">Reset custom CSS</button>
+                    </section>
+
+                    <div style="margin-top:1.5em">
+                        <button id="JellyChatResetAll" is="emby-button" type="button" class="raised emby-button">Reset all appearance settings</button>
+                    </div>
+                    <div style="margin-top:2em">
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                    <p id="JellyChatSaveStatus" role="status" aria-live="polite"></p>
+                </form>
+            </div>
+        </div>
+        <div id="JellyChatColorPopover" class="jellyChatConfigColorPopover" role="dialog" aria-modal="false" aria-labelledby="JellyChatColorPopoverHeading" hidden>
+            <h3 id="JellyChatColorPopoverHeading" class="jellyChatConfigColorHeading">Choose color</h3>
+            <div id="JellyChatColorSaturationValue" class="jellyChatConfigColorSv" role="slider" tabindex="0" aria-label="Saturation and brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="Saturation 100%, brightness 100%">
+                <span id="JellyChatColorSaturationValueMarker" class="jellyChatConfigColorSvMarker" aria-hidden="true"></span>
+            </div>
+            <div class="jellyChatConfigColorSliderRow">
+                <label class="jellyChatConfigColorSliderLabel" for="JellyChatColorHue"><span>Hue</span><span id="JellyChatColorHueValue">0°</span></label>
+                <input id="JellyChatColorHue" class="jellyChatConfigColorRange jellyChatConfigColorHue" type="range" min="0" max="360" step="1" value="0">
+            </div>
+            <div class="jellyChatConfigColorSliderRow">
+                <label class="jellyChatConfigColorSliderLabel" for="JellyChatColorAlpha"><span>Alpha</span><span id="JellyChatColorAlphaValue">100%</span></label>
+                <input id="JellyChatColorAlpha" class="jellyChatConfigColorRange jellyChatConfigColorAlpha" type="range" min="0" max="100" step="1" value="100">
+            </div>
+            <div class="jellyChatConfigColorValueRow">
+                <div id="JellyChatColorPreview" class="jellyChatConfigColorPreview" role="img" aria-label="Current color preview"><span id="JellyChatColorPreviewFill" class="jellyChatConfigColorPreviewFill"></span></div>
+                <div class="inputContainer jellyChatConfigColorHexContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="JellyChatColorHex">Hex color</label>
+                    <input id="JellyChatColorHex" type="text" is="emby-input" autocomplete="off" spellcheck="false" placeholder="#00a4dc">
+                </div>
+            </div>
+            <div class="jellyChatConfigColorActions">
+                <button id="JellyChatColorCancel" type="button" is="emby-button" class="button-flat emby-button">Cancel</button>
+                <button id="JellyChatColorApply" type="button" is="emby-button" class="raised button-submit emby-button">Apply</button>
+            </div>
+        </div>
+        <script type="text/javascript">
+            (function () {
+                var pluginId = 'a69744cc-2281-48bf-adef-8e451a16ff71';
+                var colors = [
+                    { property: 'AccentColor', input: 'JellyChatAccentColor', swatch: 'JellyChatAccentColorSwatch', label: 'accent color', defaultColor: '#00a4dc' },
+                    { property: 'DrawerBackgroundColor', input: 'JellyChatDrawerBackgroundColor', swatch: 'JellyChatDrawerBackgroundColorSwatch', label: 'drawer background color', defaultColor: '#101317' },
+                    { property: 'PanelBackgroundColor', input: 'JellyChatPanelBackgroundColor', swatch: 'JellyChatPanelBackgroundColorSwatch', label: 'panel and input background color', defaultColor: '#16191e' },
+                    { property: 'BorderColor', input: 'JellyChatBorderColor', swatch: 'JellyChatBorderColorSwatch', label: 'border color', defaultColor: 'rgba(255, 255, 255, 0.12)' },
+                    { property: 'TextColor', input: 'JellyChatTextColor', swatch: 'JellyChatTextColorSwatch', label: 'text color', defaultColor: '#f6f8fb' }
+                ];
+                var activeColor = null;
+                var draftColor = null;
+                var saturationPointerId = null;
+
+                function element(id) {
+                    return document.getElementById(id);
+                }
+
+                function clamp(value, minimum, maximum) {
+                    return Math.max(minimum, Math.min(maximum, value));
+                }
+
+                function swatchFill(entry) {
+                    return element(entry.swatch).querySelector('.jellyChatColorSwatchFill');
+                }
+
+                function isComputedTransparent(value) {
+                    return value === 'transparent' || value === 'rgba(0, 0, 0, 0)';
+                }
+
+                function parseComputedColor(value) {
+                    if (value === 'transparent') {
+                        return { r: 0, g: 0, b: 0, a: 0 };
+                    }
+
+                    if (!/^rgba?\(/i.test(value)) {
+                        return null;
+                    }
+
+                    var channels = value.match(/[\d.]+/g);
+                    if (!channels || channels.length < 3) {
+                        return null;
+                    }
+
+                    return {
+                        r: clamp(Math.round(Number(channels[0])), 0, 255),
+                        g: clamp(Math.round(Number(channels[1])), 0, 255),
+                        b: clamp(Math.round(Number(channels[2])), 0, 255),
+                        a: channels.length > 3 ? clamp(Number(channels[3]), 0, 1) : 1
+                    };
+                }
+
+                function parseHex(value) {
+                    var match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value.trim());
+                    if (!match) {
+                        return null;
+                    }
+
+                    var digits = match[1];
+                    if (digits.length === 3) {
+                        digits = digits.charAt(0) + digits.charAt(0) +
+                            digits.charAt(1) + digits.charAt(1) +
+                            digits.charAt(2) + digits.charAt(2);
+                    }
+
+                    return {
+                        r: parseInt(digits.substring(0, 2), 16),
+                        g: parseInt(digits.substring(2, 4), 16),
+                        b: parseInt(digits.substring(4, 6), 16)
+                    };
+                }
+
+                function rgbToHex(rgb) {
+                    return '#' + [rgb.r, rgb.g, rgb.b].map(function (channel) {
+                        var hex = clamp(Math.round(channel), 0, 255).toString(16);
+                        return hex.length === 1 ? '0' + hex : hex;
+                    }).join('');
+                }
+
+                function rgbToHsv(rgb) {
+                    var red = rgb.r / 255;
+                    var green = rgb.g / 255;
+                    var blue = rgb.b / 255;
+                    var maximum = Math.max(red, green, blue);
+                    var minimum = Math.min(red, green, blue);
+                    var difference = maximum - minimum;
+                    var hue = 0;
+
+                    if (difference !== 0) {
+                        if (maximum === red) {
+                            hue = 60 * (((green - blue) / difference) % 6);
+                        } else if (maximum === green) {
+                            hue = 60 * (((blue - red) / difference) + 2);
+                        } else {
+                            hue = 60 * (((red - green) / difference) + 4);
+                        }
+                    }
+
+                    if (hue < 0) {
+                        hue += 360;
+                    }
+
+                    return {
+                        h: hue,
+                        s: maximum === 0 ? 0 : difference / maximum,
+                        v: maximum
+                    };
+                }
+
+                function hsvToRgb(hsv) {
+                    var hue = ((hsv.h % 360) + 360) % 360;
+                    var chroma = hsv.v * hsv.s;
+                    var intermediary = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+                    var match = hsv.v - chroma;
+                    var red = 0;
+                    var green = 0;
+                    var blue = 0;
+
+                    if (hue < 60) {
+                        red = chroma;
+                        green = intermediary;
+                    } else if (hue < 120) {
+                        red = intermediary;
+                        green = chroma;
+                    } else if (hue < 180) {
+                        green = chroma;
+                        blue = intermediary;
+                    } else if (hue < 240) {
+                        green = intermediary;
+                        blue = chroma;
+                    } else if (hue < 300) {
+                        red = intermediary;
+                        blue = chroma;
+                    } else {
+                        red = chroma;
+                        blue = intermediary;
+                    }
+
+                    return {
+                        r: Math.round((red + match) * 255),
+                        g: Math.round((green + match) * 255),
+                        b: Math.round((blue + match) * 255)
+                    };
+                }
+
+                function syncSwatch(entry) {
+                    var value = element(entry.input).value.trim();
+                    var preview = value || entry.defaultColor;
+                    var fill = swatchFill(entry);
+                    var previous = entry.lastValidPreview || entry.defaultColor;
+
+                    if (value && (!window.CSS || !CSS.supports('color', value))) {
+                        fill.style.backgroundColor = previous;
+                        return;
+                    }
+
+                    fill.style.color = '';
+                    var inheritedColor = window.getComputedStyle(fill).color;
+                    fill.style.backgroundColor = preview;
+                    fill.style.color = preview;
+                    var computedStyle = window.getComputedStyle(fill);
+                    var computedBackground = computedStyle.backgroundColor;
+                    var computedColor = computedStyle.color;
+                    fill.style.color = '';
+                    var unresolvedVariable = /var\(/i.test(preview) &&
+                        isComputedTransparent(computedBackground) &&
+                        computedColor === inheritedColor &&
+                        !isComputedTransparent(inheritedColor);
+
+                    if (unresolvedVariable || !parseComputedColor(computedBackground)) {
+                        fill.style.backgroundColor = previous;
+                        return;
+                    }
+
+                    entry.lastValidPreview = preview;
+                }
+
+                function validateColor(entry) {
+                    var input = element(entry.input);
+                    var value = input.value.trim();
+                    var valid = !value || (window.CSS && CSS.supports('color', value));
+                    input.setCustomValidity(valid ? '' : 'Enter a valid CSS color value.');
+                    return valid;
+                }
+
+                function formatAlpha(value) {
+                    return String(Number(clamp(value, 0, 1).toFixed(3)));
+                }
+
+                function formatDraftColor() {
+                    var rgb = hsvToRgb(draftColor);
+                    if (draftColor.a >= .9995) {
+                        return rgbToHex(rgb);
+                    }
+
+                    return 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + formatAlpha(draftColor.a) + ')';
+                }
+
+                function renderPicker(preserveHexInput) {
+                    if (!draftColor) {
+                        return;
+                    }
+
+                    var rgb = hsvToRgb(draftColor);
+                    var saturation = Math.round(draftColor.s * 100);
+                    var brightness = Math.round(draftColor.v * 100);
+                    var alpha = Math.round(draftColor.a * 100);
+                    var saturationValue = element('JellyChatColorSaturationValue');
+
+                    saturationValue.style.setProperty('--jellychat-picker-hue', draftColor.h);
+                    element('JellyChatColorSaturationValueMarker').style.left = saturation + '%';
+                    element('JellyChatColorSaturationValueMarker').style.top = (100 - brightness) + '%';
+                    saturationValue.setAttribute('aria-valuenow', String(saturation));
+                    saturationValue.setAttribute('aria-valuetext', 'Saturation ' + saturation + '%, brightness ' + brightness + '%');
+
+                    element('JellyChatColorHue').value = String(Math.round(draftColor.h));
+                    element('JellyChatColorHueValue').textContent = Math.round(draftColor.h) + '°';
+                    element('JellyChatColorAlpha').value = String(alpha);
+                    element('JellyChatColorAlpha').style.setProperty('--jellychat-picker-alpha-color', 'rgb(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ')');
+                    element('JellyChatColorAlphaValue').textContent = alpha + '%';
+
+                    element('JellyChatColorPreviewFill').style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + formatAlpha(draftColor.a) + ')';
+                    element('JellyChatColorPreview').setAttribute('aria-label', 'Current color ' + formatDraftColor());
+
+                    if (!preserveHexInput) {
+                        var hexInput = element('JellyChatColorHex');
+                        hexInput.value = rgbToHex(rgb);
+                        hexInput.setCustomValidity('');
+                        element('JellyChatColorApply').disabled = false;
+                    }
+                }
+
+                function setDraftRgb(rgb) {
+                    var hsv = rgbToHsv(rgb);
+                    if (draftColor && hsv.s === 0) {
+                        hsv.h = draftColor.h;
+                    }
+
+                    draftColor.h = hsv.h;
+                    draftColor.s = hsv.s;
+                    draftColor.v = hsv.v;
+                }
+
+                function positionColorPopover() {
+                    if (!activeColor) {
+                        return;
+                    }
+
+                    var trigger = element(activeColor.swatch);
+                    if (!trigger || !trigger.isConnected) {
+                        closeColorPopover(false);
+                        return;
+                    }
+
+                    var popover = element('JellyChatColorPopover');
+                    var triggerRect = trigger.getBoundingClientRect();
+                    var popoverRect = popover.getBoundingClientRect();
+                    var viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+                    var viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+                    var gutter = 10;
+                    var gap = 8;
+                    var left = triggerRect.left;
+                    var top = triggerRect.bottom + gap;
+
+                    if (viewportWidth >= 700 && triggerRect.right + gap + popoverRect.width <= viewportWidth - gutter) {
+                        left = triggerRect.right + gap;
+                        top = triggerRect.top;
+                    } else if (top + popoverRect.height > viewportHeight - gutter && triggerRect.top - gap - popoverRect.height >= gutter) {
+                        top = triggerRect.top - gap - popoverRect.height;
+                    } else if (top + popoverRect.height > viewportHeight - gutter && triggerRect.left - gap - popoverRect.width >= gutter) {
+                        left = triggerRect.left - gap - popoverRect.width;
+                        top = triggerRect.top;
+                    }
+
+                    left = clamp(left, gutter, viewportWidth - popoverRect.width - gutter);
+                    top = clamp(top, gutter, viewportHeight - popoverRect.height - gutter);
+                    popover.style.left = left + 'px';
+                    popover.style.top = top + 'px';
+                }
+
+                function closeColorPopover(returnFocus) {
+                    if (!activeColor) {
+                        return;
+                    }
+
+                    var entry = activeColor;
+                    var trigger = element(entry.swatch);
+                    var popover = element('JellyChatColorPopover');
+                    activeColor = null;
+                    draftColor = null;
+                    saturationPointerId = null;
+                    popover.hidden = true;
+                    popover.style.left = '';
+                    popover.style.top = '';
+                    trigger.setAttribute('aria-expanded', 'false');
+                    element('JellyChatColorHex').setCustomValidity('');
+                    element('JellyChatColorApply').disabled = false;
+
+                    var page = element('JellyChatConfigPage');
+                    if (page && page.isConnected) {
+                        page.appendChild(popover);
+                    }
+
+                    if (returnFocus) {
+                        window.requestAnimationFrame(function () {
+                            if (trigger.isConnected) {
+                                trigger.focus();
+                            }
+                        });
+                    }
+                }
+
+                function openColorPopover(entry) {
+                    if (activeColor === entry) {
+                        closeColorPopover(true);
+                        return;
+                    }
+
+                    closeColorPopover(false);
+                    var computed = parseComputedColor(window.getComputedStyle(swatchFill(entry)).backgroundColor);
+                    if (!computed) {
+                        return;
+                    }
+
+                    var hsv = rgbToHsv(computed);
+                    activeColor = entry;
+                    draftColor = { h: hsv.h, s: hsv.s, v: hsv.v, a: computed.a };
+                    element(entry.swatch).setAttribute('aria-expanded', 'true');
+                    element('JellyChatColorPopoverHeading').textContent = 'Choose ' + entry.label;
+                    element('JellyChatColorHex').setCustomValidity('');
+                    element('JellyChatColorApply').disabled = false;
+
+                    var popover = element('JellyChatColorPopover');
+                    document.body.appendChild(popover);
+                    popover.hidden = false;
+                    renderPicker(false);
+                    positionColorPopover();
+                    element('JellyChatColorSaturationValue').focus();
+                }
+
+                function applyColorPopover() {
+                    if (!activeColor || !draftColor) {
+                        return;
+                    }
+
+                    var hexInput = element('JellyChatColorHex');
+                    var rgb = parseHex(hexInput.value);
+                    if (!rgb) {
+                        hexInput.setCustomValidity('Enter a hex color such as #00a4dc.');
+                        hexInput.reportValidity();
+                        return;
+                    }
+
+                    setDraftRgb(rgb);
+                    hexInput.setCustomValidity('');
+                    var colorInput = element(activeColor.input);
+                    colorInput.value = formatDraftColor();
+                    validateColor(activeColor);
+                    syncSwatch(activeColor);
+                    closeColorPopover(false);
+                    colorInput.focus();
+                }
+
+                function updateSaturationValue(event) {
+                    if (!draftColor) {
+                        return;
+                    }
+
+                    var rect = element('JellyChatColorSaturationValue').getBoundingClientRect();
+                    draftColor.s = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+                    draftColor.v = 1 - clamp((event.clientY - rect.top) / rect.height, 0, 1);
+                    renderPicker(false);
+                }
+
+                colors.forEach(function (entry) {
+                    entry.lastValidPreview = entry.defaultColor;
+                    syncSwatch(entry);
+                    element(entry.swatch).addEventListener('click', function () {
+                        openColorPopover(entry);
+                    });
+                    element(entry.input).addEventListener('input', function () {
+                        validateColor(entry);
+                        syncSwatch(entry);
+                    });
+                });
+
+                element('JellyChatColorSaturationValue').addEventListener('pointerdown', function (event) {
+                    event.preventDefault();
+                    saturationPointerId = event.pointerId;
+                    this.setPointerCapture(event.pointerId);
+                    updateSaturationValue(event);
+                });
+                element('JellyChatColorSaturationValue').addEventListener('pointermove', function (event) {
+                    if (event.pointerId === saturationPointerId) {
+                        updateSaturationValue(event);
+                    }
+                });
+                element('JellyChatColorSaturationValue').addEventListener('pointerup', function (event) {
+                    if (event.pointerId === saturationPointerId) {
+                        saturationPointerId = null;
+                        this.releasePointerCapture(event.pointerId);
+                    }
+                });
+                element('JellyChatColorSaturationValue').addEventListener('pointercancel', function (event) {
+                    if (event.pointerId === saturationPointerId) {
+                        saturationPointerId = null;
+                    }
+                });
+                element('JellyChatColorSaturationValue').addEventListener('keydown', function (event) {
+                    if (!draftColor || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    var step = event.shiftKey ? .1 : .01;
+                    if (event.key === 'ArrowLeft') {
+                        draftColor.s = clamp(draftColor.s - step, 0, 1);
+                    } else if (event.key === 'ArrowRight') {
+                        draftColor.s = clamp(draftColor.s + step, 0, 1);
+                    } else if (event.key === 'ArrowUp') {
+                        draftColor.v = clamp(draftColor.v + step, 0, 1);
+                    } else {
+                        draftColor.v = clamp(draftColor.v - step, 0, 1);
+                    }
+
+                    renderPicker(false);
+                });
+
+                element('JellyChatColorHue').addEventListener('input', function () {
+                    if (draftColor) {
+                        draftColor.h = Number(this.value);
+                        renderPicker(false);
+                    }
+                });
+                element('JellyChatColorAlpha').addEventListener('input', function () {
+                    if (draftColor) {
+                        draftColor.a = Number(this.value) / 100;
+                        renderPicker(false);
+                    }
+                });
+                element('JellyChatColorHex').addEventListener('input', function () {
+                    var rgb = parseHex(this.value);
+                    var valid = Boolean(rgb);
+                    this.setCustomValidity(valid ? '' : 'Enter a hex color such as #00a4dc.');
+                    element('JellyChatColorApply').disabled = !valid;
+                    if (valid && draftColor) {
+                        setDraftRgb(rgb);
+                        renderPicker(true);
+                    }
+                });
+                element('JellyChatColorHex').addEventListener('blur', function () {
+                    var rgb = parseHex(this.value);
+                    if (rgb) {
+                        this.value = rgbToHex(rgb);
+                    }
+                });
+                element('JellyChatColorHex').addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        applyColorPopover();
+                    }
+                });
+                element('JellyChatColorApply').addEventListener('click', applyColorPopover);
+                element('JellyChatColorCancel').addEventListener('click', function () {
+                    closeColorPopover(true);
+                });
+
+                document.addEventListener('pointerdown', function (event) {
+                    if (!activeColor || element('JellyChatColorPopover').contains(event.target) || element(activeColor.swatch).contains(event.target)) {
+                        return;
+                    }
+
+                    closeColorPopover(false);
+                }, true);
+
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' && activeColor) {
+                        event.preventDefault();
+                        closeColorPopover(true);
+                    }
+                });
+
+                window.addEventListener('resize', positionColorPopover);
+                window.addEventListener('scroll', positionColorPopover, true);
+
+                function resetColors() {
+                    closeColorPopover(false);
+                    colors.forEach(function (entry) {
+                        element(entry.input).value = '';
+                        validateColor(entry);
+                        syncSwatch(entry);
+                    });
+                    element('JellyChatSaveStatus').textContent = '';
+                }
+
+                element('JellyChatResetColors').addEventListener('click', resetColors);
+                element('JellyChatResetCustomCss').addEventListener('click', function () {
+                    element('JellyChatCustomCss').value = '';
+                    element('JellyChatSaveStatus').textContent = '';
+                });
+                element('JellyChatResetAll').addEventListener('click', function () {
+                    resetColors();
+                    element('JellyChatCustomCss').value = '';
+                });
+
+                element('JellyChatConfigPage').addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        colors.forEach(function (entry) {
+                            element(entry.input).value = config[entry.property] || '';
+                            validateColor(entry);
+                            syncSwatch(entry);
+                        });
+                        element('JellyChatCustomCss').value = config.CustomCss || '';
+                        element('JellyChatSaveStatus').textContent = '';
+                        Dashboard.hideLoadingMsg();
+                    }).catch(function () {
+                        Dashboard.hideLoadingMsg();
+                        element('JellyChatSaveStatus').textContent = 'Unable to load JellyChat appearance settings.';
+                    });
+                });
+
+                element('JellyChatConfigPage').addEventListener('pagehide', function () {
+                    closeColorPopover(false);
+                });
+
+                element('JellyChatConfigForm').addEventListener('submit', function (event) {
+                    event.preventDefault();
+                    if (!colors.map(validateColor).every(Boolean)) {
+                        element('JellyChatConfigForm').reportValidity();
+                        return false;
+                    }
+
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        colors.forEach(function (entry) {
+                            config[entry.property] = element(entry.input).value.trim();
+                        });
+                        config.CustomCss = element('JellyChatCustomCss').value;
+                        return ApiClient.updatePluginConfiguration(pluginId, config);
+                    }).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        element('JellyChatSaveStatus').textContent = 'Changes apply after refreshing Jellyfin Web.';
+                    }).catch(function () {
+                        Dashboard.hideLoadingMsg();
+                        element('JellyChatSaveStatus').textContent = 'Unable to save JellyChat appearance settings.';
+                    });
+                    return false;
+                });
+            }());
+        </script>
+    </div>
+</body>
+</html>

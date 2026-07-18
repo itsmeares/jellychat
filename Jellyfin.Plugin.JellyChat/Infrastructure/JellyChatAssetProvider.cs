@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Jellyfin.Plugin.JellyChat.Configuration;
 
 namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 
@@ -37,6 +38,17 @@ public sealed class JellyChatAssetProvider
     /// Gets the content-aware asset version used for cache-busting asset URLs.
     /// </summary>
     public string AssetVersion { get; }
+
+    /// <summary>
+    /// Gets current server-wide appearance CSS and its content version.
+    /// </summary>
+    /// <returns>Generated appearance asset.</returns>
+    internal JellyChatAppearanceAsset GetAppearanceAsset()
+    {
+        var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        JellyChatAppearanceAsset appearance = JellyChatAppearanceStylesheet.Build(configuration);
+        return appearance with { Version = string.Concat(AssetVersion, "-", appearance.Version) };
+    }
 
     /// <summary>
     /// Opens a known JellyChat asset.

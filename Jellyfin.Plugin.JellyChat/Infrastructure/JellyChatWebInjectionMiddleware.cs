@@ -29,6 +29,10 @@ public sealed class JellyChatWebInjectionMiddleware
         @"<link\b[^>]*\bhref=""[^""]*/JellyChat/Assets/jellychat\.css\?v=[^""]*""[^>]*>\s*",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
+    private static readonly Regex JellyChatAppearanceCssTagRegex = new(
+        @"<link\b[^>]*\bhref=""[^""]*/JellyChat/Assets/appearance\.css\?v=[^""]*""[^>]*>\s*",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+
     private static readonly Regex JellyChatScriptTagRegex = new(
         @"<script\b[^>]*\bsrc=""[^""]*/JellyChat/Assets/jellychat\.js\?v=[^""]*""[^>]*>\s*</script>\s*",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
@@ -162,14 +166,17 @@ public sealed class JellyChatWebInjectionMiddleware
 
         string version = _assetProvider.AssetVersion;
         string encodedVersion = Uri.EscapeDataString(version);
+        string appearanceVersion = Uri.EscapeDataString(_assetProvider.GetAppearanceAsset().Version);
         string stylesheetUrl = BuildAssetUrl(assetPathBase, "jellychat.css", encodedVersion);
+        string appearanceStylesheetUrl = BuildAssetUrl(assetPathBase, "appearance.css", appearanceVersion);
         string scriptUrl = BuildAssetUrl(assetPathBase, "jellychat.js", encodedVersion);
         string assetBlock = string.Format(
             CultureInfo.InvariantCulture,
-            "{0}<!-- JellyChat:start v{1} -->{0}<link rel=\"stylesheet\" href=\"{2}\" data-jellychat-style=\"true\">{0}<script defer src=\"{3}\" data-jellychat-script=\"true\"></script>{0}<!-- JellyChat:end -->{0}",
+            "{0}<!-- JellyChat:start v{1} -->{0}<link rel=\"stylesheet\" href=\"{2}\" data-jellychat-style=\"true\">{0}<link rel=\"stylesheet\" href=\"{3}\" data-jellychat-appearance=\"true\">{0}<script defer src=\"{4}\" data-jellychat-script=\"true\"></script>{0}<!-- JellyChat:end -->{0}",
             Environment.NewLine,
             version,
             stylesheetUrl,
+            appearanceStylesheetUrl,
             scriptUrl);
 
         transformedHtml = string.Concat(
@@ -234,7 +241,8 @@ public sealed class JellyChatWebInjectionMiddleware
         string withoutMarkerBlocks = MarkerBlockRegex.Replace(html, string.Empty);
         string withoutLegacyBlock = LegacyAssetsRegex.Replace(withoutMarkerBlocks, string.Empty);
         string withoutCssTags = JellyChatCssTagRegex.Replace(withoutLegacyBlock, string.Empty);
-        return JellyChatScriptTagRegex.Replace(withoutCssTags, string.Empty);
+        string withoutAppearanceCssTags = JellyChatAppearanceCssTagRegex.Replace(withoutCssTags, string.Empty);
+        return JellyChatScriptTagRegex.Replace(withoutAppearanceCssTags, string.Empty);
     }
 
     private static void RewriteHtmlCacheHeaders(HttpResponse response, long contentLength)
