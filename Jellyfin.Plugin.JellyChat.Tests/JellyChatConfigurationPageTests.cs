@@ -68,6 +68,40 @@ public sealed class JellyChatConfigurationPageTests
         Assert.True(content > style);
     }
 
+    [Fact]
+    public void GeneratedPickerColorClearsHexErrorAndEnablesApply()
+    {
+        string html = ReadConfigurationPage();
+        string renderPicker = ReadBetween(html, "function renderPicker", "function setDraftRgb");
+
+        Assert.Contains("hexInput.value = rgbToHex(rgb);", renderPicker, StringComparison.Ordinal);
+        Assert.Contains("hexInput.setCustomValidity('');", renderPicker, StringComparison.Ordinal);
+        Assert.Contains("element('JellyChatColorApply').disabled = false;", renderPicker, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PickerOnlyReturnsFocusForExplicitDismissal()
+    {
+        string html = ReadConfigurationPage();
+        string applyPicker = ReadBetween(html, "function applyColorPopover", "function updateSaturationValue");
+        string outsidePointer = ReadBetween(html, "document.addEventListener('pointerdown'", "document.addEventListener('keydown'");
+        string escapeKey = ReadBetween(html, "document.addEventListener('keydown'", "window.addEventListener('resize'");
+        string cancelButton = ReadBetween(html, "element('JellyChatColorCancel').addEventListener", "document.addEventListener('pointerdown'");
+        string openPicker = ReadBetween(html, "function openColorPopover", "function applyColorPopover");
+        string resetColors = ReadBetween(html, "function resetColors", "element('JellyChatResetColors')");
+
+        Assert.Contains("closeColorPopover(false);", applyPicker, StringComparison.Ordinal);
+        Assert.Contains("colorInput.focus();", applyPicker, StringComparison.Ordinal);
+        Assert.DoesNotContain("closeColorPopover(true);", applyPicker, StringComparison.Ordinal);
+        Assert.Contains("closeColorPopover(false);", outsidePointer, StringComparison.Ordinal);
+        Assert.DoesNotContain("closeColorPopover(true);", outsidePointer, StringComparison.Ordinal);
+        Assert.DoesNotContain("targetSwatch", outsidePointer, StringComparison.Ordinal);
+        Assert.Contains("closeColorPopover(false);", resetColors, StringComparison.Ordinal);
+        Assert.Contains("closeColorPopover(true);", escapeKey, StringComparison.Ordinal);
+        Assert.Contains("closeColorPopover(true);", cancelButton, StringComparison.Ordinal);
+        Assert.Contains("closeColorPopover(true);", openPicker, StringComparison.Ordinal);
+    }
+
     private static string ReadConfigurationPage()
     {
         Assembly assembly = typeof(Plugin).Assembly;
@@ -75,5 +109,14 @@ public sealed class JellyChatConfigurationPageTests
         Assert.NotNull(stream);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    private static string ReadBetween(string value, string startMarker, string endMarker)
+    {
+        int start = value.IndexOf(startMarker, StringComparison.Ordinal);
+        int end = value.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        Assert.True(end > start);
+        return value[start..end];
     }
 }

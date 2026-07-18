@@ -2,16 +2,26 @@
 
 This checklist is for publishing JellyChat plugin releases.
 
+## Version Formats
+
+Each release uses two related version formats:
+
+- **Release version** (`MAJOR.MINOR.PATCH`), for example `1.2.0`: Git tag `v1.2.0`, GitHub release title, zip name `Jellyfin.Plugin.JellyChat_1.2.0.zip`, and frontend package metadata.
+- **Plugin version** (`MAJOR.MINOR.PATCH.0`), for example `1.2.0.0`: `Directory.Build.props`, assembly/file versions, `build.yaml`, and the `manifest.json` version entry.
+
+The release workflow validates the three-part tag and appends `.0` when writing Jellyfin plugin metadata. The manifest source URL continues to use the three-part tag and asset name.
+
 ## Version Bump Checklist
 
-1. Update `Directory.Build.props`:
+1. Choose the three-part release version, such as `1.2.0`, and derive the four-part plugin version, such as `1.2.0.0`.
+2. Update `Directory.Build.props` to the four-part plugin version:
    - `<Version>`
    - `<AssemblyVersion>`
    - `<FileVersion>`
-2. Update `build.yaml` `version`.
-3. Update `web-src/package.json` and `web-src/package-lock.json` package metadata.
-4. Keep `manifest.json` unchanged until a real GitHub release asset exists. The release workflow adds the new manifest entry after the release is published.
-5. Run the validation commands below before tagging.
+3. Update `build.yaml` `version` to the four-part plugin version.
+4. Update `web-src/package.json` and `web-src/package-lock.json` to the three-part release version.
+5. Keep `manifest.json` unchanged until a real GitHub release asset exists. The release workflow adds the four-part plugin version after the release is published.
+6. Run the validation commands below before tagging.
 
 ## Build Commands
 
@@ -46,9 +56,9 @@ Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
 Set the version and create the release zip from the contents of the publish directory:
 
 ```powershell
-$version = "1.0.0"
+$releaseVersion = "1.2.0"
 $publish = "Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish"
-$zip = "artifacts/Jellyfin.Plugin.JellyChat_$version.zip"
+$zip = "artifacts/Jellyfin.Plugin.JellyChat_$releaseVersion.zip"
 
 New-Item -ItemType Directory -Force artifacts | Out-Null
 if (Test-Path $zip) { Remove-Item $zip -Force }
@@ -61,10 +71,10 @@ The GitHub release asset must be named:
 Jellyfin.Plugin.JellyChat_<version>.zip
 ```
 
-For v1.0.0:
+For v1.2.0:
 
 ```text
-Jellyfin.Plugin.JellyChat_1.0.0.zip
+Jellyfin.Plugin.JellyChat_1.2.0.zip
 ```
 
 ## GitHub Release
@@ -72,9 +82,9 @@ Jellyfin.Plugin.JellyChat_1.0.0.zip
 Create a tag and release named with a leading `v`:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
-gh release create v1.0.0 artifacts/Jellyfin.Plugin.JellyChat_1.0.0.zip --title "v1.0.0" --notes-file RELEASE_NOTES.md
+git tag v1.2.0
+git push origin v1.2.0
+gh release create v1.2.0 artifacts/Jellyfin.Plugin.JellyChat_1.2.0.zip --title "v1.2.0" --notes-file RELEASE_NOTES.md
 ```
 
 The release notes become the manifest changelog after the release workflow flattens markdown whitespace, so keep them concise and user-facing.
@@ -85,11 +95,12 @@ Publishing a GitHub release triggers `.github/workflows/release.yaml`.
 
 The workflow:
 
-- Downloads `Jellyfin.Plugin.JellyChat_<version>.zip`.
+- Validates a three-part `vMAJOR.MINOR.PATCH` release tag.
+- Downloads `Jellyfin.Plugin.JellyChat_<MAJOR.MINOR.PATCH>.zip`.
 - Computes the MD5 checksum.
-- Adds or replaces the matching version entry in `manifest.json`.
-- Updates `Directory.Build.props` to the release version.
-- Opens or updates a pull request named `release: update manifest and version to <version>`.
+- Adds or replaces the four-part `MAJOR.MINOR.PATCH.0` entry in `manifest.json`, pointing to the three-part release asset.
+- Updates `Directory.Build.props` and `build.yaml` to the four-part plugin version.
+- Opens or updates a pull request named `release: update manifest and version to <MAJOR.MINOR.PATCH.0>`.
 
 After the workflow PR opens:
 
@@ -115,5 +126,5 @@ Check the README and docs for old pre-stable labels, generic caveat sections, an
 After release:
 
 ```bash
-gh release view v1.0.0
+gh release view v1.2.0
 ```

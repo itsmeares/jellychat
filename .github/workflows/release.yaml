@@ -21,12 +21,19 @@ jobs:
         id: version
         run: |
           TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if [[ ! "${TAG}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Release tag must use vMAJOR.MINOR.PATCH, for example v1.2.0." >&2
+            exit 1
+          fi
+
+          RELEASE_VERSION="${BASH_REMATCH[1]}"
+          PLUGIN_VERSION="${RELEASE_VERSION}.0"
+          echo "release_version=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "plugin_version=${PLUGIN_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Download release asset and compute checksum
         run: |
-          ASSET_NAME="Jellyfin.Plugin.JellyChat_${{ steps.version.outputs.version }}.zip"
+          ASSET_NAME="Jellyfin.Plugin.JellyChat_${{ steps.version.outputs.release_version }}.zip"
           gh release download "${{ github.event.release.tag_name }}" \
             --pattern "${ASSET_NAME}" \
             --dir /tmp
@@ -41,38 +48,41 @@ jobs:
           script: |
             const fs = require('fs');
             const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-            const version = '${{ steps.version.outputs.version }}';
+            const releaseVersion = '${{ steps.version.outputs.release_version }}';
+            const pluginVersion = '${{ steps.version.outputs.plugin_version }}';
             const checksum = process.env.checksum;
             const body = context.payload.release.body || '';
             const changelog = body.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, '');
-            const sourceUrl = `https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/Jellyfin.Plugin.JellyChat_${version}.zip`;
+            const sourceUrl = `https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/Jellyfin.Plugin.JellyChat_${releaseVersion}.zip`;
 
             const newEntry = {
               changelog,
               targetAbi: '10.11.0.0',
-              version,
+              version: pluginVersion,
               sourceUrl,
               checksum,
               timestamp: now
             };
 
-            manifest[0].versions = manifest[0].versions.filter(entry => entry.version !== version);
+            manifest[0].versions = manifest[0].versions.filter(entry => entry.version !== pluginVersion && entry.version !== releaseVersion);
             manifest[0].versions.unshift(newEntry);
             fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 4) + '\n');
 
-      - name: Update Directory.Build.props
+      - name: Update plugin version files
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          sed -i "s|<Version>.*</Version>|<Version>${VERSION}</Version>|" Directory.Build.props
-          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${VERSION}</AssemblyVersion>|" Directory.Build.props
-          sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>${VERSION}</FileVersion>|" Directory.Build.props
+          PLUGIN_VERSION="${{ steps.version.outputs.plugin_version }}"
+          sed -i "s|<Version>.*</Version>|<Version>${PLUGIN_VERSION}</Version>|" Directory.Build.props
+          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${PLUGIN_VERSION}</AssemblyVersion>|" Directory.Build.props
+          sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>${PLUGIN_VERSION}</FileVersion>|" Directory.Build.props
+          sed -i "s|^version: .*|version: \"${PLUGIN_VERSION}\"|" build.yaml
 
       - name: Create manifest update pull request
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="automation/update-manifest-${VERSION}"
-          TITLE="release: update manifest and version to ${VERSION}"
+          RELEASE_VERSION="${{ steps.version.outputs.release_version }}"
+          PLUGIN_VERSION="${{ steps.version.outputs.plugin_version }}"
+          BRANCH="automation/update-manifest-${PLUGIN_VERSION}"
+          TITLE="release: update manifest and version to ${PLUGIN_VERSION}"
           BODY_FILE="/tmp/jellychat-release-pr-body.md"
 
           git config user.name "github-actions[bot]"
@@ -80,7 +90,7 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git checkout -B "${BRANCH}"
 
-          git add manifest.json Directory.Build.props
+          git add manifest.json Directory.Build.props build.yaml
           if git diff --cached --quiet; then
             echo "No release metadata changes to publish."
             exit 0
@@ -91,14 +101,14 @@ jobs:
 
           cat > "${BODY_FILE}" <<EOF
           ## Summary
-          - Add/update JellyChat ${VERSION} release metadata
-          - Point manifest to the published release asset
+          - Add/update JellyChat ${PLUGIN_VERSION} plugin metadata
+          - Point manifest to the ${RELEASE_VERSION} release asset
           - Use checksum ${checksum}
 
           ## Validation
-          - Release workflow downloaded Jellyfin.Plugin.JellyChat_${VERSION}.zip
+          - Release workflow downloaded Jellyfin.Plugin.JellyChat_${RELEASE_VERSION}.zip
           - Release workflow computed checksum ${checksum}
-          - Release workflow updated manifest.json and Directory.Build.props
+          - Release workflow updated manifest.json, Directory.Build.props, and build.yaml
           EOF
 
           PR_NUMBER=$(gh pr list \

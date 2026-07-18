@@ -542,7 +542,10 @@
                     element('JellyChatColorPreview').setAttribute('aria-label', 'Current color ' + formatDraftColor());
 
                     if (!preserveHexInput) {
-                        element('JellyChatColorHex').value = rgbToHex(rgb);
+                        var hexInput = element('JellyChatColorHex');
+                        hexInput.value = rgbToHex(rgb);
+                        hexInput.setCustomValidity('');
+                        element('JellyChatColorApply').disabled = false;
                     }
                 }
 
@@ -669,10 +672,12 @@
 
                     setDraftRgb(rgb);
                     hexInput.setCustomValidity('');
-                    element(activeColor.input).value = formatDraftColor();
+                    var colorInput = element(activeColor.input);
+                    colorInput.value = formatDraftColor();
                     validateColor(activeColor);
                     syncSwatch(activeColor);
-                    closeColorPopover(true);
+                    closeColorPopover(false);
+                    colorInput.focus();
                 }
 
                 function updateSaturationValue(event) {
@@ -784,8 +789,7 @@
                         return;
                     }
 
-                    var targetSwatch = event.target.closest && event.target.closest('.jellyChatColorSwatch');
-                    closeColorPopover(!targetSwatch);
+                    closeColorPopover(false);
                 }, true);
 
                 document.addEventListener('keydown', function (event) {
@@ -799,7 +803,7 @@
                 window.addEventListener('scroll', positionColorPopover, true);
 
                 function resetColors() {
-                    closeColorPopover(true);
+                    closeColorPopover(false);
                     colors.forEach(function (entry) {
                         element(entry.input).value = '';
                         validateColor(entry);
