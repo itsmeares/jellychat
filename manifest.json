@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## What's new - Personalize JellyChat with appearance colors and an in-page color picker. - Apply custom CSS server-wide for a consistent look across clients.",
+                "targetAbi": "10.11.0.0",
+                "version": "1.2.0.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v1.2.0/Jellyfin.Plugin.JellyChat_1.2.0.zip",
+                "checksum": "8b4ae5d21457fdb06c7387ba685dbb70",
+                "timestamp": "2026-07-18T20:36:10"
+            },
+            {
                 "changelog": "## What's new - Protect JellyChat rooms with an optional password while keeping SyncPlay open. - Hand room ownership to the next participant automatically when the owner leaves. - Scope access to each authenticated Jellyfin session and clean up temporary room state when the room empties. - Harden password and membership updates against concurrency races, and keep the password field focused while typing.",
                 "targetAbi": "10.11.0.0",
                 "version": "1.1.0.0",
