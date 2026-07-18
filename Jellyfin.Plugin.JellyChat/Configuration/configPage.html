@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JellyChat</title>
+</head>
+<body>
+    <div id="JellyChatConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="JellyChatConfigForm">
+                    <section aria-labelledby="JellyChatAppearanceHeading">
+                        <h2 id="JellyChatAppearanceHeading">Appearance</h2>
+                        <p>Set server-wide JellyChat colors. Leave any value empty to use the JellyChat default.</p>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatAccentColor">Accent color</label>
+                            <div style="display:flex;align-items:center;gap:.75em">
+                                <input id="JellyChatAccentColorPicker" type="color" aria-label="Choose accent color" value="#00a4dc" style="width:3.5em;height:2.5em;padding:0">
+                                <input id="JellyChatAccentColor" type="text" is="emby-input" autocomplete="off" placeholder="#00a4dc" style="flex:1">
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatDrawerBackgroundColor">Drawer background color</label>
+                            <div style="display:flex;align-items:center;gap:.75em">
+                                <input id="JellyChatDrawerBackgroundColorPicker" type="color" aria-label="Choose drawer background color" value="#101317" style="width:3.5em;height:2.5em;padding:0">
+                                <input id="JellyChatDrawerBackgroundColor" type="text" is="emby-input" autocomplete="off" placeholder="#101317" style="flex:1">
+                            </div>
+                            <div class="fieldDescription">Per-client Background % continues to control drawer opacity.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatPanelBackgroundColor">Panel/input background color</label>
+                            <div style="display:flex;align-items:center;gap:.75em">
+                                <input id="JellyChatPanelBackgroundColorPicker" type="color" aria-label="Choose panel and input background color" value="#16191e" style="width:3.5em;height:2.5em;padding:0">
+                                <input id="JellyChatPanelBackgroundColor" type="text" is="emby-input" autocomplete="off" placeholder="#16191e" style="flex:1">
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatBorderColor">Border color</label>
+                            <div style="display:flex;align-items:center;gap:.75em">
+                                <input id="JellyChatBorderColorPicker" type="color" aria-label="Choose border color" value="#36393d" style="width:3.5em;height:2.5em;padding:0">
+                                <input id="JellyChatBorderColor" type="text" is="emby-input" autocomplete="off" placeholder="rgba(255, 255, 255, 0.12)" style="flex:1">
+                            </div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatTextColor">Text color</label>
+                            <div style="display:flex;align-items:center;gap:.75em">
+                                <input id="JellyChatTextColorPicker" type="color" aria-label="Choose text color" value="#f6f8fb" style="width:3.5em;height:2.5em;padding:0">
+                                <input id="JellyChatTextColor" type="text" is="emby-input" autocomplete="off" placeholder="#f6f8fb" style="flex:1">
+                            </div>
+                            <div class="fieldDescription">Accepts CSS colors including hex, rgb(), rgba(), hsl(), and CSS variables.</div>
+                        </div>
+
+                        <div style="display:flex;flex-wrap:wrap;gap:.75em;margin:1.5em 0">
+                            <button id="JellyChatResetColors" is="emby-button" type="button" class="raised emby-button">Reset colors</button>
+                        </div>
+                    </section>
+
+                    <section aria-labelledby="JellyChatCustomCssHeading">
+                        <h2 id="JellyChatCustomCssHeading">Advanced custom CSS</h2>
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="JellyChatCustomCss">Custom CSS</label>
+                            <textarea id="JellyChatCustomCss" is="emby-input" rows="14" spellcheck="false" style="width:100%;box-sizing:border-box;font-family:monospace;resize:vertical"></textarea>
+                            <div class="fieldDescription">Raw CSS is loaded after JellyChat styles and color overrides. JellyChat-specific selectors such as <code>#jellyChatDrawer</code> and <code>.jellyChatComposer</code> are recommended.</div>
+                        </div>
+                        <button id="JellyChatResetCustomCss" is="emby-button" type="button" class="raised emby-button">Reset custom CSS</button>
+                    </section>
+
+                    <div style="margin-top:1.5em">
+                        <button id="JellyChatResetAll" is="emby-button" type="button" class="raised emby-button">Reset all appearance settings</button>
+                    </div>
+                    <div style="margin-top:2em">
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Save</span>
+                        </button>
+                    </div>
+                    <p id="JellyChatSaveStatus" role="status" aria-live="polite"></p>
+                </form>
+            </div>
+        </div>
+        <script type="text/javascript">
+            (function () {
+                var pluginId = 'a69744cc-2281-48bf-adef-8e451a16ff71';
+                var colors = [
+                    { property: 'AccentColor', input: 'JellyChatAccentColor', picker: 'JellyChatAccentColorPicker' },
+                    { property: 'DrawerBackgroundColor', input: 'JellyChatDrawerBackgroundColor', picker: 'JellyChatDrawerBackgroundColorPicker' },
+                    { property: 'PanelBackgroundColor', input: 'JellyChatPanelBackgroundColor', picker: 'JellyChatPanelBackgroundColorPicker' },
+                    { property: 'BorderColor', input: 'JellyChatBorderColor', picker: 'JellyChatBorderColorPicker' },
+                    { property: 'TextColor', input: 'JellyChatTextColor', picker: 'JellyChatTextColorPicker' }
+                ];
+
+                function element(id) {
+                    return document.getElementById(id);
+                }
+
+                function syncPicker(entry) {
+                    var value = element(entry.input).value.trim();
+                    if (/^#[0-9a-f]{6}$/i.test(value)) {
+                        element(entry.picker).value = value;
+                    }
+                }
+
+                function validateColor(entry) {
+                    var input = element(entry.input);
+                    var value = input.value.trim();
+                    var valid = !value || (window.CSS && CSS.supports('color', value));
+                    input.setCustomValidity(valid ? '' : 'Enter a valid CSS color value.');
+                    return valid;
+                }
+
+                colors.forEach(function (entry) {
+                    element(entry.picker).addEventListener('input', function () {
+                        element(entry.input).value = element(entry.picker).value;
+                        validateColor(entry);
+                    });
+                    element(entry.input).addEventListener('input', function () {
+                        syncPicker(entry);
+                        validateColor(entry);
+                    });
+                });
+
+                function resetColors() {
+                    colors.forEach(function (entry) {
+                        element(entry.input).value = '';
+                        validateColor(entry);
+                    });
+                    element('JellyChatSaveStatus').textContent = '';
+                }
+
+                element('JellyChatResetColors').addEventListener('click', resetColors);
+                element('JellyChatResetCustomCss').addEventListener('click', function () {
+                    element('JellyChatCustomCss').value = '';
+                    element('JellyChatSaveStatus').textContent = '';
+                });
+                element('JellyChatResetAll').addEventListener('click', function () {
+                    resetColors();
+                    element('JellyChatCustomCss').value = '';
+                });
+
+                element('JellyChatConfigPage').addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        colors.forEach(function (entry) {
+                            element(entry.input).value = config[entry.property] || '';
+                            syncPicker(entry);
+                            validateColor(entry);
+                        });
+                        element('JellyChatCustomCss').value = config.CustomCss || '';
+                        element('JellyChatSaveStatus').textContent = '';
+                        Dashboard.hideLoadingMsg();
+                    }).catch(function () {
+                        Dashboard.hideLoadingMsg();
+                        element('JellyChatSaveStatus').textContent = 'Unable to load JellyChat appearance settings.';
+                    });
+                });
+
+                element('JellyChatConfigForm').addEventListener('submit', function (event) {
+                    event.preventDefault();
+                    if (!colors.map(validateColor).every(Boolean)) {
+                        element('JellyChatConfigForm').reportValidity();
+                        return false;
+                    }
+
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        colors.forEach(function (entry) {
+                            config[entry.property] = element(entry.input).value.trim();
+                        });
+                        config.CustomCss = element('JellyChatCustomCss').value;
+                        return ApiClient.updatePluginConfiguration(pluginId, config);
+                    }).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        element('JellyChatSaveStatus').textContent = 'Changes apply after refreshing Jellyfin Web.';
+                    }).catch(function () {
+                        Dashboard.hideLoadingMsg();
+                        element('JellyChatSaveStatus').textContent = 'Unable to save JellyChat appearance settings.';
+                    });
+                    return false;
+                });
+            }());
+        </script>
+    </div>
+</body>
+</html>

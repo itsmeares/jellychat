@@ -3,55 +3,37 @@ using MediaBrowser.Model.Plugins;
 namespace Jellyfin.Plugin.JellyChat.Configuration;
 
 /// <summary>
-/// The configuration options.
-/// </summary>
-public enum SomeOptions
-{
-    /// <summary>
-    /// Option one.
-    /// </summary>
-    OneOption,
-
-    /// <summary>
-    /// Second option.
-    /// </summary>
-    AnotherOption
-}
-
-/// <summary>
 /// Plugin configuration.
 /// </summary>
 public class PluginConfiguration : BasePluginConfiguration
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="PluginConfiguration"/> class.
+    /// Gets or sets the JellyChat accent color.
     /// </summary>
-    public PluginConfiguration()
-    {
-        // set default options here
-        Options = SomeOptions.AnotherOption;
-        TrueFalseSetting = true;
-        AnInteger = 2;
-        AString = "string";
-    }
+    public string AccentColor { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets a value indicating whether some true or false setting is enabled..
+    /// Gets or sets the JellyChat drawer background color.
     /// </summary>
-    public bool TrueFalseSetting { get; set; }
+    public string DrawerBackgroundColor { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets an integer setting.
+    /// Gets or sets the JellyChat panel and input background color.
     /// </summary>
-    public int AnInteger { get; set; }
+    public string PanelBackgroundColor { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets a string setting.
+    /// Gets or sets the JellyChat border color.
     /// </summary>
-    public string AString { get; set; }
+    public string BorderColor { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets an enum option.
+    /// Gets or sets the JellyChat text color.
     /// </summary>
-    public SomeOptions Options { get; set; }
+    public string TextColor { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets server-wide custom CSS loaded after JellyChat styles.
+    /// </summary>
+    public string CustomCss { get; set; } = string.Empty;
 }

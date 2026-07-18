@@ -39,6 +39,16 @@ public sealed class JellyChatAssetsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult GetAsset([FromRoute] string assetName, [FromQuery(Name = "v")] string? version)
     {
+        if (string.Equals(assetName, "appearance.css", System.StringComparison.OrdinalIgnoreCase))
+        {
+            JellyChatAppearanceAsset appearance = _assetProvider.GetAppearanceAsset();
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            Response.Headers.CacheControl = string.Equals(version, appearance.Version, System.StringComparison.Ordinal)
+                ? "public, max-age=31536000, immutable"
+                : "no-cache";
+            return File(appearance.Content, "text/css; charset=utf-8");
+        }
+
         if (!_assetProvider.TryOpenAsset(assetName, out var stream, out string contentType, out string resourceName) || stream is null)
         {
             _logger.LogWarning("JellyChat asset {AssetName} could not be found in embedded resources.", assetName);
