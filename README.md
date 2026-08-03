@@ -35,11 +35,13 @@ Repository URL: https://raw.githubusercontent.com/itsmeares/jellychat/main/manif
 
 Save the repository, install `JellyChat` from the catalog, then restart Jellyfin.
 
-JellyChat targets Jellyfin `10.11.x` with target ABI `10.11.0.0`.
+JellyChat `v2.0.0` and later target Jellyfin `12.x` with target ABI `12.0.0.0`.
+Jellyfin `10.11.x` installations remain supported by JellyChat `v1.2.0` with
+target ABI `10.11.0.0`; the plugin catalog selects the compatible release.
 
 ## Manual Install
 
-Use the repository install when possible. For manual installs, download the release zip from the [latest GitHub release](https://github.com/itsmeares/jellychat/releases/latest), extract it into a Jellyfin plugin folder named `JellyChat`, then restart Jellyfin.
+Use the repository install when possible. For manual installs, download the release zip compatible with your Jellyfin version from the [GitHub releases page](https://github.com/itsmeares/jellychat/releases), extract it into a Jellyfin plugin folder named `JellyChat`, then restart Jellyfin.
 
 Common plugin folder locations include:
 

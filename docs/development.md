@@ -1,6 +1,6 @@
 # Development
 
-JellyChat is a Jellyfin server plugin with an injected React frontend for Jellyfin Web.
+JellyChat is a .NET 10 Jellyfin server plugin with an injected React frontend for Jellyfin Web.
 
 ## Repo Layout
 
@@ -48,7 +48,7 @@ dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Rel
 Publish output is written to:
 
 ```text
-Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
+Jellyfin.Plugin.JellyChat/bin/Release/net10.0/publish/
 ```
 
 For debug builds:

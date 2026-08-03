@@ -16,7 +16,29 @@ public sealed class JellyChatReleaseWorkflowTests
         Assert.Contains("version: pluginVersion", workflow, StringComparison.Ordinal);
         Assert.Contains("Jellyfin.Plugin.JellyChat_${releaseVersion}.zip", workflow, StringComparison.Ordinal);
         Assert.Contains("version: \\\"${PLUGIN_VERSION}\\\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("fs.readFileSync('build.yaml', 'utf8')", workflow, StringComparison.Ordinal);
+        Assert.Contains("const targetAbi = targetAbiMatch[1]", workflow, StringComparison.Ordinal);
+        Assert.Contains("targetAbi,", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("targetAbi: '10.11.0.0'", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("steps.version.outputs.version", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildMetadataTargetsJellyfin12()
+    {
+        string buildMetadata = ReadRepositoryFile("build.yaml");
+
+        Assert.Contains("version: \"2.0.0.0\"", buildMetadata, StringComparison.Ordinal);
+        Assert.Contains("targetAbi: \"12.0.0.0\"", buildMetadata, StringComparison.Ordinal);
+        Assert.Contains("framework: \"net10.0\"", buildMetadata, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Jellyfin12HeaderTriggerUsesStableSyncPlayHook()
+    {
+        string triggerSource = ReadRepositoryFile("web-src/src/runtime/trigger.ts");
+
+        Assert.Contains("header div:has(> button[aria-label=\"SyncPlay\"])", triggerSource, StringComparison.Ordinal);
     }
 
     private static string ReadRepositoryFile(string relativePath)

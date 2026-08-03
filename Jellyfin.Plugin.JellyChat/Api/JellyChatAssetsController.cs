@@ -59,7 +59,11 @@ public sealed class JellyChatAssetsController : ControllerBase
         Response.Headers.CacheControl = string.Equals(version, _assetProvider.AssetVersion, System.StringComparison.Ordinal)
             ? "public, max-age=31536000, immutable"
             : "no-cache";
-        _logger.LogDebug("Serving JellyChat asset {AssetName} from {ResourceName}.", assetName, resourceName);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Serving JellyChat asset {AssetName} from {ResourceName}.", assetName, resourceName);
+        }
+
         return File(stream, contentType);
     }
 }
