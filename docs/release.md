@@ -6,14 +6,14 @@ This checklist is for publishing JellyChat plugin releases.
 
 Each release uses two related version formats:
 
-- **Release version** (`MAJOR.MINOR.PATCH`), for example `1.2.0`: Git tag `v1.2.0`, GitHub release title, zip name `Jellyfin.Plugin.JellyChat_1.2.0.zip`, and frontend package metadata.
-- **Plugin version** (`MAJOR.MINOR.PATCH.0`), for example `1.2.0.0`: `Directory.Build.props`, assembly/file versions, `build.yaml`, and the `manifest.json` version entry.
+- **Release version** (`MAJOR.MINOR.PATCH`), for example `2.0.0`: Git tag `v2.0.0`, GitHub release title, zip name `Jellyfin.Plugin.JellyChat_2.0.0.zip`, and frontend package metadata.
+- **Plugin version** (`MAJOR.MINOR.PATCH.0`), for example `2.0.0.0`: `Directory.Build.props`, assembly/file versions, `build.yaml`, and the `manifest.json` version entry.
 
 The release workflow validates the three-part tag and appends `.0` when writing Jellyfin plugin metadata. The manifest source URL continues to use the three-part tag and asset name.
 
 ## Version Bump Checklist
 
-1. Choose the three-part release version, such as `1.2.0`, and derive the four-part plugin version, such as `1.2.0.0`.
+1. Choose the three-part release version, such as `2.0.0`, and derive the four-part plugin version, such as `2.0.0.0`.
 2. Update `Directory.Build.props` to the four-part plugin version:
    - `<Version>`
    - `<AssemblyVersion>`
@@ -48,7 +48,7 @@ dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Rel
 Publish output:
 
 ```text
-Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
+Jellyfin.Plugin.JellyChat/bin/Release/net10.0/publish/
 ```
 
 ## Zip Packaging
@@ -56,8 +56,8 @@ Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish/
 Set the version and create the release zip from the contents of the publish directory:
 
 ```powershell
-$releaseVersion = "1.2.0"
-$publish = "Jellyfin.Plugin.JellyChat/bin/Release/net9.0/publish"
+$releaseVersion = "2.0.0"
+$publish = "Jellyfin.Plugin.JellyChat/bin/Release/net10.0/publish"
 $zip = "artifacts/Jellyfin.Plugin.JellyChat_$releaseVersion.zip"
 
 New-Item -ItemType Directory -Force artifacts | Out-Null
@@ -71,10 +71,10 @@ The GitHub release asset must be named:
 Jellyfin.Plugin.JellyChat_<version>.zip
 ```
 
-For v1.2.0:
+For v2.0.0:
 
 ```text
-Jellyfin.Plugin.JellyChat_1.2.0.zip
+Jellyfin.Plugin.JellyChat_2.0.0.zip
 ```
 
 ## GitHub Release
@@ -82,9 +82,9 @@ Jellyfin.Plugin.JellyChat_1.2.0.zip
 Create a tag and release named with a leading `v`:
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
-gh release create v1.2.0 artifacts/Jellyfin.Plugin.JellyChat_1.2.0.zip --title "v1.2.0" --notes-file RELEASE_NOTES.md
+git tag v2.0.0
+git push origin v2.0.0
+gh release create v2.0.0 artifacts/Jellyfin.Plugin.JellyChat_2.0.0.zip --title "JellyChat v2.0.0" --prerelease --notes-file RELEASE_NOTES.md
 ```
 
 The release notes become the manifest changelog after the release workflow flattens markdown whitespace, so keep them concise and user-facing.
@@ -117,6 +117,7 @@ Run before release:
 cd web-src
 npm run build
 cd ..
+dotnet test Jellyfin.Plugin.JellyChat.sln -c Release
 dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
 git diff --check
 ```
@@ -126,5 +127,5 @@ Check the README and docs for old pre-stable labels, generic caveat sections, an
 After release:
 
 ```bash
-gh release view v1.2.0
+gh release view v2.0.0
 ```

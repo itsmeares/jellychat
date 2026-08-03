@@ -37,6 +37,7 @@ const nativeVideoSelectors = [
 ];
 
 const nativeHeaderSelectors = [
+  'header div:has(> button[aria-label="SyncPlay"])',
   ".skinHeader .headerRight",
   ".skinHeader .headerRightItems",
   ".skinHeader .headerButtons",
