@@ -191,6 +191,28 @@ function queryHosts(selectors: string[], root: ParentNode): HTMLElement[] {
   return hosts;
 }
 
+function getNativeHeaderHost(): HTMLElement | null {
+  const legacy = document.querySelector(".headerRight");
+  if (legacy instanceof HTMLElement && legacy.offsetParent !== null && isUsableHost(legacy)) {
+    return legacy;
+  }
+
+  const userMenuButton = document.querySelector('[aria-controls="app-user-menu"]');
+  const toolbar = userMenuButton?.closest<HTMLElement>(".MuiToolbar-root")
+    || document.querySelector<HTMLElement>(".MuiAppBar-root .MuiToolbar-root");
+  if (!toolbar) {
+    return null;
+  }
+
+  let userMenuBox = userMenuButton;
+  while (userMenuBox && userMenuBox.parentElement !== toolbar) {
+    userMenuBox = userMenuBox.parentElement;
+  }
+
+  const buttonsTray = userMenuBox?.previousElementSibling || null;
+  return isUsableHost(buttonsTray) ? buttonsTray : null;
+}
+
 function bestHost(hosts: HTMLElement[], preferRight: boolean): HTMLElement | null {
   return hosts.sort((first, second) => {
     const firstRect = first.getBoundingClientRect();
@@ -264,7 +286,7 @@ export function resolveTriggerMount(): TriggerMount {
     return mount;
   }
 
-  const headerHost = bestHost(headerHosts, true);
+  const headerHost = getNativeHeaderHost() || bestHost(headerHosts, true);
   if (headerHost) {
     const mount = {
       host: headerHost,
