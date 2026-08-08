@@ -213,7 +213,10 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
   box-shadow: none;
 }
 
-.skinHeader:not(.osdHeader) .jellyChatButton.is-native-trigger {
+body:not(.jellychat-video-route) .jellyChatButton.is-native-trigger {
+  flex: 0 0 48px;
+  min-width: 48px;
+  min-height: 48px;
   order: -1;
 }
 
