@@ -1557,9 +1557,9 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   border: 1px solid var(--jellychat-border-semi-strong);
   background: var(--jellychat-panel-background-soft);
   color: var(--jellychat-text-strong);
-  line-height: 1.25rem;
   font: inherit;
   font-size: 0.92rem;
+  line-height: 1.25rem;
 }
 
 #jellyChatInput::placeholder {
@@ -1639,6 +1639,10 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
     width: 2rem;
     height: 2rem;
     opacity: 0.54;
+  }
+
+  .jellyChatContinuationTime {
+    opacity: 1;
   }
 
   .jellyChatMessageActionMenu button {

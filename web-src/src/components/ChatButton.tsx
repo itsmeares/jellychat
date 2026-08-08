@@ -28,7 +28,7 @@ export function ChatButton({ isOpen, actions, mode, indicator, nativeButtonClass
     if (mode === "native-header" && button && parent && parent.firstElementChild !== button) {
       parent.prepend(button);
     }
-  }, [mode]);
+  });
 
   useEffect(() => {
     if (!activityVisible || prefersReducedMotion()) {

@@ -64,13 +64,15 @@ function readBoolean(key: string): boolean {
   }
 }
 
-function writeBoolean(key: string, value: boolean): void {
+function writeBoolean(key: string, value: boolean): boolean {
   try {
     window.localStorage?.setItem(key, String(value));
+    return true;
   } catch {
     if (window.JellyChatDebug) {
       window.JellyChatDebug.lastError = "Could not save JellyChat appearance preferences.";
     }
+    return false;
   }
 }
 
@@ -87,8 +89,7 @@ export function applyCustomCssPreference(disabled = getCustomCssDisabledPreferen
 }
 
 export function saveCustomCssDisabled(disabled: boolean): boolean {
-  writeBoolean(customCssDisabledStorageKey, disabled);
-  return applyCustomCssPreference(disabled);
+  return applyCustomCssPreference(writeBoolean(customCssDisabledStorageKey, disabled) ? disabled : false);
 }
 
 export function resetCustomCssDisabled(): boolean {
