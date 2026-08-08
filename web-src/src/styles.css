@@ -178,6 +178,10 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
 .jellyChatButton {
   pointer-events: auto;
   position: relative;
+  overflow: visible;
+}
+
+.jellyChatButton:not(.MuiIconButton-root) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -189,19 +193,36 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
   background: var(--jellychat-panel-background-trigger);
   color: var(--jellychat-text-strong);
   cursor: pointer;
+  line-height: 0;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
   transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.jellyChatButton.is-native-trigger {
-  width: 2.5rem;
-  height: 2.5rem;
-  margin: 0 0.15rem;
+.jellyChatButton > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.jellyChatButton.is-native-trigger:not(.MuiIconButton-root) {
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   color: inherit;
+  font-size: 16px;
   box-shadow: none;
+}
+
+.jellyChatButton.is-native-trigger > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.osdHeader .headerButton.jellyChatButton {
+  display: inline-flex !important;
 }
 
 .jellyChatButton.is-desktop-overlay-trigger,
@@ -238,19 +259,19 @@ html.jellychat-drawer-left body.jellychat-video-route .jellyChatButton,
   border-radius: 0 0.65rem 0.65rem 0;
 }
 
-.jellyChatButton:hover,
-.jellyChatButton:focus-visible {
+.jellyChatButton:not(.MuiIconButton-root):hover,
+.jellyChatButton:not(.MuiIconButton-root):focus-visible {
   background: var(--jellychat-panel-background-active);
   border-color: var(--jellychat-border-prominent);
 }
 
-.jellyChatButton:focus-visible {
+.jellyChatButton:not(.MuiIconButton-root):focus-visible {
   outline: 2px solid var(--jellychat-focus);
   outline-offset: 2px;
 }
 
-.jellyChatButton.is-native-trigger:hover,
-.jellyChatButton.is-native-trigger:focus-visible,
+.jellyChatButton.is-native-trigger:not(.MuiIconButton-root):hover,
+.jellyChatButton.is-native-trigger:not(.MuiIconButton-root):focus-visible,
 .jellyChatButton.is-desktop-overlay-trigger:hover,
 .jellyChatButton.is-desktop-overlay-trigger:focus-visible {
   background: var(--jellychat-panel-background-selected);
@@ -266,7 +287,7 @@ html.jellychat-drawer-left body.jellychat-video-route .jellyChatButton,
   background: var(--jellychat-accent-14);
 }
 
-.jellyChatUnreadDot {
+.jellyChatButton.has-unread::after {
   position: absolute;
   top: 0.42rem;
   right: 0.42rem;
@@ -275,6 +296,9 @@ html.jellychat-drawer-left body.jellychat-video-route .jellyChatButton,
   border-radius: 50%;
   background: #ff3b30;
   box-shadow: 0 0 0 2px rgba(16, 19, 23, 0.92);
+  z-index: 1;
+  pointer-events: none;
+  content: "";
 }
 
 .jellyChatActivityDots {
@@ -545,6 +569,23 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   text-align: right;
 }
 
+.jellyChatCustomCssPreference {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.78rem;
+  color: var(--jellychat-text-tertiary);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.jellyChatCustomCssPreference input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--jellychat-accent);
+}
+
 .jellyChatSettingsActions {
   display: grid;
   gap: 0.45rem;
@@ -675,8 +716,40 @@ html.jellychat-drawer-left .jellyChatSettingsPopover {
   flex: 1 1 auto;
   overflow-y: auto;
   min-height: 0;
-  padding: 0.95rem 1rem 1rem;
-  scrollbar-gutter: stable;
+  padding: 0.7rem 0 1rem;
+}
+
+#jellyChatMessages,
+#jellyChatInput {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+#jellyChatMessages::-webkit-scrollbar,
+#jellyChatInput::-webkit-scrollbar {
+  width: 0.42rem;
+}
+
+#jellyChatMessages::-webkit-scrollbar-track,
+#jellyChatInput::-webkit-scrollbar-track,
+#jellyChatMessages::-webkit-scrollbar-thumb,
+#jellyChatInput::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+#jellyChatMessages:hover,
+#jellyChatMessages:focus-within,
+#jellyChatInput:hover,
+#jellyChatInput:focus {
+  scrollbar-color: var(--jellychat-border-robust) transparent;
+}
+
+#jellyChatMessages:hover::-webkit-scrollbar-thumb,
+#jellyChatMessages:focus-within::-webkit-scrollbar-thumb,
+#jellyChatInput:hover::-webkit-scrollbar-thumb,
+#jellyChatInput:focus::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--jellychat-border-robust);
 }
 
 .jellyChatInlineStatus {
@@ -720,6 +793,8 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
 
 .jellyChatEmptyState {
   min-height: 100%;
+  padding: 0 1rem;
+  box-sizing: border-box;
   align-items: center;
   justify-content: center;
   text-align: center;
@@ -786,18 +861,41 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   padding: 0.4rem 0.78rem;
 }
 
+.jellyChatDateDivider {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.55rem 1rem 0.75rem;
+  color: var(--jellychat-text-soft);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1rem;
+  text-align: center;
+}
+
+.jellyChatDateDivider::before,
+.jellyChatDateDivider::after {
+  height: 1px;
+  flex: 1 1 auto;
+  background: var(--jellychat-border);
+  content: "";
+}
+
+.jellyChatDateDivider span {
+  flex: 0 0 auto;
+}
+
 .jellyChatMessageGroup {
-  margin: 0 0 0.9rem;
+  margin: 0 0 0.7rem;
 }
 
 .jellyChatMessageMeta {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.32rem;
+  gap: 0.42rem;
+  margin-bottom: 0.08rem;
   color: var(--jellychat-text-muted);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   line-height: 1rem;
 }
 
@@ -810,31 +908,81 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   white-space: nowrap;
 }
 
-.jellyChatMessageMeta span:last-child {
+.jellyChatMessageMeta time {
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
-.jellyChatMessageStack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
 .jellyChatMessage {
   position: relative;
-  padding: 0.54rem 0.68rem;
-  padding-right: 2.45rem;
-  border-radius: 0.55rem;
-  background: var(--jellychat-panel-background-soft);
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.22rem 1rem;
+  background: transparent;
   color: var(--jellychat-text);
   overflow-wrap: anywhere;
   transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .jellyChatMessage.is-continuation {
-  padding-top: 0.42rem;
-  padding-bottom: 0.42rem;
+  padding-top: 0.08rem;
+  padding-bottom: 0.08rem;
+}
+
+.jellyChatMessage:hover,
+.jellyChatMessage:focus-within {
+  background: var(--jellychat-panel-background-faint);
+}
+
+.jellyChatMessageGutter {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+}
+
+.jellyChatMessageAvatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--jellychat-panel-background-raised);
+  color: var(--jellychat-text-secondary);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.jellyChatMessageAvatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.jellyChatContinuationTime {
+  padding-top: 0.12rem;
+  color: var(--jellychat-text-disabled);
+  font-size: 0.62rem;
+  line-height: 1.1rem;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.jellyChatMessage:hover .jellyChatContinuationTime,
+.jellyChatMessage:focus-within .jellyChatContinuationTime {
+  opacity: 1;
+}
+
+.jellyChatMessageContent {
+  min-width: 0;
+  padding-right: 2.15rem;
 }
 
 .jellyChatMessage.is-optimistic {
@@ -843,15 +991,14 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
 
 .jellyChatMessage.is-highlighted {
   background: var(--jellychat-accent-16);
-  outline: 2px solid var(--jellychat-accent-75);
-  outline-offset: 2px;
-  transition: background 0.16s cubic-bezier(0.22, 1, 0.36, 1), outline-color 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: inset 3px 0 var(--jellychat-accent-75);
+  transition: background 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .jellyChatMessageReplyButton {
   position: absolute;
   top: 50%;
-  right: 0.34rem;
+  right: 0.55rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -945,7 +1092,6 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   font-size: 0.93rem;
   line-height: 1.35rem;
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
 .jellyChatPlaybackEvent {
@@ -973,7 +1119,7 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
 
 .jellyChatTypingIndicator {
   min-height: 1.35rem;
-  margin: 0.45rem 0 0;
+  margin: 0.45rem 1rem 0;
   color: var(--jellychat-text-soft);
   font-size: 0.78rem;
   line-height: 1.2rem;
@@ -1284,30 +1430,30 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   font-size: 2.55rem;
   font-synthesis: none;
   line-height: 1;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.55),
     0 6px 16px rgba(0, 0, 0, 0.28);
   transform: translate3d(-50%, 0, 0) scale(var(--jellychat-reaction-scale, 1));
   transform-origin: center;
   animation:
-    jellyChatReactionDrift var(--jellychat-reaction-duration, 3400ms) linear forwards,
-    jellyChatReactionOpacity var(--jellychat-reaction-duration, 3400ms) linear forwards;
+    jellychat-reaction-drift var(--jellychat-reaction-duration, 3400ms) linear forwards,
+    jellychat-reaction-opacity var(--jellychat-reaction-duration, 3400ms) linear forwards;
   backface-visibility: hidden;
   will-change: transform, opacity;
 }
 
-@keyframes jellyChatReactionDrift {
+@keyframes jellychat-reaction-drift {
   from {
     transform: translate3d(-50%, 0, 0) scale(var(--jellychat-reaction-scale, 1));
   }
 
-  to {
+  100% {
     transform: translate3d(calc(-50% + var(--jellychat-reaction-dx, 0px)), var(--jellychat-reaction-rise-y, -560px), 0) scale(var(--jellychat-reaction-scale, 1));
   }
 }
 
-@keyframes jellyChatReactionOpacity {
+@keyframes jellychat-reaction-opacity {
   0%,
   72% {
     opacity: 1;
@@ -1404,15 +1550,15 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   box-sizing: border-box;
   resize: none;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding: 0.52rem 0.65rem;
   border-radius: 0.5rem;
   border: 1px solid var(--jellychat-border-semi-strong);
   background: var(--jellychat-panel-background-soft);
   color: var(--jellychat-text-strong);
-  line-height: 1.25rem;
   font: inherit;
   font-size: 0.92rem;
+  line-height: 1.25rem;
 }
 
 #jellyChatInput::placeholder {
@@ -1435,9 +1581,13 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
 
 #jellyChatSendButton {
   flex: 0 0 auto;
-  min-width: 4.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  min-width: 2.35rem;
   min-height: 2.35rem;
-  padding: 0.48rem 0.75rem;
+  padding: 0;
   border: 1px solid var(--jellychat-accent-55);
   border-radius: 0.5rem;
   background: var(--jellychat-accent);
@@ -1446,6 +1596,12 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   font: inherit;
   font-size: 0.9rem;
   font-weight: 650;
+  line-height: 0;
+}
+
+#jellyChatSendButton svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 #jellyChatSendButton:hover,
@@ -1474,8 +1630,8 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
     height: 2.75rem;
   }
 
-  .jellyChatMessage {
-    padding-right: 2.55rem;
+  .jellyChatMessageContent {
+    padding-right: 2.35rem;
   }
 
   .jellyChatMessageReplyButton {
@@ -1484,17 +1640,26 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
     opacity: 0.54;
   }
 
+  .jellyChatContinuationTime {
+    opacity: 1;
+  }
+
   .jellyChatMessageActionMenu button {
     min-height: 2.75rem;
   }
 
   #jellyChatInput,
-  #jellyChatSendButton,
   .jellyChatSettingsActions button,
   .jellyChatRoomPasswordActions button,
   .jellyChatLockedRoom button,
   .jellyChatRoomPasswordSettings input,
   .jellyChatLockedRoom input {
+    min-height: 2.75rem;
+  }
+
+  #jellyChatSendButton {
+    width: 2.75rem;
+    min-width: 2.75rem;
     min-height: 2.75rem;
   }
 
@@ -1575,7 +1740,7 @@ body.jellychat-phone-portrait #jellyChatDrawer.is-open,
 }
 
 .jellychat-phone-portrait #jellyChatMessages {
-  padding: 0.72rem 0.82rem 0.74rem;
+  padding: 0.62rem 0 0.74rem;
 }
 
 .jellychat-phone-portrait .jellyChatLockedRoom {
@@ -1603,8 +1768,14 @@ body.jellychat-phone-portrait #jellyChatDrawer.is-open,
 }
 
 .jellychat-phone-portrait .jellyChatMessage {
-  padding: 0.48rem 0.58rem;
-  padding-right: 2.45rem;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.18rem 0.82rem;
+}
+
+.jellychat-phone-portrait .jellyChatMessageAvatar {
+  width: 2rem;
+  height: 2rem;
 }
 
 .jellychat-phone-portrait .jellyChatMessageReplyButton {
@@ -1692,11 +1863,11 @@ body.jellychat-phone-portrait #jellyChatDrawer.is-open,
   }
 
   .jellyChatReactionFloat {
-    animation: jellyChatReactionFade 900ms linear forwards;
+    animation: jellychat-reaction-fade 900ms linear forwards;
   }
 }
 
-@keyframes jellyChatReactionFade {
+@keyframes jellychat-reaction-fade {
   0% {
     opacity: 0;
     transform: translate3d(-50%, 0, 0) scale(1);

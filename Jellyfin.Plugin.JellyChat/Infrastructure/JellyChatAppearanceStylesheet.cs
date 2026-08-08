@@ -69,7 +69,7 @@ internal static class JellyChatAppearanceStylesheet
     ];
 
     /// <summary>
-    /// Builds color overrides followed by unmodified custom CSS.
+    /// Builds server-wide color overrides.
     /// </summary>
     /// <param name="configuration">Current plugin configuration.</param>
     /// <returns>Generated appearance asset.</returns>
@@ -114,15 +114,21 @@ internal static class JellyChatAppearanceStylesheet
             builder.AppendLine("}");
         }
 
-        string customCss = configuration.CustomCss ?? string.Empty;
-        if (builder.Length > 0 && customCss.Length > 0)
-        {
-            builder.AppendLine();
-        }
+        byte[] content = Encoding.UTF8.GetBytes(builder.ToString());
+        byte[] digest = SHA256.HashData(content);
+        return new JellyChatAppearanceAsset(content, Convert.ToHexString(digest)[..12]);
+    }
 
-        builder.Append(customCss);
-        string css = builder.ToString();
-        byte[] content = Encoding.UTF8.GetBytes(css);
+    /// <summary>
+    /// Builds the unmodified server-wide custom CSS asset.
+    /// </summary>
+    /// <param name="configuration">Current plugin configuration.</param>
+    /// <returns>Generated custom CSS asset.</returns>
+    public static JellyChatAppearanceAsset BuildCustomCss(PluginConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        byte[] content = Encoding.UTF8.GetBytes(configuration.CustomCss ?? string.Empty);
         byte[] digest = SHA256.HashData(content);
         return new JellyChatAppearanceAsset(content, Convert.ToHexString(digest)[..12]);
     }

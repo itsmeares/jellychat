@@ -145,6 +145,29 @@ export function formatMessageTime(message: { createdAtUtc: string }): string {
   return createdAt.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + time;
 }
 
+export function formatClockTime(message: { createdAtUtc: string }): string {
+  const createdAt = new Date(message.createdAtUtc);
+  return Number.isNaN(createdAt.getTime())
+    ? ""
+    : createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export function getLocalDateKey(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
+export function formatDateDivider(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString([], { day: "2-digit", month: "long", year: "numeric" });
+}
+
 export function formatFullTimestamp(message: { createdAtUtc: string }): string {
   if (!message.createdAtUtc) {
     return "";
@@ -308,6 +331,7 @@ export function groupMessages(messages: ChatMessage[], windowMs: number): Messag
     const previousMessageTime = previousMessage ? getMessageTime(previousMessage) : 0;
     const shouldStartGroup = !previousMessage
       || previousGroup?.senderKey !== senderKey
+      || getLocalDateKey(message.createdAtUtc) !== getLocalDateKey(previousMessage?.createdAtUtc || "")
       || Math.abs(messageTime - previousMessageTime) > windowMs;
 
     if (shouldStartGroup) {
@@ -360,6 +384,7 @@ export function buildTimelineItems(events: RoomEvent[], windowMs: number): Timel
         const senderKey = getMessageSenderKey(message);
         const shouldStartGroup = !previousMessage
           || currentGroup?.senderKey !== senderKey
+          || getLocalDateKey(message.createdAtUtc) !== getLocalDateKey(previousMessage?.createdAtUtc || "")
           || Math.abs(getMessageTime(message) - getMessageTime(previousMessage)) > windowMs;
 
         if (shouldStartGroup) {

@@ -18,6 +18,7 @@ export type TriggerMount = {
 };
 
 const nativeVideoSelectors = [
+  '.osdHeader [class*="MuiToolbar-root"] > div:has(> button)',
   ".videoOsdHeader .headerRight",
   ".videoOsdHeader .headerRightItems",
   ".videoOsdHeader .buttons",
@@ -37,6 +38,7 @@ const nativeVideoSelectors = [
 ];
 
 const nativeHeaderSelectors = [
+  '.skinHeader:not(.osdHeader) [class*="MuiToolbar-root"] > div:has(> button)',
   'header div:has(> button[aria-label="SyncPlay"])',
   ".skinHeader .headerRight",
   ".skinHeader .headerRightItems",
@@ -161,7 +163,7 @@ function isVideoRoute(): boolean {
       || document.querySelector('[class*="VideoPlayer"]'));
 }
 
-function isVisibleHost(element: Element | null): element is HTMLElement {
+function isUsableHost(element: Element | null): element is HTMLElement {
   if (!element || !element.isConnected || isWithinJellyChatElement(element)) {
     return false;
   }
@@ -170,15 +172,7 @@ function isVisibleHost(element: Element | null): element is HTMLElement {
     return false;
   }
 
-  const rect = element.getBoundingClientRect();
-  if (rect.width < 30 || rect.height < 24) {
-    return false;
-  }
-
-  const style = window.getComputedStyle(element);
-  return style.display !== "none"
-    && style.visibility !== "hidden"
-    && Number(style.opacity || "1") > 0.05;
+  return true;
 }
 
 function queryHosts(selectors: string[], root: ParentNode): HTMLElement[] {
@@ -186,7 +180,7 @@ function queryHosts(selectors: string[], root: ParentNode): HTMLElement[] {
   selectors.forEach((selector) => {
     try {
       root.querySelectorAll<HTMLElement>(selector).forEach((element) => {
-        if (isVisibleHost(element) && !hosts.includes(element)) {
+        if (isUsableHost(element) && !hosts.includes(element)) {
           hosts.push(element);
         }
       });
@@ -195,6 +189,28 @@ function queryHosts(selectors: string[], root: ParentNode): HTMLElement[] {
     }
   });
   return hosts;
+}
+
+function getNativeHeaderHost(): HTMLElement | null {
+  const legacy = document.querySelector(".headerRight");
+  if (legacy instanceof HTMLElement && legacy.offsetParent !== null && isUsableHost(legacy)) {
+    return legacy;
+  }
+
+  const userMenuButton = document.querySelector('[aria-controls="app-user-menu"]');
+  const toolbar = userMenuButton?.closest<HTMLElement>(".MuiToolbar-root")
+    || document.querySelector<HTMLElement>(".MuiAppBar-root .MuiToolbar-root");
+  if (!toolbar) {
+    return null;
+  }
+
+  let userMenuBox = userMenuButton;
+  while (userMenuBox && userMenuBox.parentElement !== toolbar) {
+    userMenuBox = userMenuBox.parentElement;
+  }
+
+  const buttonsTray = userMenuBox?.previousElementSibling || null;
+  return isUsableHost(buttonsTray) ? buttonsTray : null;
 }
 
 function bestHost(hosts: HTMLElement[], preferRight: boolean): HTMLElement | null {
@@ -254,9 +270,23 @@ export function resolveTriggerMount(): TriggerMount {
       updateDebug(mount);
       return mount;
     }
+
+    const mount = {
+      host: null,
+      mode: "native-missing" as const,
+      hostFound: false,
+      selector: "",
+      route,
+      activeRootSelector,
+      videoHostCandidateCount: videoHosts.length,
+      headerHostCandidateCount: headerHosts.length,
+      error: null
+    };
+    updateDebug(mount);
+    return mount;
   }
 
-  const headerHost = bestHost(headerHosts, true);
+  const headerHost = getNativeHeaderHost() || bestHost(headerHosts, true);
   if (headerHost) {
     const mount = {
       host: headerHost,

@@ -49,6 +49,16 @@ public sealed class JellyChatAssetsController : ControllerBase
             return File(appearance.Content, "text/css; charset=utf-8");
         }
 
+        if (string.Equals(assetName, "custom.css", System.StringComparison.OrdinalIgnoreCase))
+        {
+            JellyChatAppearanceAsset customCss = _assetProvider.GetCustomCssAsset();
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            Response.Headers.CacheControl = string.Equals(version, customCss.Version, System.StringComparison.Ordinal)
+                ? "public, max-age=31536000, immutable"
+                : "no-cache";
+            return File(customCss.Content, "text/css; charset=utf-8");
+        }
+
         if (!_assetProvider.TryOpenAsset(assetName, out var stream, out string contentType, out string resourceName) || stream is null)
         {
             _logger.LogWarning("JellyChat asset {AssetName} could not be found in embedded resources.", assetName);

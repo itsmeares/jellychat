@@ -8,7 +8,7 @@ namespace Jellyfin.Plugin.JellyChat.Tests;
 public sealed class JellyChatWebInjectionMiddlewareTests
 {
     [Fact]
-    public async Task InvokeAsyncInjectsAppearanceAfterBaseStylesheetAndBeforeScript()
+    public async Task InvokeAsyncInjectsStylesheetsInOrderBeforeScript()
     {
         var body = new MemoryStream();
         var context = new DefaultHttpContext();
@@ -20,7 +20,7 @@ public sealed class JellyChatWebInjectionMiddlewareTests
             async httpContext =>
             {
                 httpContext.Response.ContentType = "text/html; charset=utf-8";
-                await httpContext.Response.WriteAsync("<!DOCTYPE html><html><body></body></html>");
+                await httpContext.Response.WriteAsync("<!DOCTYPE html><html><head><link rel=\"stylesheet\" href=\"/JellyChat/Assets/custom.css?v=stale\" data-jellychat-custom=\"true\"></head><body></body></html>");
             },
             new JellyChatAssetProvider(),
             NullLogger<JellyChatWebInjectionMiddleware>.Instance);
@@ -31,9 +31,14 @@ public sealed class JellyChatWebInjectionMiddlewareTests
 
         int baseStylesheet = html.IndexOf("jellychat.css", StringComparison.Ordinal);
         int appearanceStylesheet = html.IndexOf("appearance.css", StringComparison.Ordinal);
+        int customStylesheet = html.IndexOf("custom.css", StringComparison.Ordinal);
         int script = html.IndexOf("jellychat.js", StringComparison.Ordinal);
         Assert.True(baseStylesheet >= 0);
         Assert.True(appearanceStylesheet > baseStylesheet);
-        Assert.True(script > appearanceStylesheet);
+        Assert.True(customStylesheet > appearanceStylesheet);
+        Assert.True(script > customStylesheet);
+        Assert.Equal(customStylesheet, html.LastIndexOf("custom.css", StringComparison.Ordinal));
+        Assert.DoesNotContain("custom.css?v=stale", html, StringComparison.Ordinal);
+        Assert.Contains("data-jellychat-custom=\"true\" disabled", html, StringComparison.Ordinal);
     }
 }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { ChatActions, ChatState } from "../types";
 import { closeButtonId, drawerId, sideToggleButtonId, statusId, titleId } from "../runtime/util";
-import { getCurrentGroupLabel } from "../runtime/store";
 import { clampDrawerBackgroundAlpha, drawerBackgroundAlphaMax, drawerBackgroundAlphaMin } from "../runtime/preferences";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
@@ -281,6 +280,14 @@ function DrawerSettingsPopover({ state, actions, open, onClose }: Props & { open
         output={Math.round(state.drawerBackgroundAlpha * 100) + "%"}
         onValue={(nextValue) => actions.setDrawerBackgroundAlpha(clampDrawerBackgroundAlpha(nextValue))}
       />
+      <label className="jellyChatCustomCssPreference">
+        <input
+          type="checkbox"
+          checked={state.customCssDisabled}
+          onChange={(event) => actions.setCustomCssDisabled(event.target.checked)}
+        />
+        <span>Disable server custom CSS</span>
+      </label>
       {state.syncPlay.inGroup && state.syncPlay.accessResolved && state.syncPlay.isOwner ? (
         <section className="jellyChatRoomPasswordSettings" aria-labelledby="jellyChatRoomPasswordHeading">
           <h3 id="jellyChatRoomPasswordHeading">Room privacy</h3>
@@ -337,7 +344,7 @@ export function ChatDrawer({ state, actions }: Props) {
     : roomLocked
       ? "JellyChat room is locked"
       : state.syncPlay.inGroup
-        ? "In SyncPlay group: " + getCurrentGroupLabel()
+        ? ""
         : "Not in a SyncPlay group";
   const controls = (
     <div className="jellyChatHeaderControls">
@@ -399,6 +406,9 @@ export function ChatDrawer({ state, actions }: Props) {
       aria-labelledby={titleId}
       aria-hidden={state.drawerOpen ? "false" : "true"}
       inert={!state.drawerOpen}
+      onWheel={(event) => event.stopPropagation()}
+      onMouseMove={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
     >
       <DrawerResizeHandle state={state} actions={actions} />
       <div className={"jellyChatHeader is-" + state.drawerSide}>
@@ -406,9 +416,7 @@ export function ChatDrawer({ state, actions }: Props) {
         {controls}
         <DrawerSettingsPopover state={state} actions={actions} open={settingsOpen} onClose={closeSettings} />
       </div>
-      <div id={statusId} className={state.syncPlay.inGroup && state.syncPlay.authorized ? "is-active" : ""} role="status" aria-live="polite">
-        {statusText}
-      </div>
+      {statusText ? <div id={statusId} role="status" aria-live="polite">{statusText}</div> : null}
       {checkingAccess || roomLocked ? (
         <LockedRoom
           key={state.syncPlay.groupId + ":" + state.syncPlay.sessionId}
@@ -421,7 +429,6 @@ export function ChatDrawer({ state, actions }: Props) {
             timelineItems={state.timelineItems}
             syncPlay={state.syncPlay}
             statusText={statusText}
-            statusActive={state.syncPlay.inGroup && state.syncPlay.authorized}
             typingUsers={state.typingRemoteUsers}
             actions={actions}
             messageActionMenu={state.messageActionMenu}
