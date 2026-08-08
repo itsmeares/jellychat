@@ -1092,7 +1092,6 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   font-size: 0.93rem;
   line-height: 1.35rem;
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
 .jellyChatPlaybackEvent {
@@ -1431,30 +1430,30 @@ body.jellychat-compact-video-status .jellyChatInlineStatus.is-active,
   font-size: 2.55rem;
   font-synthesis: none;
   line-height: 1;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.55),
     0 6px 16px rgba(0, 0, 0, 0.28);
   transform: translate3d(-50%, 0, 0) scale(var(--jellychat-reaction-scale, 1));
   transform-origin: center;
   animation:
-    jellyChatReactionDrift var(--jellychat-reaction-duration, 3400ms) linear forwards,
-    jellyChatReactionOpacity var(--jellychat-reaction-duration, 3400ms) linear forwards;
+    jellychat-reaction-drift var(--jellychat-reaction-duration, 3400ms) linear forwards,
+    jellychat-reaction-opacity var(--jellychat-reaction-duration, 3400ms) linear forwards;
   backface-visibility: hidden;
   will-change: transform, opacity;
 }
 
-@keyframes jellyChatReactionDrift {
+@keyframes jellychat-reaction-drift {
   from {
     transform: translate3d(-50%, 0, 0) scale(var(--jellychat-reaction-scale, 1));
   }
 
-  to {
+  100% {
     transform: translate3d(calc(-50% + var(--jellychat-reaction-dx, 0px)), var(--jellychat-reaction-rise-y, -560px), 0) scale(var(--jellychat-reaction-scale, 1));
   }
 }
 
-@keyframes jellyChatReactionOpacity {
+@keyframes jellychat-reaction-opacity {
   0%,
   72% {
     opacity: 1;
@@ -1864,11 +1863,11 @@ body.jellychat-phone-portrait #jellyChatDrawer.is-open,
   }
 
   .jellyChatReactionFloat {
-    animation: jellyChatReactionFade 900ms linear forwards;
+    animation: jellychat-reaction-fade 900ms linear forwards;
   }
 }
 
-@keyframes jellyChatReactionFade {
+@keyframes jellychat-reaction-fade {
   0% {
     opacity: 0;
     transform: translate3d(-50%, 0, 0) scale(1);
