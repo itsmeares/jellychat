@@ -28,7 +28,7 @@ public sealed class JellyChatReleaseWorkflowTests
     {
         string buildMetadata = ReadRepositoryFile("build.yaml");
 
-        Assert.Contains("version: \"2.0.0.0\"", buildMetadata, StringComparison.Ordinal);
+        Assert.Contains("version: \"2.1.0.0\"", buildMetadata, StringComparison.Ordinal);
         Assert.Contains("targetAbi: \"12.0.0.0\"", buildMetadata, StringComparison.Ordinal);
         Assert.Contains("framework: \"net10.0\"", buildMetadata, StringComparison.Ordinal);
     }
