@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "Improves chat composition and message grouping, adds per-user custom CSS control, and adds native Jellyfin toolbar and player chat buttons with unread indicators. Chat input, scrolling, and pointer activity no longer leak into Jellyfin player shortcuts or controls. Requires Jellyfin 12 RC4.",
+                "targetAbi": "12.0.0.0",
+                "version": "2.1.0.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v2.1.0/Jellyfin.Plugin.JellyChat_2.1.0.zip",
+                "checksum": "de2626fcb9e6885f98d1779fbb38d16f",
+                "timestamp": "2026-08-08T20:41:58"
+            },
+            {
                 "changelog": "Adds Jellyfin 12 RC compatibility with .NET 10 and the Jellyfin 12.0 RC4 plugin API. JellyChat routes, same-origin assets, SyncPlay chat behavior, plugin GUID, and File Transformation independence remain unchanged.",
                 "targetAbi": "12.0.0.0",
                 "version": "2.0.0.0",
