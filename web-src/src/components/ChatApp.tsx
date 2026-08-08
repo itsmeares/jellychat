@@ -87,6 +87,9 @@ export function ChatApp() {
   const triggerHost = triggerMount.hostFound && triggerMount.host && triggerMount.host.isConnected
     ? triggerMount.host
     : null;
+  const nativeButtonClassName = triggerHost
+    ?.querySelector<HTMLElement>(":scope > .MuiIconButton-root:not([data-jellychat-button])")
+    ?.className || "";
 
   return (
     <>
@@ -96,6 +99,7 @@ export function ChatApp() {
           actions={actions}
           mode={triggerMount.mode}
           indicator={state.triggerIndicator}
+          nativeButtonClassName={nativeButtonClassName}
         />,
         triggerHost
       ) : null}

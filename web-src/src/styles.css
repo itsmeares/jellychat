@@ -178,6 +178,10 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
 .jellyChatButton {
   pointer-events: auto;
   position: relative;
+  overflow: visible;
+}
+
+.jellyChatButton:not(.MuiIconButton-root) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -190,7 +194,6 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
   color: var(--jellychat-text-strong);
   cursor: pointer;
   line-height: 0;
-  overflow: visible;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.26);
   transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -200,7 +203,7 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
   flex: 0 0 auto;
 }
 
-.jellyChatButton.is-native-trigger {
+.jellyChatButton.is-native-trigger:not(.MuiIconButton-root) {
   width: 48px;
   height: 48px;
   margin: 0;
@@ -211,13 +214,6 @@ html.jellychat-desktop-video-safe.jellychat-drawer-open:not(.jellychat-mobile) :
   color: inherit;
   font-size: 16px;
   box-shadow: none;
-}
-
-body:not(.jellychat-video-route) .jellyChatButton.is-native-trigger {
-  flex: 0 0 48px;
-  min-width: 48px;
-  min-height: 48px;
-  order: -1;
 }
 
 .jellyChatButton.is-native-trigger > svg {
@@ -263,19 +259,19 @@ html.jellychat-drawer-left body.jellychat-video-route .jellyChatButton,
   border-radius: 0 0.65rem 0.65rem 0;
 }
 
-.jellyChatButton:hover,
-.jellyChatButton:focus-visible {
+.jellyChatButton:not(.MuiIconButton-root):hover,
+.jellyChatButton:not(.MuiIconButton-root):focus-visible {
   background: var(--jellychat-panel-background-active);
   border-color: var(--jellychat-border-prominent);
 }
 
-.jellyChatButton:focus-visible {
+.jellyChatButton:not(.MuiIconButton-root):focus-visible {
   outline: 2px solid var(--jellychat-focus);
   outline-offset: 2px;
 }
 
-.jellyChatButton.is-native-trigger:hover,
-.jellyChatButton.is-native-trigger:focus-visible,
+.jellyChatButton.is-native-trigger:not(.MuiIconButton-root):hover,
+.jellyChatButton.is-native-trigger:not(.MuiIconButton-root):focus-visible,
 .jellyChatButton.is-desktop-overlay-trigger:hover,
 .jellyChatButton.is-desktop-overlay-trigger:focus-visible {
   background: var(--jellychat-panel-background-selected);

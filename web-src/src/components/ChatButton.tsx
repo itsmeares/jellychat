@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { buttonId, markerClass } from "../runtime/util";
 import { rememberTriggerFocus } from "../runtime/trigger";
 import type { ChatActions, TriggerIndicatorState, TriggerMode } from "../types";
@@ -8,17 +8,27 @@ type Props = {
   actions: ChatActions;
   mode: TriggerMode;
   indicator: TriggerIndicatorState;
+  nativeButtonClassName: string;
 };
 
 function prefersReducedMotion(): boolean {
   return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
-export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
+export function ChatButton({ isOpen, actions, mode, indicator, nativeButtonClassName }: Props) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [activityStep, setActivityStep] = useState(0);
   const activityVisible = indicator.playbackActivityIndicatorActive && !indicator.unreadChatIndicatorActive;
   const triggerClass = mode === "desktop-overlay-fallback" ? " is-desktop-overlay-trigger" : (mode === "native-missing" ? " is-native-missing" : " is-native-trigger");
-  const nativeClass = mode === "native-header" || mode === "native-video-osd" ? " paper-icon-button-light headerButton headerButtonRight" : "";
+  const legacyNativeClass = !nativeButtonClassName && (mode === "native-header" || mode === "native-video-osd") ? " paper-icon-button-light headerButton headerButtonRight" : "";
+
+  useLayoutEffect(() => {
+    const button = buttonRef.current;
+    const parent = button?.parentElement;
+    if (mode === "native-header" && button && parent && parent.firstElementChild !== button) {
+      parent.prepend(button);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (!activityVisible || prefersReducedMotion()) {
@@ -57,9 +67,10 @@ export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
 
   return (
     <button
+      ref={buttonRef}
       id={buttonId}
       type="button"
-      className={"emby-button " + markerClass + triggerClass + nativeClass + (isOpen ? " is-open" : "") + (indicator.unreadChatIndicatorActive ? " has-unread" : "")}
+      className={(nativeButtonClassName || "emby-button") + " " + markerClass + triggerClass + legacyNativeClass + (isOpen ? " is-open" : "") + (indicator.unreadChatIndicatorActive ? " has-unread" : "")}
       data-jellychat-button="true"
       data-jellychat-trigger="true"
       data-jellychat-trigger-mode={mode}
