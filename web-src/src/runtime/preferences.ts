@@ -20,6 +20,7 @@ export const drawerBackgroundAlphaMax = 1;
 
 const drawerWidthStorageKey = "jellychat.drawer.width.v1";
 const drawerBackgroundAlphaStorageKey = "jellychat.drawer.backgroundAlpha.v1";
+const customCssDisabledStorageKey = "jellychat.customCss.disabled.v1";
 
 function readNumber(key: string): number | null {
   try {
@@ -53,6 +54,46 @@ function removeValue(key: string): void {
       window.JellyChatDebug.lastError = "Could not reset JellyChat drawer preferences.";
     }
   }
+}
+
+function readBoolean(key: string): boolean {
+  try {
+    return window.localStorage?.getItem(key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeBoolean(key: string, value: boolean): void {
+  try {
+    window.localStorage?.setItem(key, String(value));
+  } catch {
+    if (window.JellyChatDebug) {
+      window.JellyChatDebug.lastError = "Could not save JellyChat appearance preferences.";
+    }
+  }
+}
+
+export function getCustomCssDisabledPreference(): boolean {
+  return readBoolean(customCssDisabledStorageKey);
+}
+
+export function applyCustomCssPreference(disabled = getCustomCssDisabledPreference()): boolean {
+  const stylesheet = document.querySelector<HTMLLinkElement>('link[data-jellychat-custom="true"]');
+  if (stylesheet) {
+    stylesheet.disabled = disabled;
+  }
+  return disabled;
+}
+
+export function saveCustomCssDisabled(disabled: boolean): boolean {
+  writeBoolean(customCssDisabledStorageKey, disabled);
+  return applyCustomCssPreference(disabled);
+}
+
+export function resetCustomCssDisabled(): boolean {
+  removeValue(customCssDisabledStorageKey);
+  return applyCustomCssPreference(false);
 }
 
 export function getDrawerWidthMax(): number {
@@ -132,11 +173,12 @@ export function resetDrawerBackgroundAlpha(): DrawerAlphaPreference {
   return getDrawerBackgroundAlphaPreference(!!window.JellyChatDebug?.desktopVideoSafeMode);
 }
 
-export function resetDrawerPreferences(): { width: DrawerWidthPreference; alpha: DrawerAlphaPreference } {
+export function resetDrawerPreferences(): { width: DrawerWidthPreference; alpha: DrawerAlphaPreference; customCssDisabled: boolean } {
   removeValue(drawerWidthStorageKey);
   removeValue(drawerBackgroundAlphaStorageKey);
   return {
     width: getDrawerWidthPreference(),
-    alpha: getDrawerBackgroundAlphaPreference(!!window.JellyChatDebug?.desktopVideoSafeMode)
+    alpha: getDrawerBackgroundAlphaPreference(!!window.JellyChatDebug?.desktopVideoSafeMode),
+    customCssDisabled: resetCustomCssDisabled()
   };
 }

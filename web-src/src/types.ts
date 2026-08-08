@@ -132,6 +132,7 @@ export type ChatState = {
   drawerWidthMax: number;
   drawerBackgroundAlpha: number;
   drawerBackgroundAlphaSource: string;
+  customCssDisabled: boolean;
   syncPlay: SyncPlayContext;
   messages: ChatMessage[];
   groups: MessageGroupModel[];
@@ -156,6 +157,7 @@ export type ChatActions = {
   resetDrawerWidth: () => void;
   setDrawerBackgroundAlpha: (alpha: number) => void;
   resetDrawerBackgroundAlpha: () => void;
+  setCustomCssDisabled: (disabled: boolean) => void;
   resetDrawerPreferences: () => void;
   setDrawerResizeActive: (active: boolean) => void;
   noteComposerInput: (value: string) => void;

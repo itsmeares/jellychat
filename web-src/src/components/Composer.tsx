@@ -13,7 +13,20 @@ type Props = {
 export function Composer({ actions, sending, syncPlay, replyTarget, replyTargetFound }: Props) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const disabled = sending || !syncPlay.inGroup;
+  const disabled = !syncPlay.inGroup;
+
+  function focusInput() {
+    const input = inputRef.current;
+    if (!input || input.disabled) {
+      return;
+    }
+
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+  }
 
   function resizeInput() {
     const input = inputRef.current;
@@ -22,7 +35,13 @@ export function Composer({ actions, sending, syncPlay, replyTarget, replyTargetF
     }
 
     input.style.height = "auto";
-    input.style.height = Math.max(32, Math.min(112, input.scrollHeight)) + "px";
+    const style = window.getComputedStyle(input);
+    const minHeight = Number.parseFloat(style.minHeight) || 0;
+    const maxHeight = Number.parseFloat(style.maxHeight) || Number.POSITIVE_INFINITY;
+    const borderHeight = (Number.parseFloat(style.borderTopWidth) || 0) + (Number.parseFloat(style.borderBottomWidth) || 0);
+    const contentHeight = input.scrollHeight + borderHeight;
+    input.style.height = Math.max(minHeight, Math.min(maxHeight, contentHeight)) + "px";
+    input.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
   }
 
   async function submit(event?: FormEvent) {
@@ -31,8 +50,12 @@ export function Composer({ actions, sending, syncPlay, replyTarget, replyTargetF
     if (sent) {
       setValue("");
       actions.stopTyping("message-sent");
-      window.setTimeout(resizeInput, 0);
     }
+
+    window.setTimeout(() => {
+      resizeInput();
+      focusInput();
+    }, 0);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -82,6 +105,8 @@ export function Composer({ actions, sending, syncPlay, replyTarget, replyTargetF
           aria-label="JellyChat message"
           wrap="soft"
           disabled={disabled}
+          readOnly={sending}
+          aria-busy={sending ? "true" : "false"}
           value={value}
           onChange={(event) => {
             setValue(event.target.value);
@@ -96,8 +121,16 @@ export function Composer({ actions, sending, syncPlay, replyTarget, replyTargetF
             actions.setInputFocused(false);
           }}
         />
-        <button id={sendButtonId} type="submit" disabled={disabled || value.trim().length === 0}>
-          {sending ? "Sending..." : "Send"}
+        <button
+          id={sendButtonId}
+          type="submit"
+          disabled={disabled || sending || value.trim().length === 0}
+          aria-label={sending ? "Sending message" : "Send message"}
+          title={sending ? "Sending message" : "Send message"}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12 4 10.6 5.4l5.6 5.6H4v2h12.2l-5.6 5.6L12 20l8-8-8-8Z" />
+          </svg>
         </button>
       </form>
     </div>

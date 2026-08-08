@@ -16,18 +16,18 @@ public sealed class JellyChatAppearanceStylesheetTests
     }
 
     [Fact]
-    public void BuildWithOnlyCustomCssPreservesExactContent()
+    public void BuildCustomCssPreservesExactContent()
     {
         const string CustomCss = "\nbody > .skinHeader { display: none; }\n";
 
-        JellyChatAppearanceAsset asset = JellyChatAppearanceStylesheet.Build(
+        JellyChatAppearanceAsset asset = JellyChatAppearanceStylesheet.BuildCustomCss(
             new PluginConfiguration { CustomCss = CustomCss });
 
         Assert.Equal(CustomCss, Encoding.UTF8.GetString(asset.Content));
     }
 
     [Fact]
-    public void BuildPlacesColorOverridesBeforeUnmodifiedCustomCss()
+    public void BuildContainsColorOverridesWithoutCustomCss()
     {
         const string CustomCss = "#jellyChatDrawer { backdrop-filter: blur(8px); }\nbody { --brand: coral; }";
         var configuration = new PluginConfiguration
@@ -49,20 +49,21 @@ public sealed class JellyChatAppearanceStylesheetTests
         Assert.Contains("--jellychat-border: rgba(255, 255, 255, 0.25);", css, StringComparison.Ordinal);
         Assert.Contains("--jellychat-text: #fefefe;", css, StringComparison.Ordinal);
         Assert.DoesNotContain("--jellychat-drawer-background-alpha", css, StringComparison.Ordinal);
-        Assert.EndsWith(CustomCss, css, StringComparison.Ordinal);
+        Assert.DoesNotContain(CustomCss, css, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void BuildVersionChangesWithCustomCss()
+    public void AppearanceAndCustomCssVersionsChangeIndependently()
     {
         var firstConfiguration = new PluginConfiguration { CustomCss = ".one { color: red; }" };
         var secondConfiguration = new PluginConfiguration { CustomCss = ".two { color: red; }" };
 
         JellyChatAppearanceAsset first = JellyChatAppearanceStylesheet.Build(firstConfiguration);
-        JellyChatAppearanceAsset same = JellyChatAppearanceStylesheet.Build(firstConfiguration);
         JellyChatAppearanceAsset second = JellyChatAppearanceStylesheet.Build(secondConfiguration);
+        JellyChatAppearanceAsset firstCustomCss = JellyChatAppearanceStylesheet.BuildCustomCss(firstConfiguration);
+        JellyChatAppearanceAsset secondCustomCss = JellyChatAppearanceStylesheet.BuildCustomCss(secondConfiguration);
 
-        Assert.Equal(first.Version, same.Version);
-        Assert.NotEqual(first.Version, second.Version);
+        Assert.Equal(first.Version, second.Version);
+        Assert.NotEqual(firstCustomCss.Version, secondCustomCss.Version);
     }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ChatActions, MessageActionMenuState, SyncPlayContext, TimelineItem, TypingRemoteUser } from "../types";
-import { emptyStateId, messagesId } from "../runtime/util";
+import { emptyStateId, formatDateDivider, getLocalDateKey, messagesId } from "../runtime/util";
 import { MessageGroup } from "./MessageGroup";
 import { PlaybackTimelineRow } from "./PlaybackTimelineRow";
 
@@ -9,7 +9,6 @@ type Props = {
   timelineItems: TimelineItem[];
   syncPlay: SyncPlayContext;
   statusText: string;
-  statusActive: boolean;
   typingUsers: TypingRemoteUser[];
   actions: ChatActions;
   messageActionMenu: MessageActionMenuState;
@@ -105,7 +104,7 @@ function MessageActionMenu({ menu, actions }: { menu: MessageActionMenuState; ac
   return portalHost ? createPortal(menuContent, portalHost) : menuContent;
 }
 
-export function MessageList({ timelineItems, syncPlay, statusText, statusActive, typingUsers, actions, messageActionMenu, highlightedMessageId }: Props) {
+export function MessageList({ timelineItems, syncPlay, statusText, typingUsers, actions, messageActionMenu, highlightedMessageId }: Props) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottom = useRef(true);
   const originalMessageIds = getMessageIds(timelineItems);
@@ -147,9 +146,7 @@ export function MessageList({ timelineItems, syncPlay, statusText, statusActive,
         }
       }}
     >
-      <div className={statusActive ? "jellyChatInlineStatus is-active" : "jellyChatInlineStatus"} role="status" aria-live="polite">
-        {statusText}
-      </div>
+      {statusText ? <div className="jellyChatInlineStatus" role="status" aria-live="polite">{statusText}</div> : null}
       <div
         id={emptyStateId}
         className="jellyChatEmptyState"
@@ -157,11 +154,21 @@ export function MessageList({ timelineItems, syncPlay, statusText, statusActive,
       >
         {syncPlay.inGroup ? "No messages yet. Start the chat when you are ready." : "Join a SyncPlay group to chat here."}
       </div>
-      {timelineItems.map((item) => (
-        item.kind === "messageGroup"
+      {timelineItems.flatMap((item, index) => {
+        const createdAtUtc = item.kind === "messageGroup" ? item.group.createdAtUtc : item.createdAtUtc;
+        const previous = timelineItems[index - 1];
+        const previousCreatedAtUtc = previous
+          ? previous.kind === "messageGroup" ? previous.group.createdAtUtc : previous.createdAtUtc
+          : "";
+        const dateLabel = formatDateDivider(createdAtUtc);
+        const divider = getLocalDateKey(createdAtUtc) !== getLocalDateKey(previousCreatedAtUtc) && dateLabel
+          ? <div key={"date:" + getLocalDateKey(createdAtUtc)} className="jellyChatDateDivider" role="separator" aria-label={dateLabel}><span>{dateLabel}</span></div>
+          : null;
+        const row = item.kind === "messageGroup"
           ? <MessageGroup key={item.key} group={item.group} actions={actions} originalMessageIds={originalMessageIds} highlightedMessageId={highlightedMessageId} />
-          : <PlaybackTimelineRow key={item.key} item={item} />
-      ))}
+          : <PlaybackTimelineRow key={item.key} item={item} />;
+        return divider ? [divider, row] : [row];
+      })}
       {typingUsers.length > 0 ? (
         <div className="jellyChatTypingIndicator" aria-live="polite">
           {typingText(typingUsers)}

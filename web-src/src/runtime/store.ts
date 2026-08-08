@@ -6,7 +6,7 @@ import { buildReplyTarget, buildTimelineItems, countDebugNodes, createClientEven
 import { getActiveMountHost, getDrawerSide, isDrawerOpen, moveJellyChatRootToHost, scheduleLayoutUpdate, setDrawerSide, updateLayout } from "./layout";
 import { getCurrentPlaybackSnapshot, installPlaybackActionLogging, scanPlaybackTarget } from "./playback";
 import { addReactionOverlay, addRoomReactionOverlay, clearReactionOverlays, recordReactionReceived, setReactionParticipantCount } from "./reactions";
-import { getDrawerBackgroundAlphaPreference, getDrawerWidthPreference, resetDrawerBackgroundAlpha as resetStoredDrawerBackgroundAlpha, resetDrawerPreferences as resetStoredDrawerPreferences, resetDrawerWidth as resetStoredDrawerWidth, saveDrawerBackgroundAlpha, saveDrawerWidth } from "./preferences";
+import { getCustomCssDisabledPreference, getDrawerBackgroundAlphaPreference, getDrawerWidthPreference, resetDrawerBackgroundAlpha as resetStoredDrawerBackgroundAlpha, resetDrawerPreferences as resetStoredDrawerPreferences, resetDrawerWidth as resetStoredDrawerWidth, saveCustomCssDisabled, saveDrawerBackgroundAlpha, saveDrawerWidth } from "./preferences";
 import { restoreTriggerFocus } from "./trigger";
 
 type Subscriber = (state: ChatState) => void;
@@ -105,6 +105,7 @@ let state: ChatState = {
   drawerWidthMax: getDrawerWidthPreference().max,
   drawerBackgroundAlpha: getDrawerBackgroundAlphaPreference(false).alpha,
   drawerBackgroundAlphaSource: getDrawerBackgroundAlphaPreference(false).source,
+  customCssDisabled: getCustomCssDisabledPreference(),
   syncPlay: currentSyncPlayContext,
   messages: [],
   groups: [],
@@ -158,7 +159,8 @@ function setActorDebug(actorName: string, fallbackReason: string): void {
 function getDrawerPreferenceSnapshot() {
   const width = getDrawerWidthPreference();
   const alpha = getDrawerBackgroundAlphaPreference(!!window.JellyChatDebug?.desktopVideoSafeMode);
-  return { width, alpha };
+  const customCssDisabled = getCustomCssDisabledPreference();
+  return { width, alpha, customCssDisabled };
 }
 
 function updatePresenceDebug(): void {
@@ -249,6 +251,7 @@ function emit(): void {
     drawerWidthMax: prefs.width.max,
     drawerBackgroundAlpha: prefs.alpha.alpha,
     drawerBackgroundAlphaSource: prefs.alpha.source,
+    customCssDisabled: prefs.customCssDisabled,
     syncPlay: currentSyncPlayContext,
     messages: historyMessages.slice(),
     groups: groupedMessages.slice(),
@@ -666,7 +669,7 @@ function recordClosedDrawerIndicators(events: RoomEvent[], skipHistory: boolean)
   }
 
   events.forEach((event) => {
-    if (event.groupId !== currentSyncPlayContext.groupId || isReactionEvent(event) || isTypingEvent(event) || isCurrentUserEvent(event) || localClientEventIds.has(event.clientEventId)) {
+    if (isReactionEvent(event) || isTypingEvent(event) || isCurrentUserEvent(event) || localClientEventIds.has(event.clientEventId)) {
       return;
     }
 
@@ -2097,6 +2100,10 @@ export const actions: ChatActions = {
     resetStoredDrawerBackgroundAlpha();
     emit();
     updateLayout("drawer-alpha-reset");
+  },
+  setCustomCssDisabled: (disabled: boolean) => {
+    saveCustomCssDisabled(disabled);
+    emit();
   },
   resetDrawerPreferences: () => {
     resetStoredDrawerPreferences();

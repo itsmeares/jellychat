@@ -8,7 +8,7 @@ namespace Jellyfin.Plugin.JellyChat.Tests;
 public sealed class JellyChatWebInjectionMiddlewareTests
 {
     [Fact]
-    public async Task InvokeAsyncInjectsAppearanceAfterBaseStylesheetAndBeforeScript()
+    public async Task InvokeAsyncInjectsStylesheetsInOrderBeforeScript()
     {
         var body = new MemoryStream();
         var context = new DefaultHttpContext();
@@ -31,9 +31,12 @@ public sealed class JellyChatWebInjectionMiddlewareTests
 
         int baseStylesheet = html.IndexOf("jellychat.css", StringComparison.Ordinal);
         int appearanceStylesheet = html.IndexOf("appearance.css", StringComparison.Ordinal);
+        int customStylesheet = html.IndexOf("custom.css", StringComparison.Ordinal);
         int script = html.IndexOf("jellychat.js", StringComparison.Ordinal);
         Assert.True(baseStylesheet >= 0);
         Assert.True(appearanceStylesheet > baseStylesheet);
-        Assert.True(script > appearanceStylesheet);
+        Assert.True(customStylesheet > appearanceStylesheet);
+        Assert.True(script > customStylesheet);
+        Assert.Contains("data-jellychat-custom=\"true\" disabled", html, StringComparison.Ordinal);
     }
 }

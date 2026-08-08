@@ -18,6 +18,7 @@ export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
   const [activityStep, setActivityStep] = useState(0);
   const activityVisible = indicator.playbackActivityIndicatorActive && !indicator.unreadChatIndicatorActive;
   const triggerClass = mode === "desktop-overlay-fallback" ? " is-desktop-overlay-trigger" : (mode === "native-missing" ? " is-native-missing" : " is-native-trigger");
+  const nativeClass = mode === "native-header" || mode === "native-video-osd" ? " paper-icon-button-light headerButton headerButtonRight" : "";
 
   useEffect(() => {
     if (!activityVisible || prefersReducedMotion()) {
@@ -48,13 +49,17 @@ export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
   }, [activityVisible]);
 
   const activityText = prefersReducedMotion() ? "..." : ".".repeat(activityStep + 1);
-  const label = isOpen ? "Close JellyChat" : "Open JellyChat";
+  const label = isOpen
+    ? "Close JellyChat"
+    : indicator.unreadChatIndicatorActive
+      ? "Open JellyChat, unread messages"
+      : "Open JellyChat";
 
   return (
     <button
       id={buttonId}
       type="button"
-      className={"emby-button " + markerClass + triggerClass + (isOpen ? " is-open" : "")}
+      className={"emby-button " + markerClass + triggerClass + nativeClass + (isOpen ? " is-open" : "") + (indicator.unreadChatIndicatorActive ? " has-unread" : "")}
       data-jellychat-button="true"
       data-jellychat-trigger="true"
       data-jellychat-trigger-mode={mode}
@@ -70,7 +75,6 @@ export function ChatButton({ isOpen, actions, mode, indicator }: Props) {
       <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false">
         <path fill="currentColor" d="M4 4h16v11H8l-4 4V4z" />
       </svg>
-      {indicator.unreadChatIndicatorActive ? <span className="jellyChatUnreadDot" aria-hidden="true" /> : null}
       {activityVisible ? <span className="jellyChatActivityDots" aria-hidden="true">{activityText}</span> : null}
     </button>
   );

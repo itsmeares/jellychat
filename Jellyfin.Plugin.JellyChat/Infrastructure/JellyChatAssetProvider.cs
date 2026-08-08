@@ -51,6 +51,17 @@ public sealed class JellyChatAssetProvider
     }
 
     /// <summary>
+    /// Gets current server-wide custom CSS and its content version.
+    /// </summary>
+    /// <returns>Generated custom CSS asset.</returns>
+    internal JellyChatAppearanceAsset GetCustomCssAsset()
+    {
+        var configuration = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        JellyChatAppearanceAsset customCss = JellyChatAppearanceStylesheet.BuildCustomCss(configuration);
+        return customCss with { Version = string.Concat(AssetVersion, "-", customCss.Version) };
+    }
+
+    /// <summary>
     /// Opens a known JellyChat asset.
     /// </summary>
     /// <param name="assetName">The requested asset name.</param>

@@ -137,26 +137,26 @@ export function recordApiResultDebug(method: string, path: string, url: string, 
   window.JellyChatDebug.lastApiError = error ? summarizeUrlError(error) : null;
 }
 
-export function resolveJellyfinUrl(path: string): string {
+export function resolveJellyfinUrl(path: string, recordDebug = true): string {
   const normalizedPath = path.charAt(0) === "/" ? path.slice(1) : path;
   if (/^https?:\/\//i.test(normalizedPath)) {
-    recordApiUrl(normalizedPath, normalizedPath, "absolute-url", null);
+    if (recordDebug) recordApiUrl(normalizedPath, normalizedPath, "absolute-url", null);
     return normalizedPath;
   }
 
   if (window.ApiClient && typeof window.ApiClient.getUrl === "function") {
     try {
       const url = window.ApiClient.getUrl(normalizedPath);
-      recordApiUrl(normalizedPath, url, "ApiClient.getUrl", null);
+      if (recordDebug) recordApiUrl(normalizedPath, url, "ApiClient.getUrl", null);
       return url;
     } catch (err) {
       const fallbackUrl = getAssetBasePath() + "/" + normalizedPath;
-      recordApiUrl(normalizedPath, fallbackUrl, "asset-base-path-fallback", summarizeUrlError(err));
+      if (recordDebug) recordApiUrl(normalizedPath, fallbackUrl, "asset-base-path-fallback", summarizeUrlError(err));
       return fallbackUrl;
     }
   }
 
   const fallbackUrl = getAssetBasePath() + "/" + normalizedPath;
-  recordApiUrl(normalizedPath, fallbackUrl, "asset-base-path", null);
+  if (recordDebug) recordApiUrl(normalizedPath, fallbackUrl, "asset-base-path", null);
   return fallbackUrl;
 }

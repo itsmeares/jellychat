@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { ChatApp } from "./components/ChatApp";
 import { initializeJellyChatDebug } from "./runtime/debug";
 import { getActiveMountHost, updateLayout } from "./runtime/layout";
+import { applyCustomCssPreference } from "./runtime/preferences";
 import { cleanupDuplicateRoots, countDebugNodes, logDebug, markSelfContainedAssetsLoaded, recordError, rootId, waitForStylesheet } from "./runtime/util";
 import { startRuntime } from "./runtime/store";
 import "./styles.css";
@@ -23,6 +24,7 @@ async function start(): Promise<void> {
   window.__JELLYCHAT_LOADED__ = true;
   initializeJellyChatDebug();
   markSelfContainedAssetsLoaded(currentScriptSrc);
+  applyCustomCssPreference();
   logDebug("self-contained assets loaded");
   await waitForStylesheet();
 

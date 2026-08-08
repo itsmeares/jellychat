@@ -1,7 +1,8 @@
 import { useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { ChatActions, ChatMessage, MessageGroupModel } from "../types";
-import { formatFullTimestamp, formatMessageTime } from "../runtime/util";
+import { resolveJellyfinUrl } from "../runtime/urls";
+import { formatClockTime, formatFullTimestamp } from "../runtime/util";
 
 type Props = {
   group: MessageGroupModel;
@@ -68,6 +69,8 @@ function MessageQuote({ message, actions, originalMessageIds }: {
 export function MessageGroup({ group, actions, originalMessageIds, highlightedMessageId }: Props) {
   const longPressTimer = useRef<number>(0);
   const longPressStart = useRef<{ x: number; y: number; message: ChatMessage } | null>(null);
+  const profileImageUrl = resolveJellyfinUrl("UserImage?userId=" + encodeURIComponent(group.messages[0]?.userId || "") + "&format=jpg", false);
+  const fallbackInitial = group.userName.trim().charAt(0).toUpperCase() || "?";
 
   function clearLongPress() {
     if (longPressTimer.current) {
@@ -107,36 +110,50 @@ export function MessageGroup({ group, actions, originalMessageIds, highlightedMe
 
   return (
     <div className="jellyChatMessageGroup" data-jellychat-group-key={group.key}>
-      <div className="jellyChatMessageMeta">
-        <span className="jellyChatMessageAuthor">{group.userName}</span>
-        <span title={formatFullTimestamp(group)}>{formatMessageTime(group)}</span>
-      </div>
-      <div className="jellyChatMessageStack">
-        {group.messages.map((message, index) => (
-          <div
-            key={message.eventKey}
-            className={[
-              "jellyChatMessage",
-              index > 0 ? "is-continuation" : "",
-              highlightedMessageId === message.id ? "is-highlighted" : "",
-              message.optimistic ? "is-optimistic" : ""
-            ].filter(Boolean).join(" ")}
-            data-jellychat-message-key={message.eventKey}
-            data-jellychat-message-id={message.id}
-            onContextMenu={(event) => {
-              if (message.optimistic) {
-                return;
-              }
+      {group.messages.map((message, index) => (
+        <div
+          key={message.eventKey}
+          className={[
+            "jellyChatMessage",
+            index > 0 ? "is-continuation" : "",
+            highlightedMessageId === message.id ? "is-highlighted" : "",
+            message.optimistic ? "is-optimistic" : ""
+          ].filter(Boolean).join(" ")}
+          data-jellychat-message-key={message.eventKey}
+          data-jellychat-message-id={message.id}
+          onContextMenu={(event) => {
+            if (message.optimistic) {
+              return;
+            }
 
-              event.preventDefault();
-              event.stopPropagation();
-              actions.openMessageActionMenu(message, event.clientX, event.clientY);
-            }}
-            onPointerDown={(event) => onPointerDown(event, message)}
-            onPointerMove={onPointerMove}
-            onPointerUp={clearLongPress}
-            onPointerCancel={clearLongPress}
-          >
+            event.preventDefault();
+            event.stopPropagation();
+            actions.openMessageActionMenu(message, event.clientX, event.clientY);
+          }}
+          onPointerDown={(event) => onPointerDown(event, message)}
+          onPointerMove={onPointerMove}
+          onPointerUp={clearLongPress}
+          onPointerCancel={clearLongPress}
+        >
+          <div className="jellyChatMessageGutter">
+            {index === 0 ? (
+              <span className="jellyChatMessageAvatar" aria-hidden="true">
+                <span>{fallbackInitial}</span>
+                <img src={profileImageUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />
+              </span>
+            ) : (
+              <time className="jellyChatContinuationTime" dateTime={message.createdAtUtc} title={formatFullTimestamp(message)}>
+                {formatClockTime(message)}
+              </time>
+            )}
+          </div>
+          <div className="jellyChatMessageContent">
+            {index === 0 ? (
+              <div className="jellyChatMessageMeta">
+                <span className="jellyChatMessageAuthor">{group.userName}</span>
+                <time dateTime={message.createdAtUtc} title={formatFullTimestamp(message)}>{formatClockTime(message)}</time>
+              </div>
+            ) : null}
             <button
               type="button"
               className="jellyChatMessageReplyButton"
@@ -150,8 +167,8 @@ export function MessageGroup({ group, actions, originalMessageIds, highlightedMe
             <MessageQuote message={message} actions={actions} originalMessageIds={originalMessageIds} />
             <div className="jellyChatMessageBody">{message.text}</div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
