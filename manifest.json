@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "## Fixed - Prevents the browser or Jellyfin host canvas from appearing beside or through the translucent JellyChat drawer during docked video playback. - Keeps Jellium and Jellyfin Desktop video-backed translucent drawer behavior unchanged. ## Validation - Frontend production build completed. - All 28 release tests passed on .NET 10. - Release publish and package completed successfully.",
+                "targetAbi": "12.0.0.0",
+                "version": "2.1.1.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v2.1.1/Jellyfin.Plugin.JellyChat_2.1.1.zip",
+                "checksum": "b552951980b66cd25ad29ea1baf6296d",
+                "timestamp": "2026-08-16T20:30:32"
+            },
+            {
                 "changelog": "Improves chat composition and message grouping, adds per-user custom CSS control, and adds native Jellyfin toolbar and player chat buttons with unread indicators. Chat input, scrolling, and pointer activity no longer leak into Jellyfin player shortcuts or controls. Requires Jellyfin 12 RC4.",
                 "targetAbi": "12.0.0.0",
                 "version": "2.1.0.0",
