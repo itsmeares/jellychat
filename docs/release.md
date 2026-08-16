@@ -12,7 +12,7 @@ JellyChat release assets are built, tested, packaged, and published by GitHub Ac
 Update these files before running the release workflow:
 
 - `Directory.Build.props`: `<Version>`, `<AssemblyVersion>`, and `<FileVersion>` use the four-part plugin version.
-- `build.yaml`: `version` uses the four-part plugin version.
+- `build.yaml`: `version` uses the four-part plugin version. The release workflow does not use its `changelog` as release notes.
 - `web-src/package.json` and `web-src/package-lock.json`: `version` uses the three-part release version.
 
 Do not update `manifest.json`; the release workflow adds its entry after it has built the real ZIP and calculated its checksum.
