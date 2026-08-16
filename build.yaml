@@ -13,6 +13,3 @@ category: "General"
 owner: "itsmeares"
 artifacts:
 - "Jellyfin.Plugin.JellyChat.dll"
-changelog: >
-  Prevents the browser or Jellyfin host canvas from appearing behind the
-  translucent JellyChat drawer during docked video playback.
