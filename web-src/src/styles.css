@@ -87,7 +87,7 @@
 
 body.jellychat-video-route.jellychat-docked,
 .jellychat-fullscreen-host.jellychat-fullscreen-docked {
-  background-color: #000;
+  background-color: #000 !important;
 }
 
 .jellychat-fullscreen-player-surface {
