@@ -85,6 +85,11 @@
   box-sizing: border-box;
 }
 
+body.jellychat-video-route.jellychat-docked,
+.jellychat-fullscreen-host.jellychat-fullscreen-docked {
+  background-color: #000;
+}
+
 .jellychat-fullscreen-player-surface {
   background: #000 !important;
   overflow: hidden !important;
