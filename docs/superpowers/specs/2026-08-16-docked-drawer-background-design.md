@@ -11,7 +11,7 @@ Give only docked video hosts a black `background-color` in `web-src/src/styles.c
 - `body.jellychat-video-route.jellychat-docked` covers normal browser playback.
 - `.jellychat-fullscreen-host.jellychat-fullscreen-docked` covers fullscreen playback, including iPad WebKit.
 
-The declaration will not use `!important`, allowing intentional downstream custom CSS overrides. The existing drawer animation, opacity setting, player sizing, and layout runtime remain unchanged.
+The declaration uses `!important` because Jellyfin 12 declares the body's transparent background with `!important`; without matching importance, the black fallback does not win the cascade. The existing drawer animation, opacity setting, player sizing, and layout runtime remain unchanged.
 
 Jellium/Jellyfin Desktop safe mode is excluded: `desktop-video-safe` is not considered docked, so neither selector matches. The background also paints behind child video content rather than introducing an overlay; a video that continues beneath the drawer remains visible.
 
