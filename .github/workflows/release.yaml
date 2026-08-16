@@ -1,55 +1,150 @@
 name: "🚀 Release"
 
 on:
-  release:
-    types:
-      - published
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the leading v (for example, 2.1.2)"
+        required: true
+        type: string
+      changelog:
+        description: "Concise user-facing release notes used in manifest.json"
+        required: true
+        type: string
+      prerelease:
+        description: "Publish as a prerelease"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: jellychat-release
+  cancel-in-progress: false
 
 jobs:
-  update-manifest:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
 
-      - name: Parse version from release tag
-        id: version
+      - name: Validate release inputs
+        env:
+          CHANGELOG_INPUT: ${{ inputs.changelog }}
+          RELEASE_VERSION_INPUT: ${{ inputs.version }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [[ ! "${TAG}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            echo "Release tag must use vMAJOR.MINOR.PATCH, for example v1.2.0." >&2
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Release workflow must be run from main." >&2
+            exit 1
+          fi
+
+          if [[ ! "${RELEASE_VERSION_INPUT}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Release version must use MAJOR.MINOR.PATCH, for example 2.1.2." >&2
+            exit 1
+          fi
+
+          if [[ -z "${CHANGELOG_INPUT//[[:space:]]/}" ]]; then
+            echo "Changelog must not be empty." >&2
             exit 1
           fi
 
           RELEASE_VERSION="${BASH_REMATCH[1]}"
           PLUGIN_VERSION="${RELEASE_VERSION}.0"
-          echo "release_version=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "plugin_version=${PLUGIN_VERSION}" >> "$GITHUB_OUTPUT"
+          TAG_NAME="v${RELEASE_VERSION}"
+          ASSET_NAME="Jellyfin.Plugin.JellyChat_${RELEASE_VERSION}.zip"
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "${GITHUB_ENV}"
+          echo "PLUGIN_VERSION=${PLUGIN_VERSION}" >> "${GITHUB_ENV}"
+          echo "TAG_NAME=${TAG_NAME}" >> "${GITHUB_ENV}"
+          echo "ASSET_NAME=${ASSET_NAME}" >> "${GITHUB_ENV}"
 
-      - name: Download release asset and compute checksum
+      - name: Validate repository versions
         run: |
-          ASSET_NAME="Jellyfin.Plugin.JellyChat_${{ steps.version.outputs.release_version }}.zip"
-          gh release download "${{ github.event.release.tag_name }}" \
-            --pattern "${ASSET_NAME}" \
-            --dir /tmp
-          MD5=$(md5sum "/tmp/${ASSET_NAME}" | awk '{print $1}')
-          echo "checksum=${MD5}" >> "$GITHUB_ENV"
+          grep -Fq "<Version>${PLUGIN_VERSION}</Version>" Directory.Build.props
+          grep -Fq "<AssemblyVersion>${PLUGIN_VERSION}</AssemblyVersion>" Directory.Build.props
+          grep -Fq "<FileVersion>${PLUGIN_VERSION}</FileVersion>" Directory.Build.props
+          grep -Fq "version: \"${PLUGIN_VERSION}\"" build.yaml
+          jq -e --arg version "${RELEASE_VERSION}" '.version == $version' web-src/package.json > /dev/null
+          jq -e --arg version "${RELEASE_VERSION}" '.version == $version and .packages[""].version == $version' web-src/package-lock.json > /dev/null
+
+      - name: Reject an existing release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/${TAG_NAME}" || gh release view "${TAG_NAME}" > /dev/null 2>&1; then
+            echo "Tag or release ${TAG_NAME} already exists." >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-src/package-lock.json
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build frontend assets
+        working-directory: web-src
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify frontend assets
+        run: git diff --exit-code -- Jellyfin.Plugin.JellyChat/Web/jellychat.js Jellyfin.Plugin.JellyChat/Web/jellychat.css
+
+      - name: Test plugin
+        run: dotnet test Jellyfin.Plugin.JellyChat.Tests/Jellyfin.Plugin.JellyChat.Tests.csproj -c Release
+
+      - name: Publish plugin
+        run: dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
+
+      - name: Package plugin and compute checksum
+        run: |
+          mkdir -p artifacts
+          (
+            cd Jellyfin.Plugin.JellyChat/bin/Release/net10.0/publish
+            zip -q -r "${GITHUB_WORKSPACE}/artifacts/${ASSET_NAME}" .
+          )
+          CHECKSUM=$(md5sum "artifacts/${ASSET_NAME}" | awk '{print $1}')
+          echo "CHECKSUM=${CHECKSUM}" >> "${GITHUB_ENV}"
+
+      - name: Create draft release
+        env:
+          CHANGELOG_INPUT: ${{ inputs.changelog }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE_INPUT: ${{ inputs.prerelease }}
+        run: |
+          printf '%s\n' "${CHANGELOG_INPUT}" > /tmp/jellychat-release-notes.md
+          FLAGS=(--draft)
+          if [[ "${PRERELEASE_INPUT}" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "${TAG_NAME}" "artifacts/${ASSET_NAME}" \
+            --target "${GITHUB_SHA}" \
+            --title "JellyChat ${TAG_NAME}" \
+            --notes-file /tmp/jellychat-release-notes.md \
+            "${FLAGS[@]}"
 
       - name: Update manifest.json
         uses: actions/github-script@v7
+        env:
+          CHANGELOG_INPUT: ${{ inputs.changelog }}
         with:
           script: |
             const fs = require('fs');
             const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-            const releaseVersion = '${{ steps.version.outputs.release_version }}';
-            const pluginVersion = '${{ steps.version.outputs.plugin_version }}';
+            const releaseVersion = process.env.RELEASE_VERSION;
+            const pluginVersion = process.env.PLUGIN_VERSION;
             const buildMetadata = fs.readFileSync('build.yaml', 'utf8');
             const targetAbiMatch = buildMetadata.match(/^targetAbi:\s*["']?(\d+\.\d+\.\d+\.\d+)["']?\s*$/m);
             if (!targetAbiMatch) {
@@ -58,18 +153,15 @@ jobs:
             }
 
             const targetAbi = targetAbiMatch[1];
-            const checksum = process.env.checksum;
-            const body = context.payload.release.body || '';
-            const changelog = body.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+            const changelog = process.env.CHANGELOG_INPUT.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
             const now = new Date().toISOString().replace(/\.\d{3}Z$/, '');
-            const sourceUrl = `https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/Jellyfin.Plugin.JellyChat_${releaseVersion}.zip`;
-
+            const sourceUrl = `https://github.com/${{ github.repository }}/releases/download/${process.env.TAG_NAME}/Jellyfin.Plugin.JellyChat_${releaseVersion}.zip`;
             const newEntry = {
               changelog,
               targetAbi,
               version: pluginVersion,
               sourceUrl,
-              checksum,
+              checksum: process.env.CHECKSUM,
               timestamp: now
             };
 
@@ -79,7 +171,6 @@ jobs:
 
       - name: Update plugin version files
         run: |
-          PLUGIN_VERSION="${{ steps.version.outputs.plugin_version }}"
           sed -i "s|<Version>.*</Version>|<Version>${PLUGIN_VERSION}</Version>|" Directory.Build.props
           sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${PLUGIN_VERSION}</AssemblyVersion>|" Directory.Build.props
           sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>${PLUGIN_VERSION}</FileVersion>|" Directory.Build.props
@@ -87,8 +178,6 @@ jobs:
 
       - name: Create manifest update pull request
         run: |
-          RELEASE_VERSION="${{ steps.version.outputs.release_version }}"
-          PLUGIN_VERSION="${{ steps.version.outputs.plugin_version }}"
           BRANCH="automation/update-manifest-${PLUGIN_VERSION}"
           TITLE="release: update manifest and version to ${PLUGIN_VERSION}"
           BODY_FILE="/tmp/jellychat-release-pr-body.md"
@@ -100,8 +189,8 @@ jobs:
 
           git add manifest.json Directory.Build.props build.yaml
           if git diff --cached --quiet; then
-            echo "No release metadata changes to publish."
-            exit 0
+            echo "No release metadata changes to publish." >&2
+            exit 1
           fi
 
           git commit -m "${TITLE}"
@@ -111,11 +200,12 @@ jobs:
           ## Summary
           - Add/update JellyChat ${PLUGIN_VERSION} plugin metadata
           - Point manifest to the ${RELEASE_VERSION} release asset
-          - Use checksum ${checksum}
+          - Use checksum ${CHECKSUM}
 
           ## Validation
-          - Release workflow downloaded Jellyfin.Plugin.JellyChat_${RELEASE_VERSION}.zip
-          - Release workflow computed checksum ${checksum}
+          - Release workflow built and tested the plugin on GitHub Actions
+          - Release workflow created Jellyfin.Plugin.JellyChat_${RELEASE_VERSION}.zip
+          - Release workflow computed checksum ${CHECKSUM}
           - Release workflow updated manifest.json, Directory.Build.props, and build.yaml
           EOF
 
@@ -144,3 +234,8 @@ jobs:
         env:
           # Optional PAT/GitHub App token. Falls back to GITHUB_TOKEN if unset.
           GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${TAG_NAME}" --draft=false
