@@ -61,7 +61,11 @@ public sealed class JellyChatAssetsController : ControllerBase
 
         if (!_assetProvider.TryOpenAsset(assetName, out var stream, out string contentType, out string resourceName) || stream is null)
         {
-            _logger.LogWarning("JellyChat asset {AssetName} could not be found in embedded resources.", assetName);
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("JellyChat asset {AssetName} could not be found in embedded resources.", assetName);
+            }
+
             return NotFound();
         }
 

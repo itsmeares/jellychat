@@ -156,7 +156,11 @@ public sealed class JellyChatWebInjectionMiddleware
         int bodyIndex = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
         if (bodyIndex < 0)
         {
-            _logger.LogWarning("JellyChat could not inject assets into {Path} because </body> was not found.", path);
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("JellyChat could not inject assets into {Path} because </body> was not found.", path);
+            }
+
             return false;
         }
 
@@ -164,7 +168,11 @@ public sealed class JellyChatWebInjectionMiddleware
         bodyIndex = withoutJellyChat.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
         if (bodyIndex < 0)
         {
-            _logger.LogWarning("JellyChat could not inject assets into {Path} after removing stale marker blocks because </body> was not found.", path);
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("JellyChat could not inject assets into {Path} after removing stale marker blocks because </body> was not found.", path);
+            }
+
             return false;
         }
 
