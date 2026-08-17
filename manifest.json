@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "Fixes the docked JellyChat drawer background so Jellyfin's transparent host canvas no longer appears white during opening or at lower background opacity, while preserving video-backed translucency in Jellium and Jellyfin Desktop.",
+                "targetAbi": "12.0.0.0",
+                "version": "2.1.2.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v2.1.2/Jellyfin.Plugin.JellyChat_2.1.2.zip",
+                "checksum": "8e91dd578ffae5b813f0e3c167ec074a",
+                "timestamp": "2026-08-17T00:40:29"
+            },
+            {
                 "changelog": "## Fixed - Prevents the browser or Jellyfin host canvas from appearing beside or through the translucent JellyChat drawer during docked video playback. - Keeps Jellium and Jellyfin Desktop video-backed translucent drawer behavior unchanged. ## Validation - Frontend production build completed. - All 28 release tests passed on .NET 10. - Release publish and package completed successfully.",
                 "targetAbi": "12.0.0.0",
                 "version": "2.1.1.0",
