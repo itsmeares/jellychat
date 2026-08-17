@@ -7,19 +7,7 @@ JellyChat release assets are built, tested, packaged, and published by GitHub Ac
 - **Release version**: `MAJOR.MINOR.PATCH`, for example `2.1.2`. Used by the Git tag, GitHub Release, ZIP name, and frontend package metadata.
 - **Plugin version**: `MAJOR.MINOR.PATCH.0`, for example `2.1.2.0`. Used by the assembly, `build.yaml`, and `manifest.json`.
 
-## 1. Merge a Version-Bump PR
-
-Update these files before running the release workflow:
-
-- `Directory.Build.props`: `<Version>`, `<AssemblyVersion>`, and `<FileVersion>` use the four-part plugin version.
-- `build.yaml`: `version` uses the four-part plugin version. The release workflow does not use its `changelog` as release notes.
-- `web-src/package.json` and `web-src/package-lock.json`: `version` uses the three-part release version.
-
-Do not update `manifest.json`; the release workflow adds its entry after it has built the real ZIP and calculated its checksum.
-
-The normal pull-request checks must pass before merging the version bump.
-
-## 2. Run the Release Workflow
+## 1. Run the Release Workflow
 
 From GitHub:
 
@@ -30,8 +18,10 @@ From GitHub:
 5. Enable `prerelease` only when required.
 6. Run the workflow.
 
-The workflow validates the committed versions and checks that the tag does not already exist. It then:
+The workflow validates its inputs and checks that the tag does not already exist. It then:
 
+- updates `Directory.Build.props`, `build.yaml`, `web-src/package.json`, and `web-src/package-lock.json` from the workflow inputs;
+- uses the changelog input for `build.yaml`, the GitHub Release notes, and `manifest.json`;
 - builds and verifies the frontend assets;
 - runs the .NET release tests;
 - publishes and ZIPs the plugin on a GitHub-hosted runner;
@@ -42,10 +32,10 @@ The workflow validates the committed versions and checks that the tag does not a
 
 Only one release workflow can run at a time.
 
-## 3. Merge the Manifest PR
+## 2. Merge the Release Metadata PR
 
 1. Wait for the generated PR checks to pass.
-2. Confirm its `manifest.json` entry uses the expected version, release URL, checksum, and changelog.
+2. Confirm the version files and `manifest.json` entry use the expected version, release URL, checksum, and changelog.
 3. Merge the PR.
 4. Verify the raw `main` manifest includes the new version.
 
