@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       changelog:
-        description: "Concise user-facing release notes used in manifest.json"
+        description: "Concise user-facing release notes used in release metadata"
         required: true
         type: string
       prerelease:
@@ -63,15 +63,6 @@ jobs:
           echo "TAG_NAME=${TAG_NAME}" >> "${GITHUB_ENV}"
           echo "ASSET_NAME=${ASSET_NAME}" >> "${GITHUB_ENV}"
 
-      - name: Validate repository versions
-        run: |
-          grep -Fq "<Version>${PLUGIN_VERSION}</Version>" Directory.Build.props
-          grep -Fq "<AssemblyVersion>${PLUGIN_VERSION}</AssemblyVersion>" Directory.Build.props
-          grep -Fq "<FileVersion>${PLUGIN_VERSION}</FileVersion>" Directory.Build.props
-          grep -Fq "version: \"${PLUGIN_VERSION}\"" build.yaml
-          jq -e --arg version "${RELEASE_VERSION}" '.version == $version' web-src/package.json > /dev/null
-          jq -e --arg version "${RELEASE_VERSION}" '.version == $version and .packages[""].version == $version' web-src/package-lock.json > /dev/null
-
       - name: Reject an existing release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -87,6 +78,48 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web-src/package-lock.json
+
+      - name: Prepare release metadata
+        uses: actions/github-script@v7
+        env:
+          CHANGELOG_INPUT: ${{ inputs.changelog }}
+        with:
+          script: |
+            const fs = require('fs');
+            const releaseVersion = process.env.RELEASE_VERSION;
+            const pluginVersion = process.env.PLUGIN_VERSION;
+            const changelog = process.env.CHANGELOG_INPUT.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+
+            let buildProps = fs.readFileSync('Directory.Build.props', 'utf8');
+            for (const field of ['Version', 'AssemblyVersion', 'FileVersion']) {
+              const pattern = new RegExp(`<${field}>[^<]+</${field}>`);
+              if (!pattern.test(buildProps)) {
+                throw new Error(`Directory.Build.props is missing ${field}.`);
+              }
+              buildProps = buildProps.replace(pattern, `<${field}>${pluginVersion}</${field}>`);
+            }
+            fs.writeFileSync('Directory.Build.props', buildProps);
+
+            let buildMetadata = fs.readFileSync('build.yaml', 'utf8');
+            const buildChangelog = /^changelog:\s*>\s*\n(?:[ \t]+.*(?:\n|$))+/m;
+            if (!/^version:\s*["']?\d+\.\d+\.\d+\.\d+["']?\s*$/m.test(buildMetadata) || !buildChangelog.test(buildMetadata)) {
+              throw new Error('build.yaml must contain version and changelog fields.');
+            }
+            buildMetadata = buildMetadata
+              .replace(/^version:.*$/m, `version: "${pluginVersion}"`)
+              .replace(buildChangelog, `changelog: >\n  ${changelog}\n`);
+            fs.writeFileSync('build.yaml', buildMetadata);
+
+            const packageJson = JSON.parse(fs.readFileSync('web-src/package.json', 'utf8'));
+            const packageLock = JSON.parse(fs.readFileSync('web-src/package-lock.json', 'utf8'));
+            if (!packageLock.packages?.['']) {
+              throw new Error('web-src/package-lock.json is missing the root package.');
+            }
+            packageJson.version = releaseVersion;
+            packageLock.version = releaseVersion;
+            packageLock.packages[''].version = releaseVersion;
+            fs.writeFileSync('web-src/package.json', JSON.stringify(packageJson, null, 2) + '\n');
+            fs.writeFileSync('web-src/package-lock.json', JSON.stringify(packageLock, null, 2) + '\n');
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -117,23 +150,6 @@ jobs:
           )
           CHECKSUM=$(md5sum "artifacts/${ASSET_NAME}" | awk '{print $1}')
           echo "CHECKSUM=${CHECKSUM}" >> "${GITHUB_ENV}"
-
-      - name: Create draft release
-        env:
-          CHANGELOG_INPUT: ${{ inputs.changelog }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PRERELEASE_INPUT: ${{ inputs.prerelease }}
-        run: |
-          printf '%s\n' "${CHANGELOG_INPUT}" > /tmp/jellychat-release-notes.md
-          FLAGS=(--draft)
-          if [[ "${PRERELEASE_INPUT}" == "true" ]]; then
-            FLAGS+=(--prerelease)
-          fi
-          gh release create "${TAG_NAME}" "artifacts/${ASSET_NAME}" \
-            --target "${GITHUB_SHA}" \
-            --title "JellyChat ${TAG_NAME}" \
-            --notes-file /tmp/jellychat-release-notes.md \
-            "${FLAGS[@]}"
 
       - name: Update manifest.json
         uses: actions/github-script@v7
@@ -169,25 +185,17 @@ jobs:
             manifest[0].versions.unshift(newEntry);
             fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 4) + '\n');
 
-      - name: Update plugin version files
-        run: |
-          sed -i "s|<Version>.*</Version>|<Version>${PLUGIN_VERSION}</Version>|" Directory.Build.props
-          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>${PLUGIN_VERSION}</AssemblyVersion>|" Directory.Build.props
-          sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>${PLUGIN_VERSION}</FileVersion>|" Directory.Build.props
-          sed -i "s|^version: .*|version: \"${PLUGIN_VERSION}\"|" build.yaml
-
-      - name: Create manifest update pull request
+      - name: Commit release metadata
         run: |
           BRANCH="automation/update-manifest-${PLUGIN_VERSION}"
           TITLE="release: update manifest and version to ${PLUGIN_VERSION}"
-          BODY_FILE="/tmp/jellychat-release-pr-body.md"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git checkout -B "${BRANCH}"
 
-          git add manifest.json Directory.Build.props build.yaml
+          git add manifest.json Directory.Build.props build.yaml web-src/package.json web-src/package-lock.json
           if git diff --cached --quiet; then
             echo "No release metadata changes to publish." >&2
             exit 1
@@ -195,6 +203,32 @@ jobs:
 
           git commit -m "${TITLE}"
           git push --force-with-lease origin "${BRANCH}"
+          echo "RELEASE_BRANCH=${BRANCH}" >> "${GITHUB_ENV}"
+          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
+          echo "RELEASE_TITLE=${TITLE}" >> "${GITHUB_ENV}"
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Create draft release
+        env:
+          CHANGELOG_INPUT: ${{ inputs.changelog }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE_INPUT: ${{ inputs.prerelease }}
+        run: |
+          printf '%s\n' "${CHANGELOG_INPUT}" > /tmp/jellychat-release-notes.md
+          FLAGS=(--draft)
+          if [[ "${PRERELEASE_INPUT}" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "${TAG_NAME}" "artifacts/${ASSET_NAME}" \
+            --target "${RELEASE_COMMIT}" \
+            --title "JellyChat ${TAG_NAME}" \
+            --notes-file /tmp/jellychat-release-notes.md \
+            "${FLAGS[@]}"
+
+      - name: Create release metadata pull request
+        run: |
+          BODY_FILE="/tmp/jellychat-release-pr-body.md"
 
           cat > "${BODY_FILE}" <<EOF
           ## Summary
@@ -206,12 +240,12 @@ jobs:
           - Release workflow built and tested the plugin on GitHub Actions
           - Release workflow created Jellyfin.Plugin.JellyChat_${RELEASE_VERSION}.zip
           - Release workflow computed checksum ${CHECKSUM}
-          - Release workflow updated manifest.json, Directory.Build.props, and build.yaml
+          - Release workflow updated manifest.json and all version metadata
           EOF
 
           PR_NUMBER=$(gh pr list \
             --repo "${{ github.repository }}" \
-            --head "${BRANCH}" \
+            --head "${RELEASE_BRANCH}" \
             --base main \
             --state open \
             --json number \
@@ -220,19 +254,18 @@ jobs:
           if [ -n "${PR_NUMBER}" ]; then
             gh pr edit "${PR_NUMBER}" \
               --repo "${{ github.repository }}" \
-              --title "${TITLE}" \
+              --title "${RELEASE_TITLE}" \
               --body-file "${BODY_FILE}"
             echo "Updated existing release metadata PR #${PR_NUMBER}."
           else
             gh pr create \
               --repo "${{ github.repository }}" \
               --base main \
-              --head "${BRANCH}" \
-              --title "${TITLE}" \
+              --head "${RELEASE_BRANCH}" \
+              --title "${RELEASE_TITLE}" \
               --body-file "${BODY_FILE}"
           fi
         env:
-          # Optional PAT/GitHub App token. Falls back to GITHUB_TOKEN if unset.
           GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Publish release
