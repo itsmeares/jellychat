@@ -153,8 +153,7 @@ function isWithinJellyChatElement(element: Element | null): boolean {
 function isVideoRoute(): boolean {
   const routeText = String(window.location.pathname || "") + " " + String(window.location.hash || "");
   return /video|playback|nowplaying|livetv/i.test(routeText)
-    || !!(document.querySelector("video")
-      || document.querySelector(".videoOsdHeader")
+    || !!(document.querySelector(".videoOsdHeader")
       || document.querySelector(".videoOsdTop")
       || document.querySelector(".videoOsdBottom")
       || document.querySelector('[class*="videoOsd"]')
