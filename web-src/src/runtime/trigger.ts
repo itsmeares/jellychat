@@ -191,26 +191,38 @@ function queryHosts(selectors: string[], root: ParentNode): HTMLElement[] {
   return hosts;
 }
 
-function getNativeHeaderHost(): HTMLElement | null {
-  const legacy = document.querySelector(".headerRight");
-  if (legacy instanceof HTMLElement && legacy.offsetParent !== null && isUsableHost(legacy)) {
-    return legacy;
-  }
-
+function getModernHeaderHost(): HTMLElement | null {
   const userMenuButton = document.querySelector('[aria-controls="app-user-menu"]');
-  const toolbar = userMenuButton?.closest<HTMLElement>(".MuiToolbar-root")
-    || document.querySelector<HTMLElement>(".MuiAppBar-root .MuiToolbar-root");
+  const toolbar = userMenuButton?.closest<HTMLElement>(".MuiToolbar-root");
   if (!toolbar) {
     return null;
   }
 
-  let userMenuBox = userMenuButton;
+  let userMenuBox: Element | null = userMenuButton;
   while (userMenuBox && userMenuBox.parentElement !== toolbar) {
     userMenuBox = userMenuBox.parentElement;
   }
 
   const buttonsTray = userMenuBox?.previousElementSibling || null;
   return isUsableHost(buttonsTray) ? buttonsTray : null;
+}
+
+function getNativeHeaderHost(): HTMLElement | null {
+  // Jellyfin 12 Auto keeps the legacy header mounted while rendering the real
+  // toolbar with MUI. Prefer that modern toolbar whenever it exists. Otherwise a
+  // theme that hides the legacy header after custom CSS loads can strand the
+  // portal inside a now-invisible .headerRight until another DOM mutation occurs.
+  const modern = getModernHeaderHost();
+  if (modern) {
+    return modern;
+  }
+
+  const legacy = document.querySelector(".headerRight");
+  if (legacy instanceof HTMLElement && legacy.offsetParent !== null && isUsableHost(legacy)) {
+    return legacy;
+  }
+
+  return null;
 }
 
 function bestHost(hosts: HTMLElement[], preferRight: boolean): HTMLElement | null {
