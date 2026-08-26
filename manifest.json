@@ -9,6 +9,14 @@
         "imageUrl": "https://raw.githubusercontent.com/itsmeares/jellychat/main/assets/icon.jpg",
         "versions": [
             {
+                "changelog": "Fixes the JellyChat button disappearing on Jellyfin 12 Auto pages after custom CSS loads by preferring the modern Jellyfin header while keeping legacy layouts as a fallback.",
+                "targetAbi": "12.0.0.0",
+                "version": "2.1.3.0",
+                "sourceUrl": "https://github.com/itsmeares/jellychat/releases/download/v2.1.3/Jellyfin.Plugin.JellyChat_2.1.3.zip",
+                "checksum": "7bd29e3eb70dc90d3b293f5af976653d",
+                "timestamp": "2026-08-26T10:30:58"
+            },
+            {
                 "changelog": "Fixes the docked JellyChat drawer background so Jellyfin's transparent host canvas no longer appears white during opening or at lower background opacity, while preserving video-backed translucency in Jellium and Jellyfin Desktop.",
                 "targetAbi": "12.0.0.0",
                 "version": "2.1.2.0",
