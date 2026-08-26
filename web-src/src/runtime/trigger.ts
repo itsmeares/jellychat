@@ -222,13 +222,7 @@ function getNativeHeaderHost(): HTMLElement | null {
     return legacy;
   }
 
-  const toolbar = document.querySelector<HTMLElement>(".MuiAppBar-root .MuiToolbar-root");
-  if (!toolbar) {
-    return null;
-  }
-
-  const candidate = toolbar.querySelector<HTMLElement>(":scope > div:has(> button)");
-  return isUsableHost(candidate) ? candidate : null;
+  return null;
 }
 
 function bestHost(hosts: HTMLElement[], preferRight: boolean): HTMLElement | null {
