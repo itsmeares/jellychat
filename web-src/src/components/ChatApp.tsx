@@ -25,15 +25,48 @@ export function ChatApp() {
 
   useEffect(() => {
     let triggerUpdateTimer = 0;
-    const updateTriggerMount = (reason: string) => {
+    let triggerRecoveryTimer = 0;
+    let triggerRecoveryAttempt = 0;
+    const triggerRecoveryDelays = [120, 300, 700, 1500];
+
+    const clearTriggerRecovery = () => {
+      if (triggerRecoveryTimer) {
+        window.clearTimeout(triggerRecoveryTimer);
+        triggerRecoveryTimer = 0;
+      }
+      triggerRecoveryAttempt = 0;
+    };
+
+    function scheduleTriggerRecovery(): void {
+      if (triggerRecoveryTimer || triggerRecoveryAttempt >= triggerRecoveryDelays.length) {
+        return;
+      }
+
+      const delay = triggerRecoveryDelays[triggerRecoveryAttempt++];
+      triggerRecoveryTimer = window.setTimeout(() => {
+        triggerRecoveryTimer = 0;
+        updateTriggerMount("recovery");
+      }, delay);
+    }
+
+    function updateTriggerMount(reason: string): void {
       if (window.JellyChatDebug) {
         window.JellyChatDebug.triggerObserverLastReason = reason;
         window.JellyChatDebug.triggerObserverLastUpdateAt = new Date().toISOString();
         window.JellyChatDebug.triggerObserverUpdateCount = Number(window.JellyChatDebug.triggerObserverUpdateCount || 0) + 1;
       }
-      setTriggerMount(resolveTriggerMount());
-    };
+
+      const mount = resolveTriggerMount();
+      setTriggerMount(mount);
+      if (mount.hostFound) {
+        clearTriggerRecovery();
+      } else {
+        scheduleTriggerRecovery();
+      }
+    }
+
     const scheduleTriggerMount = (reason: string) => {
+      clearTriggerRecovery();
       if (triggerUpdateTimer) {
         window.clearTimeout(triggerUpdateTimer);
       }
@@ -73,6 +106,7 @@ export function ChatApp() {
       if (triggerUpdateTimer) {
         window.clearTimeout(triggerUpdateTimer);
       }
+      clearTriggerRecovery();
       observer?.disconnect();
       window.removeEventListener("resize", resizeHandler);
       window.removeEventListener("hashchange", hashHandler);
