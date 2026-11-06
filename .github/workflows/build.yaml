@@ -31,6 +31,10 @@ jobs:
         working-directory: web-src
         run: npm ci
 
+      - name: Test Frontend
+        working-directory: web-src
+        run: npm test
+
       - name: Build Frontend Assets
         working-directory: web-src
         run: npm run build

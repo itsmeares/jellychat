@@ -13,7 +13,8 @@ export function findVideo(): HTMLVideoElement | null {
 }
 
 export function portalTarget(): HTMLElement {
-  return (document.fullscreenElement as HTMLElement | null) || document.body;
+  const full = document.fullscreenElement as HTMLElement | null;
+  return full && full !== document.documentElement && full !== document.body && !(full instanceof HTMLVideoElement) ? full : document.body;
 }
 
 export function headerHost(): HTMLElement | null {
