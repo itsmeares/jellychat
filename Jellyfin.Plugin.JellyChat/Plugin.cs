@@ -23,6 +23,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+        if (JellyChatConfigurationMigration.Apply(Configuration))
+        {
+            SaveConfiguration();
+        }
     }
 
     /// <inheritdoc />
@@ -44,10 +48,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = Name,
+                DisplayName = Name,
                 EmbeddedResourcePath = string.Format(
                     CultureInfo.InvariantCulture,
                     "{0}.Configuration.configPage.html",
-                    GetType().Namespace)
+                    GetType().Namespace),
+                EnableInMainMenu = true,
+                MenuSection = "server",
+                MenuIcon = "chat"
             }
         ];
     }

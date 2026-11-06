@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.JellyChat.Api;
 
 namespace Jellyfin.Plugin.JellyChat.Infrastructure;
@@ -20,6 +22,7 @@ public class JellyChatEventStore
     private readonly Dictionary<Guid, GroupRoomState> _rooms = [];
     private readonly object _syncLock = new object();
     private readonly Func<string, byte[], byte[]> _passwordHasher;
+    private TaskCompletionSource _change = NewChangeSource();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JellyChatEventStore"/> class.
@@ -33,6 +36,11 @@ public class JellyChatEventStore
     {
         _passwordHasher = passwordHasher;
     }
+
+    /// <summary>
+    /// Gets a task that completes the next time any room changes. Capture it before reading room state to avoid missing a change.
+    /// </summary>
+    internal Task ChangeToken => _change.Task;
 
     internal void ReconcileActiveRooms(IReadOnlyList<JellyChatSyncPlayRoomSnapshot> activeRooms)
     {
@@ -97,6 +105,7 @@ public class JellyChatEventStore
                 state.TypingBySession[addedEvent.SessionId] = addedEvent;
                 PruneTyping(state);
                 storedEvent = Snapshot(addedEvent);
+                SignalChange();
                 return true;
             }
 
@@ -107,6 +116,7 @@ public class JellyChatEventStore
             }
 
             storedEvent = Snapshot(addedEvent);
+            SignalChange();
             return true;
         }
     }
@@ -564,6 +574,14 @@ public class JellyChatEventStore
             MessagePreview = source.MessagePreview,
             CreatedAt = source.CreatedAt
         };
+    }
+
+    private static TaskCompletionSource NewChangeSource() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private void SignalChange()
+    {
+        TaskCompletionSource previous = Interlocked.Exchange(ref _change, NewChangeSource());
+        previous.TrySetResult();
     }
 
     private sealed class GroupRoomState
