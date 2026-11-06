@@ -1,63 +1,71 @@
 import { createRoot } from "react-dom/client";
-import { ChatApp } from "./components/ChatApp";
-import { initializeJellyChatDebug } from "./runtime/debug";
-import { getActiveMountHost, updateLayout } from "./runtime/layout";
-import { applyCustomCssPreference } from "./runtime/preferences";
-import { cleanupDuplicateRoots, countDebugNodes, logDebug, markSelfContainedAssetsLoaded, recordError, rootId, waitForStylesheet } from "./runtime/util";
-import { startRuntime } from "./runtime/store";
-import "./styles.css";
+import { api, currentUserId, isSignedIn } from "./core/api";
+import { PrefsStore } from "./core/prefs";
+import { RoomStore } from "./core/room";
+import { SyncLoop } from "./core/sync";
+import { App } from "./ui/App";
+import { ServicesContext } from "./ui/context";
+import "./theme/jellychat.css";
 
-const currentScriptSrc = document.currentScript instanceof HTMLScriptElement ? document.currentScript.src : "";
-
-async function start(): Promise<void> {
-  if (!document.body) {
-    return;
+declare global {
+  interface Window {
+    JellyChat?: { version: string; debug: () => Record<string, unknown> };
   }
-
-  if (window.__JELLYCHAT_LOADED__ === true) {
-    if (window.console && typeof window.console.info === "function") {
-      window.console.info("[JellyChat] duplicate script ignored");
-    }
-    return;
-  }
-
-  window.__JELLYCHAT_LOADED__ = true;
-  initializeJellyChatDebug();
-  markSelfContainedAssetsLoaded(currentScriptSrc);
-  applyCustomCssPreference();
-  logDebug("self-contained assets loaded");
-  await waitForStylesheet();
-
-  const activeHost = getActiveMountHost();
-  let rootElement = cleanupDuplicateRoots(activeHost) || document.getElementById(rootId);
-  if (!rootElement) {
-    rootElement = document.createElement("div");
-    rootElement.id = rootId;
-    rootElement.setAttribute("data-jellychat-root", "true");
-    activeHost.appendChild(rootElement);
-  }
-
-  const root = createRoot(rootElement);
-  root.render(<ChatApp />);
-  if (window.JellyChatDebug) {
-    window.JellyChatDebug.mounted = true;
-    window.JellyChatDebug.reactMounted = true;
-    window.JellyChatDebug.mountCount = 1;
-    window.JellyChatDebug.rootCount = 1;
-  }
-  countDebugNodes();
-  updateLayout("react-mount");
-  startRuntime();
 }
 
-function boot(): void {
-  start().catch((error) => {
-    recordError(error);
+function start(): void {
+  if (window.JellyChat || !document.body) {
+    return;
+  }
+
+  const prefs = new PrefsStore();
+  const room = new RoomStore({ send: (event) => api.send(event), selfUserId: currentUserId });
+  const loop = new SyncLoop({
+    signedIn: isSignedIn,
+    fetchSync: (query, signal) => api.sync(query, signal),
+    onResponse: (response) => room.applySync(response),
+    cursor: () => ({ afterSequence: room.getState().lastSequence, roomVersion: room.getState().roomVersion }),
+    isHidden: () => document.hidden
   });
+
+  let loadedFor = "";
+  const watchSession = () => {
+    if (!isSignedIn()) {
+      loadedFor = "";
+      return;
+    }
+    const userId = currentUserId();
+    if (userId && userId !== loadedFor) {
+      loadedFor = userId;
+      void prefs.load();
+    }
+  };
+  watchSession();
+  setInterval(watchSession, 2000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loop.wake(); });
+  window.addEventListener("pagehide", () => void prefs.flush());
+  loop.start();
+
+  window.JellyChat = {
+    version: "3.0.0",
+    debug: () => {
+      const { room: info, lastSequence, roomVersion, items } = room.getState();
+      return { signedIn: isSignedIn(), userId: currentUserId(), room: info, lastSequence, roomVersion, timelineItems: items.length, prefs: prefs.getState().resolved, serverConfig: prefs.getState().server };
+    }
+  };
+
+  const host = document.createElement("div");
+  host.id = "jellychat-root";
+  document.body.appendChild(host);
+  createRoot(host).render(
+    <ServicesContext.Provider value={{ room, prefs }}>
+      <App />
+    </ServicesContext.Provider>
+  );
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", boot, { once: true });
+  document.addEventListener("DOMContentLoaded", start, { once: true });
 } else {
-  boot();
+  start();
 }
