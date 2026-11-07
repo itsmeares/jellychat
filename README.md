@@ -10,6 +10,8 @@ Chat for Jellyfin SyncPlay watch parties. It lives inside Jellyfin Web, uses the
 | --- | --- |
 | ![JellyChat in the Violet theme, docked next to the player](assets/screenshot-violet.png) | ![JellyChat in the Glass theme, floating over the player](assets/screenshot-glass.png) |
 
+Film: "Big Buck Bunny", (c) 2008 Blender Foundation, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+
 ## Features
 
 - Room chat with replies, copy, jump-to-original and typing indicators.

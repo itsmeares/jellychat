@@ -5,7 +5,7 @@
 //   JELLYFIN_URL=http://localhost:8096 JC_ADMIN_USER=alice JC_ADMIN_PASS=... \
 //   JC_GUEST_USER=bob JC_GUEST_PASS=... CHROMIUM_PATH=/path/to/chrome node scripts/screenshots.mjs [outDir]
 //
-// Takes Violet and Glass, docked and floating, own messages left and right, on desktop, phone portrait and phone landscape.
+// If the library has a movie, it plays it first (JC_SEEK_SECONDS picks the frame). Takes Violet and Glass, docked and floating, own messages left and right, on desktop, phone portrait and phone landscape.
 import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright-core";
 
@@ -74,14 +74,33 @@ async function shoot(label, viewport, prefs) {
     await (groups.length ? post("SyncPlay/Join", { GroupId: groups[0].GroupId }) : post("SyncPlay/New", { GroupName: "Movie night" }));
   });
   await page.waitForFunction(() => window.JellyChat.debug().room?.inGroup, null, { timeout: 15000 });
+  const movie = (await call(accounts.admin, admin.token, "GET", `/Items?Recursive=true&IncludeItemTypes=Movie&Limit=1&userId=${admin.userId}`)).Items[0];
+  if (movie) {
+    await call(accounts.admin, admin.token, "POST", "/SyncPlay/SetNewQueue", { PlayingQueue: [movie.Id], PlayingItemPosition: 0, StartPositionTicks: Number(process.env.JC_SEEK_SECONDS || 0) * 10000000 });
+    await page.waitForSelector("video", { timeout: 30000 });
+    await page.waitForTimeout(4000);
+    await call(accounts.admin, admin.token, "POST", "/SyncPlay/Pause");
+    await page.waitForTimeout(2500);
+  }
   const list = await call(accounts.admin, admin.token, "GET", "/SyncPlay/List");
   await call(accounts.guest, guest.token, "POST", "/SyncPlay/Join", { GroupId: list[0].GroupId }).catch(() => undefined);
   await say("everyone ready? starting in a sec");
   await say("i brought snacks");
-  await page.waitForSelector(".jc-hbtn", { timeout: 10000 });
-  await page.click(".jc-hbtn");
+  await call(accounts.admin, admin.token, "POST", "/JellyChat/Events", { type: "chat.message", text: "ready! press play whenever", clientEventId: "shot" + Math.random().toString(16).slice(2) });
+  await say("ok pressing play now");
+  if (movie) await page.waitForTimeout(5000);
+  if (movie) {
+    await page.mouse.move(400, 300);
+    await page.keyboard.press("c");
+  } else {
+    await page.waitForSelector(".jc-hbtn", { timeout: 10000 });
+    await page.click(".jc-hbtn");
+  }
   await page.waitForSelector(".jc-m");
+  await page.waitForTimeout(900);
   await page.screenshot({ path: `${out}/${label}.png` });
+  await call(accounts.guest, guest.token, "POST", "/SyncPlay/Leave").catch(() => undefined);
+  await call(accounts.admin, admin.token, "POST", "/SyncPlay/Leave").catch(() => undefined);
   await context.close();
 }
 
