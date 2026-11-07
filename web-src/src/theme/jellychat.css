@@ -190,6 +190,7 @@
 @media (prefers-reduced-motion:reduce){.jc-fl{animation:jcfade 1.6s linear forwards}.jc-dots i{animation:none;opacity:.6}.jc-dock,.jc-f{transition:none}}
 
 /* Docked layout: make room for the panel. --jc-dock is set on <html>. */
+html[data-jc-dock]{background:#0c0c11!important}
 html[data-jc-dock] #reactRoot,html[data-jc-dock] .skinHeader,html[data-jc-dock] header.MuiAppBar-root,html[data-jc-dock] .videoPlayerContainer,html[data-jc-dock] #videoOsdPage{transition:margin .25s ease}
 html[data-jc-dock] header.MuiAppBar-root{width:calc(100% - var(--jc-dock,0px))!important;transition:width .25s ease,left .25s ease,right .25s ease}
 html[data-jc-dock="right"] header.MuiAppBar-root{right:var(--jc-dock,0)!important;left:auto!important}
