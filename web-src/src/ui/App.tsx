@@ -113,7 +113,7 @@ export function App() {
         <Floating mode={mode} side={resolved.side} visible={player.onVideo && player.controls} unread={player.onVideo ? unread : 0} latest={latest} onOpen={openChat} onClose={closeChat} onActivity={() => { lastActivity.current = Date.now(); }} />
       ) : (
         <>
-          <Dock open={open} side={resolved.side} width={resolved.width} onClose={closeChat} />
+          <Dock open={open} side={resolved.side} width={resolved.width} glass={resolved.theme === "glass" || (resolved.theme === "custom" && resolved.customGlass)} onClose={closeChat} />
           {!open && player.onVideo && (player.controls || unread > 0) && <EdgeTab side={resolved.side} unread={unread} onClick={openChat} />}
         </>
       )}

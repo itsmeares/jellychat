@@ -92,4 +92,15 @@ public sealed class JellyChatSettingsTests
         Assert.False(JellyChatEventValidator.TryCreate(new JellyChatEventRequest { Type = "reaction.emoji", Emoji = new string('x', 40) }, Guid.NewGuid(), Guid.NewGuid(), "alice", "s", out _, out _));
         Assert.True(JellyChatEventValidator.TryCreate(new JellyChatEventRequest { Type = "chat.message", Text = "ok" }, Guid.NewGuid(), Guid.NewGuid(), "alice", "s", out _, out _));
     }
+
+    [Theory]
+    [InlineData("playback.pause")]
+    [InlineData("playback.play")]
+    public void PauseAndPlayKeepTheirPosition(string type)
+    {
+        var request = new JellyChatEventRequest { Type = type, ToPositionTicks = 3_000_000_000 };
+
+        Assert.True(JellyChatEventValidator.TryCreate(request, Guid.NewGuid(), Guid.NewGuid(), "alice", "s", out var roomEvent, out _));
+        Assert.Equal(3_000_000_000, roomEvent.ToPositionTicks);
+    }
 }

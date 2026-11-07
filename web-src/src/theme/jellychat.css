@@ -197,5 +197,6 @@ html[data-jc-dock="right"] header.MuiAppBar-root{right:var(--jc-dock,0)!importan
 html[data-jc-dock="left"] header.MuiAppBar-root{left:var(--jc-dock,0)!important;right:auto!important}
 html[data-jc-dock="right"] #reactRoot{margin-right:var(--jc-dock,0)}
 html[data-jc-dock="right"] :is(.videoPlayerContainer,.videoOsdBottom){right:var(--jc-dock,0)!important}
+html[data-jc-dock][data-jc-glass] .videoPlayerContainer{left:0!important;right:0!important}
 html[data-jc-dock="left"] :is(.videoPlayerContainer,.videoOsdBottom){left:var(--jc-dock,0)!important}
 html[data-jc-dock="left"] #reactRoot{margin-left:var(--jc-dock,0)}

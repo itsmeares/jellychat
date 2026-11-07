@@ -67,13 +67,13 @@ internal static class JellyChatEventValidator
             case "reaction.emoji":
                 return TryApplyReaction(request, roomEvent, out error);
             case "playback.start":
-                ApplyPlayback(request, roomEvent, "start", includeSeekTarget: false);
+                ApplyPlayback(request, roomEvent, "start");
                 return true;
             case "playback.play":
-                ApplyPlayback(request, roomEvent, "play", includeSeekTarget: false);
+                ApplyPlayback(request, roomEvent, "play");
                 return true;
             case "playback.pause":
-                ApplyPlayback(request, roomEvent, "pause", includeSeekTarget: false);
+                ApplyPlayback(request, roomEvent, "pause");
                 return true;
             case "playback.seek":
                 if (!request.FromPositionTicks.HasValue && !request.ToPositionTicks.HasValue)
@@ -82,7 +82,7 @@ internal static class JellyChatEventValidator
                     return false;
                 }
 
-                ApplyPlayback(request, roomEvent, "seek", includeSeekTarget: true);
+                ApplyPlayback(request, roomEvent, "seek");
                 return true;
             case "typing.update":
                 if (!request.IsTyping.HasValue)
@@ -162,11 +162,11 @@ internal static class JellyChatEventValidator
         return true;
     }
 
-    private static void ApplyPlayback(JellyChatEventRequest request, JellyChatEvent roomEvent, string action, bool includeSeekTarget)
+    private static void ApplyPlayback(JellyChatEventRequest request, JellyChatEvent roomEvent, string action)
     {
         roomEvent.PlaybackAction = action;
         roomEvent.FromPositionTicks = request.FromPositionTicks;
-        roomEvent.ToPositionTicks = includeSeekTarget ? request.ToPositionTicks : null;
+        roomEvent.ToPositionTicks = request.ToPositionTicks;
         roomEvent.ItemId = Normalize(request.ItemId);
         roomEvent.ItemName = Normalize(request.ItemName);
     }

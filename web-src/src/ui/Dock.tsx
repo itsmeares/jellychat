@@ -5,9 +5,9 @@ import type { Side } from "../core/types";
 import { Panel } from "./Panel";
 import { useServices } from "./context";
 
-type Props = { open: boolean; side: Side; width: number; onClose: () => void };
+type Props = { open: boolean; side: Side; width: number; glass: boolean; onClose: () => void };
 
-export function Dock({ open, side, width, onClose }: Props) {
+export function Dock({ open, side, width, glass, onClose }: Props) {
   const { prefs } = useServices();
   const [live, setLive] = useState<number | null>(null);
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -17,12 +17,14 @@ export function Dock({ open, side, width, onClose }: Props) {
     const root = document.documentElement;
     if (!open || isPhonePortrait()) return;
     root.dataset.jcDock = side;
+    if (glass) root.dataset.jcGlass = "1";
     root.style.setProperty("--jc-dock", shown + "px");
     return () => {
       delete root.dataset.jcDock;
+      delete root.dataset.jcGlass;
       root.style.removeProperty("--jc-dock");
     };
-  }, [open, side, shown]);
+  }, [open, side, shown, glass]);
 
   const onDown = (event: React.PointerEvent<HTMLDivElement>) => {
     drag.current = { startX: event.clientX, startWidth: width };
