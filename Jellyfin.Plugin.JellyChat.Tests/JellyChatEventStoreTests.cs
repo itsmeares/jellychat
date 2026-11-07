@@ -32,6 +32,101 @@ public sealed class JellyChatEventStoreTests
     }
 
     [Fact]
+    public async Task ConcurrentUnlocksReserveThrottleSlotsBeforeHashing()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using var hashingStarted = new CountdownEvent(5);
+        using var releaseHashing = new ManualResetEventSlim();
+        int guessesHashed = 0;
+        var store = new JellyChatEventStore((password, salt) =>
+        {
+            if (password == "wrong")
+            {
+                Interlocked.Increment(ref guessesHashed);
+                hashingStarted.Signal();
+                if (!releaseHashing.Wait(TimeSpan.FromSeconds(10), cancellationToken))
+                {
+                    throw new TimeoutException("Test password hashing was not released.");
+                }
+            }
+
+            return TestHash(password, salt);
+        });
+        var room = CreateRoom(("owner-session", OwnerUserId), ("second-session", SecondUserId));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+        Task<bool>[] attempts = Enumerable.Range(0, 5).Select(attempt => Task.Factory.StartNew(
+            () => store.TryUnlock(room, "second-session", SecondUserId, "wrong", out _),
+            cancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default)).ToArray();
+        try
+        {
+            Assert.True(hashingStarted.Wait(TimeSpan.FromSeconds(5), cancellationToken));
+            Assert.True(store.IsUnlockThrottled("second-session"));
+            Assert.False(store.TryUnlock(room, "second-session", SecondUserId, "secret", out var access));
+            Assert.False(access.Authorized);
+            Assert.Equal(5, guessesHashed);
+        }
+        finally
+        {
+            releaseHashing.Set();
+            await Task.WhenAll(attempts);
+        }
+
+        Assert.All(attempts, attempt => Assert.False(attempt.Result));
+        Assert.False(store.TryUnlock(room, "second-session", SecondUserId, "secret", out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExpiredUnlockFailuresArePruned(bool pruneViaUnlock)
+    {
+        var clock = new TestTimeProvider();
+        var store = new JellyChatEventStore(TestHash, clock);
+        var room = CreateRoom(("owner-session", OwnerUserId), ("second-session", SecondUserId));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            Assert.False(store.TryUnlock(room, "second-session", SecondUserId, "wrong", out _));
+        }
+
+        clock.UtcNow += TimeSpan.FromMinutes(1);
+        if (pruneViaUnlock)
+        {
+            Assert.True(store.TryUnlock(room, "owner-session", OwnerUserId, "secret", out _));
+        }
+        else
+        {
+            Assert.False(store.IsUnlockThrottled("unrelated-session"));
+        }
+
+        // Verify cleanup removes entries for sessions other than the caller as well.
+        var failures = (System.Collections.IDictionary)typeof(JellyChatEventStore)
+            .GetField("_unlockFailures", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(store)!;
+        Assert.Empty(failures);
+        Assert.True(store.TryUnlock(room, "second-session", SecondUserId, "secret", out _));
+    }
+
+    [Fact]
+    public void SuccessfulUnlockClearsReservedGuesses()
+    {
+        var store = new JellyChatEventStore(TestHash);
+        var room = CreateRoom(("owner-session", OwnerUserId), ("second-session", SecondUserId));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+        for (int attempt = 0; attempt < 4; attempt++)
+        {
+            Assert.False(store.TryUnlock(room, "second-session", SecondUserId, "wrong", out _));
+        }
+
+        Assert.True(store.TryUnlock(room, "second-session", SecondUserId, "secret", out _));
+        Assert.False(store.IsUnlockThrottled("second-session"));
+        Assert.False(store.TryUnlock(room, "second-session", SecondUserId, "wrong", out _));
+        Assert.False(store.IsUnlockThrottled("second-session"));
+    }
+
+    [Fact]
     public void WrongPasswordGuessesAreThrottledPerSession()
     {
         var store = new JellyChatEventStore();
@@ -480,6 +575,13 @@ public sealed class JellyChatEventStoreTests
             Text = type == "chat.message" ? "hello" : null,
             ClientEventId = Guid.NewGuid().ToString("N")
         };
+    }
+
+    private sealed class TestTimeProvider : TimeProvider
+    {
+        public DateTimeOffset UtcNow { get; set; } = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     private sealed record TestMember(string SessionId, Guid UserId, object MembershipIdentity);

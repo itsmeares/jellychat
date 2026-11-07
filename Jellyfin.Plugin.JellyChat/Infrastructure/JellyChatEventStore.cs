@@ -25,6 +25,7 @@ public class JellyChatEventStore
     private readonly object _syncLock = new object();
     private readonly Dictionary<string, (int Failures, DateTime WindowStart)> _unlockFailures = [];
     private readonly Func<string, byte[], byte[]> _passwordHasher;
+    private readonly TimeProvider _timeProvider;
     private TaskCompletionSource _change = NewChangeSource();
 
     /// <summary>
@@ -35,9 +36,10 @@ public class JellyChatEventStore
     {
     }
 
-    internal JellyChatEventStore(Func<string, byte[], byte[]> passwordHasher)
+    internal JellyChatEventStore(Func<string, byte[], byte[]> passwordHasher, TimeProvider? timeProvider = null)
     {
         _passwordHasher = passwordHasher;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -155,7 +157,7 @@ public class JellyChatEventStore
     }
 
     /// <summary>
-    /// Returns true when a session has made too many wrong password guesses recently.
+    /// Returns true when a session has exhausted its recent password guess limit, including pending guesses.
     /// </summary>
     /// <param name="sessionId">The Jellyfin session id.</param>
     /// <returns>Whether further guesses should be refused.</returns>
@@ -163,8 +165,8 @@ public class JellyChatEventStore
     {
         lock (_syncLock)
         {
+            PruneUnlockFailures(_timeProvider.GetUtcNow().UtcDateTime);
             return _unlockFailures.TryGetValue(sessionId, out var entry)
-                && DateTime.UtcNow - entry.WindowStart < UnlockWindow
                 && entry.Failures >= MaxUnlockFailures;
         }
     }
@@ -182,6 +184,8 @@ public class JellyChatEventStore
         long passwordRevision;
         lock (_syncLock)
         {
+            DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
+            PruneUnlockFailures(now);
             var state = ReconcileRoomLocked(room);
             if (!IsActiveParticipant(state, room, sessionId, userId))
             {
@@ -196,6 +200,15 @@ public class JellyChatEventStore
                 return true;
             }
 
+            _unlockFailures.TryGetValue(sessionId, out var entry);
+            if (entry.Failures >= MaxUnlockFailures)
+            {
+                accessState = CreateAccessState(state, room, sessionId, userId);
+                return false;
+            }
+
+            // Reserve a guess before hashing so concurrent attempts share the limit.
+            _unlockFailures[sessionId] = (entry.Failures + 1, entry.Failures == 0 ? now : entry.WindowStart);
             passwordState = state;
             passwordSalt = state.PasswordSalt!.ToArray();
             expectedHash = state.PasswordHash!.ToArray();
@@ -239,13 +252,6 @@ public class JellyChatEventStore
                 {
                     currentState.AuthorizedSessions.Add(sessionId);
                     _unlockFailures.Remove(sessionId);
-                }
-                else
-                {
-                    DateTime now = DateTime.UtcNow;
-                    _unlockFailures[sessionId] = _unlockFailures.TryGetValue(sessionId, out var previous) && now - previous.WindowStart < UnlockWindow
-                        ? (previous.Failures + 1, previous.WindowStart)
-                        : (1, now);
                 }
 
                 accessState = CreateAccessState(currentState, room, sessionId, userId);
@@ -364,6 +370,17 @@ public class JellyChatEventStore
             state.PasswordRevision += 1;
             accessState = CreateAccessState(state, room, sessionId, userId);
             return true;
+        }
+    }
+
+    private void PruneUnlockFailures(DateTime now)
+    {
+        foreach (string sessionId in _unlockFailures
+            .Where(entry => now - entry.Value.WindowStart >= UnlockWindow)
+            .Select(static entry => entry.Key)
+            .ToList())
+        {
+            _unlockFailures.Remove(sessionId);
         }
     }
 
