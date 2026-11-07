@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { currentUserId } from "../core/api";
-import { isEditable, portalTarget } from "../core/host";
+import { isEditable, portalTarget, syncPlayButton } from "../core/host";
 import type { PlaybackReport } from "../core/playback";
 import { Dock } from "./Dock";
 import { Floating, type FloatMode } from "./Floating";
@@ -102,9 +102,9 @@ export function App() {
     return () => document.removeEventListener("keydown", onKey, true);
   }, [inGroup, resolved.shortcut, toggle]);
 
-  const slot = useHeaderSlot(inGroup);
+  const slot = useHeaderSlot(true);
 
-  if (!inGroup) return null;
+  if (!inGroup) return <HeaderButton slot={slot} unread={0} open={false} idle onClick={() => document.querySelector<HTMLElement>(syncPlayButton)?.click()} />;
 
   const tree = (
     <div className="jc" data-theme={resolved.theme} data-style={resolved.messageStyle} data-side={resolved.messageSide} data-layout={resolved.layout} data-corners={resolved.theme === "custom" ? resolved.customCorners : undefined} data-glass={resolved.theme === "custom" && resolved.customGlass ? "1" : undefined} style={{ ["--jc-w" as string]: resolved.width + "px" }}>

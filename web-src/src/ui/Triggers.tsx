@@ -26,6 +26,7 @@ export function useHeaderSlot(enabled: boolean): HTMLElement | null {
       if (element.parentElement !== host || (anchor && element.nextElementSibling !== anchor)) {
         host.insertBefore(element, anchor || host.firstChild);
       }
+      if (anchor) element.style.color = getComputedStyle(anchor).color;
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
     const observer = new MutationObserver(schedule);
@@ -43,10 +44,11 @@ export function useHeaderSlot(enabled: boolean): HTMLElement | null {
   return slot;
 }
 
-export function HeaderButton({ slot, unread, open, onClick }: { slot: HTMLElement | null; unread: number; open: boolean; onClick: () => void }) {
+export function HeaderButton({ slot, unread, open, idle, onClick }: { slot: HTMLElement | null; unread: number; open: boolean; idle?: boolean; onClick: () => void }) {
   if (!slot) return null;
+  const label = idle ? "JellyChat. Join a SyncPlay group to chat." : unread ? `JellyChat, ${unread} new` : "JellyChat";
   return createPortal(
-    <button className="jc-hbtn" type="button" aria-label={unread ? `JellyChat, ${unread} new` : "JellyChat"} aria-pressed={open} title="JellyChat (C)" onClick={onClick}>
+    <button className="jc-hbtn" data-idle={idle ? "1" : undefined} type="button" aria-label={label} aria-pressed={idle ? undefined : open} title={idle ? label : "JellyChat (C)"} onClick={onClick}>
       <Icon name="chat" />
       {unread > 0 && <span className="jc-count">{unread > 9 ? "9+" : unread}</span>}
     </button>,

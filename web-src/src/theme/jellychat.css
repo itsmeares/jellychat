@@ -22,7 +22,7 @@
 .jc[data-corners="pill"]{--jc-rad:18px;--jc-in:99px;--jc-card:24px}
 .jc *,.jc *::before,.jc *::after{box-sizing:border-box}
 .jc button{font:inherit;color:inherit}
-.jc svg.jc-i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.jc svg.jc-i,.jc-hbtn svg.jc-i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 
 .jc-surface{background:var(--jc-bg);box-shadow:0 0 0 1px var(--jc-line),var(--jc-shadow)}
 .jc[data-theme="glass"] .jc-surface,.jc[data-glass="1"] .jc-surface{backdrop-filter:blur(var(--jc-blur)) saturate(1.6);-webkit-backdrop-filter:blur(var(--jc-blur)) saturate(1.6)}
@@ -176,10 +176,11 @@
 
 /* Triggers */
 .jc-hbtn{all:unset;box-sizing:border-box;position:relative;cursor:pointer;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;color:inherit}
+.jc-hbtn[data-idle]{opacity:.55}
 .jc-hbtn:hover{background:rgba(255,255,255,.1)}
 .jc-hbtn:focus-visible{outline:2px solid currentColor}
 .jc-hbtn .jc-count{position:absolute;top:2px;right:2px;font-size:10px;min-width:16px;height:16px;line-height:16px;padding:0 4px}
-.jc-hbtn .jc-i{width:22px;height:22px}
+.jc-hbtn svg.jc-i{width:24px;height:24px}
 
 /* Floating reactions */
 .jc-react{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1249}
