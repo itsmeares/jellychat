@@ -27,6 +27,7 @@ export class PrefsStore {
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private userId = "";
   private remote: DisplayPreferences | null = null;
+  private dirty = false;
 
   constructor() {
     const device = parseDevicePrefs(storage()?.getItem(deviceWidthKey) ?? null, storage()?.getItem(deviceSideKey) ?? null);
@@ -115,13 +116,14 @@ export class PrefsStore {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
     }
+    this.dirty = true;
     this.writeCache(this.userId, this.state.user);
     this.saveTimer = setTimeout(() => void this.save(), saveDelayMs);
   }
 
   private async save(): Promise<void> {
     this.saveTimer = null;
-    if (!this.userId) {
+    if (!this.userId || !this.dirty) {
       return;
     }
     const body: DisplayPreferences = { ...(this.remote || { Id: "jellychat", Client: "jellychat" }) };
@@ -129,6 +131,7 @@ export class PrefsStore {
     try {
       await request(this.prefsPath(), { method: "POST", query: { userId: this.userId, client: "jellychat" }, body });
       this.remote = body;
+      this.dirty = false;
     } catch {
       /* the local cache keeps the value; the next change retries */
     }

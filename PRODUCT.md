@@ -10,7 +10,7 @@ JellyChat serves Jellyfin users watching together in SyncPlay. They are already 
 
 ## Product Purpose
 
-JellyChat adds a lightweight SyncPlay chat drawer to Jellyfin Web through a plugin-owned event stream and injected frontend. Success means viewers can talk, react, and follow room activity without leaving playback, opening extra services, or fighting the video controls.
+JellyChat adds a lightweight SyncPlay chat panel to Jellyfin Web through a plugin-owned event stream and injected frontend. Success means viewers can talk, react, and follow room activity without leaving playback, opening extra services, or fighting the video controls.
 
 ## Brand Personality
 
@@ -30,4 +30,4 @@ JellyChat should not feel like a social network overlay, a heavy chat app, a mar
 
 ## Accessibility & Inclusion
 
-Target WCAG AA basics for the injected UI: readable contrast, keyboard access, visible focus states, clear labels, touch targets that work on iPad-sized layouts, and reduced-motion handling for drawer transitions, highlight jumps, and reactions.
+Target WCAG AA basics for the injected UI: readable contrast, keyboard access, visible focus states, clear labels, touch targets that work on iPad-sized layouts, and reduced-motion handling for panel transitions, highlight jumps, and reactions.

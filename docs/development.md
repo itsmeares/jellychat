@@ -91,6 +91,7 @@ Build checks:
 
 ```bash
 cd web-src
+npm test
 npm run build
 cd ..
 dotnet publish Jellyfin.Plugin.JellyChat/Jellyfin.Plugin.JellyChat.csproj -c Release
@@ -100,9 +101,7 @@ git diff --check
 Browser console checks:
 
 ```js
-window.JellyChatDebug.getSummary()
-window.JellyChatDebug.dump()
-window.JellyChatDebug.reset()
+JellyChat.debug()
 ```
 
 Useful asset and API checks from an authenticated Jellyfin browser session:
@@ -110,6 +109,8 @@ Useful asset and API checks from an authenticated Jellyfin browser session:
 ```text
 /JellyChat/Assets/jellychat.css
 /JellyChat/Assets/jellychat.js
+/JellyChat/Config
+/JellyChat/Sync
 /JellyChat/Room
 /JellyChat/Events
 ```

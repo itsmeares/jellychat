@@ -1,7 +1,7 @@
 {
   "name": "jellychat-web",
   "private": true,
-  "version": "3.0.0",
+  "version": "2.1.4",
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",

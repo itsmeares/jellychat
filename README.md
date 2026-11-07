@@ -1,24 +1,27 @@
+<p align="center"><img src="assets/brand/jellychat-256.png" width="128" height="128" alt="JellyChat logo"></p>
+
 # JellyChat
 
 **Watch together. Chat in sync.**
 
-A native-feeling watch party chat for Jellyfin SyncPlay.
+Chat for Jellyfin SyncPlay watch parties. It lives inside Jellyfin Web, uses the SyncPlay group as the room, and needs no extra server or port.
 
-![JellyChat preview](assets/demo/jellychat-preview.svg)
-
-JellyChat adds a compact chat drawer to Jellyfin Web for people watching together in SyncPlay. It stays inside Jellyfin, uses the active SyncPlay room as the chat room, and does not require a separate chat server, WebSocket service, or extra network port.
+| Violet, docked | Glass, floating |
+| --- | --- |
+| ![JellyChat in the Violet theme, docked next to the player](assets/screenshot-violet.png) | ![JellyChat in the Glass theme, floating over the player](assets/screenshot-glass.png) |
 
 ## Features
 
-- SyncPlay room chat with messages, replies, copy actions, and jump-to-original highlights.
-- Optional per-room password protection with automatic owner handoff when the current owner leaves.
-- Floating emoji reactions for quick watch-party feedback.
-- Playback activity rows for local play, pause, seek, and start events.
-- Typing presence and unread/activity indicators while the drawer is closed.
-- Native-feeling Jellyfin trigger placement in the header or video controls when available.
-- Resizable desktop drawer with side and background preferences.
-- Phone portrait bottom sheet layout, tablet-friendly touch targets, and Jellyfin Desktop fallback behavior.
-- Self-contained Jellyfin Web injection through JellyChat-owned middleware and same-origin plugin asset endpoints.
+- Room chat with replies, copy, jump-to-original and typing indicators.
+- Two built-in themes, Violet and Glass, plus one admin-only Custom theme with your own colors, corners and blur.
+- Docked layout that makes room beside the video, or a floating layout with a quiet button, toasts, a peek card and an open card.
+- Quick emoji reactions that float over the video, a searchable emoji picker, favorites and recent emoji.
+- Playback rows for play, pause, seek and start.
+- Optional per-room password owned by the SyncPlay group owner.
+- Per-user settings saved on your Jellyfin account, so your look follows you between devices.
+- `C` keyboard shortcut to open and close chat.
+- A header button on normal pages and a JellyChat button inside the player.
+- Phone portrait bottom sheet, tablet touch targets and phone landscape support.
 
 ## Installation
 
@@ -35,7 +38,7 @@ Repository URL: https://raw.githubusercontent.com/itsmeares/jellychat/main/manif
 
 Save the repository, install `JellyChat` from the catalog, then restart Jellyfin.
 
-JellyChat `v2.0.0` and later target Jellyfin `12.x` with target ABI `12.0.0.0`.
+JellyChat `v2.0.0` and later, including 3.0, target Jellyfin `12.x` with target ABI `12.0.0.0`.
 Jellyfin `10.11.x` installations remain supported by JellyChat `v1.2.0` with
 target ABI `10.11.0.0`; the plugin catalog selects the compatible release.
 
@@ -55,32 +58,50 @@ Use the plugin directory for your Jellyfin server data path if it differs.
 
 ## Usage
 
-1. Start playback in Jellyfin Web.
-2. Join or create a SyncPlay group.
-3. Open JellyChat from the Jellyfin header or video controls.
-4. Send messages, reply to recent messages, react with emoji, and keep watching.
+1. Join or create a SyncPlay group.
+2. Open JellyChat from the header button, the player button or by pressing `C`.
+3. Send messages, reply, react with emoji and keep watching.
 
-JellyChat follows the current SyncPlay room. If you leave the room or Jellyfin cannot resolve the current session, the composer explains that chat is waiting for an active SyncPlay group.
+The gear icon in the chat opens your settings: theme (Violet, Glass or the server default), layout, which side your own messages sit on, message style, hide-while-watching, the shortcut, width, panel side and your quick emoji. Settings are saved per Jellyfin user on the server. Width and panel side stay on each device.
 
-The user who creates the SyncPlay group owns its JellyChat room. The owner can enable, change, or explicitly disable a room password from JellyChat settings. Protection applies only to JellyChat; locked users can continue using SyncPlay. Access is granted per Jellyfin session, so another device using the same account must unlock separately. When the owner leaves, ownership passes to the earliest remaining room participant. All room settings and history are discarded when the final participant leaves.
+The user who creates the SyncPlay group owns its room and can set, change or remove a room password in the same settings panel. The password only protects JellyChat, not SyncPlay. Access is per Jellyfin session, so another device on the same account unlocks separately. When the owner leaves, ownership passes to the earliest remaining participant.
 
-## Client Behavior and Compatibility
+## Admin settings
 
-### All of the clients below are tested and supported by JellyChat
+Open **Dashboard, Plugins, JellyChat**.
 
-- **Web:** JellyChat runs inside Jellyfin Web and mounts into native header or video controls when Jellyfin exposes a suitable host.
-- **Desktop:** Jellyfin Desktop uses the same injected web client, with a Desktop-safe trigger fallback and video-control insets when needed.
-- **Tablet:** The drawer keeps touch targets large enough for iPad-sized layouts while preserving the desktop-style chat surface.
-- **Phone landscape:** The drawer uses the compact mobile side layout so chat stays accessible without taking over the player.
-- **Phone portrait:** JellyChat switches to a bottom sheet so chat does not interrupt screen use in main menu.
+- **Theme.** Pick the default theme for everyone (Violet, Glass or Custom). Custom starts from Violet or Glass and lets you change the accent, background, surface and text colors, corner style, frosted glass and blur strength, with a live preview.
+- **Behavior.** Default layout, which side your own messages sit on, message style, hide-while-watching, the `C` shortcut, and **Let users change their look**. When that switch is off, everyone gets the admin's choices. Users can still change width, panel side and quick emoji.
+- **Advanced.** Custom CSS that loads after the theme. The `--jc-*` variables are the supported hooks, and the old `--jellychat-*` variables from 2.x still work in the Custom theme.
 
-Native Jellyfin clients that do not use Jellyfin Web are not separate JellyChat targets.
+Class names changed in 3.0. Custom CSS written against 2.x class names needs updating.
+
+## Privacy and storage
+
+Chat lives in server memory only. JellyChat keeps the last 200 events per room, writes no chat logs to disk, and discards a room when its last participant leaves. A server restart clears all rooms.
+
+## Client compatibility
+
+| Client | Support |
+| --- | --- |
+| Jellyfin Web (desktop browsers) | Supported. |
+| Jellyfin Desktop and Jellium | Supported. They load the server's web client, so the same UI runs. |
+| Tablet browsers | Supported, with larger touch targets. |
+| Phone browsers, landscape | Supported. |
+| Phone browsers, portrait | Supported as a bottom sheet. |
+| Official Jellyfin iOS app | Chat works outside playback only. The app plays video natively, so no web page, and no chat, can sit on top of it. This is a platform limit. |
+
+Other native Jellyfin clients that do not use Jellyfin Web are not JellyChat targets.
+
+## How it stays light
+
+A client sends about one request every 25 seconds while idle. The server holds a long poll open and answers as soon as a message, a reaction, a playback event or a room change arrives. Messages go out as normal POST requests. The tab pauses its requests while hidden.
 
 ## Documentation
 
-- [Development](docs/development.md): repo layout, frontend build, .NET publish, local deploy, and debug commands.
-- [Release](docs/release.md): version bump, build, zip packaging, GitHub release asset, and manifest update flow.
-- [Troubleshooting](docs/troubleshooting.md): missing button, cross-device messages, SyncPlay resolution, reverse proxy/base-path checks, and `window.JellyChatDebug`.
+- [Development](docs/development.md): repo layout, frontend build, .NET publish, local deploy and tests.
+- [Release](docs/release.md): version bump, build, zip packaging, GitHub release asset and manifest update flow.
+- [Troubleshooting](docs/troubleshooting.md): missing button, cross-device messages, SyncPlay resolution, reverse proxy checks and `JellyChat.debug()`.
 
 ## Acknowledgements
 
