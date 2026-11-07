@@ -5,11 +5,12 @@ export function isNativeShell(host: NativeHost = window as NativeHost): boolean 
 }
 
 export function isVideoRoute(): boolean {
-  return /\/video(?:\?|$|\/)/i.test(window.location.hash || window.location.pathname) || !!document.querySelector("video");
+  return /\/video(?:\?|$|\/)/i.test(window.location.hash || window.location.pathname);
 }
 
+/** The playback element only, never an embedded preview video on Home. */
 export function findVideo(): HTMLVideoElement | null {
-  return document.querySelector<HTMLVideoElement>("video.htmlvideoplayer") || document.querySelector<HTMLVideoElement>("video");
+  return document.querySelector<HTMLVideoElement>(".videoPlayerContainer video, video.htmlvideoplayer");
 }
 
 export function portalTarget(): HTMLElement {
@@ -17,8 +18,10 @@ export function portalTarget(): HTMLElement {
   return full && full !== document.documentElement && full !== document.body && !(full instanceof HTMLVideoElement) ? full : document.body;
 }
 
+export const syncPlayButton = 'button[aria-controls="app-sync-play-menu"]';
+
 export function headerHost(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('button[aria-label="SyncPlay"]')?.parentElement || null;
+  return document.querySelector<HTMLElement>(syncPlayButton)?.parentElement || null;
 }
 
 export function isPhonePortrait(): boolean {

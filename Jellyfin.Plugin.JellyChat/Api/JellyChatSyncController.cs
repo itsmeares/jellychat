@@ -89,6 +89,7 @@ public class JellyChatSyncController : ControllerBase
             try
             {
                 await Task.WhenAny(change, Task.Delay(remaining < MembershipRecheck ? remaining : MembershipRecheck, cancellationToken)).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException)
             {

@@ -38,13 +38,13 @@ export function Floating({ mode, side, visible, unread, latest, onOpen, onClose,
   const pillShown = mode === "quiet" && (visible || unread > 0);
   return (
     <>
-      <div className="jc-f" data-side={side} data-on={pillShown ? "1" : "0"}>
+      <div className="jc-f" data-side={side} data-on={pillShown ? "1" : "0"} inert={!pillShown}>
         <button className="jc-pill jc-surface" type="button" aria-label={unread ? `Open chat, ${unread} new` : "Open chat"} onClick={onOpen} style={{ position: "relative" }}>
           <Icon name="chat" />
           {unread > 0 && <span className="jc-count">{unread > 9 ? "9+" : unread}</span>}
         </button>
       </div>
-      <div className="jc-f" data-side={side} data-on={mode === "toast" ? "1" : "0"}>
+      <div className="jc-f" data-side={side} data-on={mode === "toast" ? "1" : "0"} inert={mode !== "toast"}>
         {latest && (
           <button className="jc-toast jc-surface" type="button" onClick={onOpen}>
             <Avatar name={latest.name} small />
@@ -52,7 +52,7 @@ export function Floating({ mode, side, visible, unread, latest, onOpen, onClose,
           </button>
         )}
       </div>
-      <div className="jc-f" data-side={side} data-on={mode === "peek" ? "1" : "0"}>
+      <div className="jc-f" data-side={side} data-on={mode === "peek" ? "1" : "0"} inert={mode !== "peek"}>
         {mode === "peek" && latest && (
           <div className="jc-peek jc-surface" onPointerMove={onActivity}>
             <div className="pl">
@@ -68,7 +68,7 @@ export function Floating({ mode, side, visible, unread, latest, onOpen, onClose,
           </div>
         )}
       </div>
-      <div className="jc-f jc-card jc-surface" data-side={side} data-on={mode === "open" ? "1" : "0"} onPointerMove={onActivity} onKeyDown={onActivity} style={{ bottom: 112 }} role="dialog" aria-label="JellyChat" aria-hidden={mode !== "open"}>
+      <div className="jc-f jc-card jc-surface" data-side={side} data-on={mode === "open" ? "1" : "0"} onPointerMove={onActivity} onKeyDown={onActivity} style={{ bottom: 112 }} role="dialog" aria-label="JellyChat" inert={mode !== "open"}>
         {mode === "open" && <Panel onClose={onClose} autoFocus />}
       </div>
     </>

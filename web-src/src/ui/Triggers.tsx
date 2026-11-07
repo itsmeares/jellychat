@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { headerHost } from "../core/host";
+import { headerHost, syncPlayButton } from "../core/host";
 import { Icon } from "./icons";
 
 export function useHeaderSlot(enabled: boolean): HTMLElement | null {
@@ -22,7 +22,7 @@ export function useHeaderSlot(enabled: boolean): HTMLElement | null {
         if (element.isConnected) element.remove();
         return;
       }
-      const anchor = host.querySelector('button[aria-label="SyncPlay"]');
+      const anchor = host.querySelector(syncPlayButton);
       if (element.parentElement !== host || (anchor && element.nextElementSibling !== anchor)) {
         host.insertBefore(element, anchor || host.firstChild);
       }

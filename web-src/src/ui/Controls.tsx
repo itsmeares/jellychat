@@ -4,14 +4,14 @@ export function Seg<T extends string>({ value, options, onChange, disabled, full
   return (
     <div className={"jc-seg" + (full ? " full" : "")} role="group" aria-disabled={disabled || undefined}>
       {options.map(([key, label]) => (
-        <button key={key} type="button" aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>
+        <button key={key} type="button" disabled={disabled} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>
       ))}
     </div>
   );
 }
 
 export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (value: boolean) => void; label: string; disabled?: boolean }) {
-  return <button className="jc-tgl" type="button" role="switch" aria-checked={checked} aria-label={label} aria-disabled={disabled || undefined} onClick={() => onChange(!checked)} />;
+  return <button className="jc-tgl" type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)} />;
 }
 
 export function Row({ label, children }: { label: string; children: ReactNode }) {

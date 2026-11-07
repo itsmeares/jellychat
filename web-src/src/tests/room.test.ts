@@ -46,6 +46,18 @@ describe("RoomStore", () => {
     expect(group.kind === "group" && group.messages[0].status).toBe("sent");
   });
 
+  it("does not move the sync cursor when a send completes", async () => {
+    const send = vi.fn().mockResolvedValue(event({ sequence: 9, userId: "me", text: "hello", clientEventId: "c1" }));
+    const s = store(send);
+    s.applySync(sync([event({ sequence: 1 })]));
+    await s.sendMessage("hello");
+    expect(s.getState().lastSequence).toBe(1);
+    s.applySync(sync([event({ sequence: 5, text: "earlier" }), event({ sequence: 9, userId: "me", text: "hello", clientEventId: "c1" })]));
+    expect(s.getState().lastSequence).toBe(9);
+    const group = s.getState().items.flatMap((item) => (item.kind === "group" ? item.messages : []));
+    expect(group.map((message) => message.text)).toEqual(["hi", "earlier", "hello"]);
+  });
+
   it("marks a failed message and retries it", async () => {
     const send = vi.fn().mockRejectedValueOnce(new Error("x")).mockResolvedValueOnce(event({ sequence: 2, userId: "me", text: "yo", clientEventId: "c1" }));
     const s = store(send);

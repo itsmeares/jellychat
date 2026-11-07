@@ -32,6 +32,23 @@ public sealed class JellyChatEventStoreTests
     }
 
     [Fact]
+    public void WrongPasswordGuessesAreThrottledPerSession()
+    {
+        var store = new JellyChatEventStore();
+        var room = CreateRoom(("owner-session", OwnerUserId), ("second-session", SecondUserId));
+        Assert.True(store.TrySetPassword(room, "owner-session", OwnerUserId, "secret", out _));
+
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            Assert.False(store.IsUnlockThrottled("second-session"));
+            Assert.False(store.TryUnlock(room, "second-session", SecondUserId, "wrong", out _));
+        }
+
+        Assert.True(store.IsUnlockThrottled("second-session"));
+        Assert.False(store.IsUnlockThrottled("owner-session"));
+    }
+
+    [Fact]
     public void ExistingGrantSurvivesPasswordTransitionsButSameAccountSessionDoesNotInherit()
     {
         var store = new JellyChatEventStore();

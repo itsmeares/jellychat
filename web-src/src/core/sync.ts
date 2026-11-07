@@ -67,6 +67,8 @@ export class SyncLoop {
     while (this.running) {
       const controller = new AbortController();
       this.controller = controller;
+      let timedOut = false;
+      let deadline: ReturnType<typeof setTimeout> | null = null;
       try {
         if (!this.deps.signedIn()) {
           this.first = true;
@@ -78,8 +80,10 @@ export class SyncLoop {
           continue;
         }
         const cursor = this.deps.cursor();
+        const hold = this.first ? 0 : this.deps.holdSeconds ?? 25;
+        deadline = setTimeout(() => { timedOut = true; controller.abort(); }, (hold + 10) * 1000);
         const response = await this.deps.fetchSync(
-          { afterSequence: cursor.afterSequence, roomVersion: cursor.roomVersion, waitSeconds: this.first ? 0 : this.deps.holdSeconds ?? 25 },
+          { afterSequence: cursor.afterSequence, roomVersion: cursor.roomVersion, waitSeconds: hold },
           controller.signal
         );
         this.first = false;
@@ -89,11 +93,13 @@ export class SyncLoop {
           await this.sleep(2000, controller.signal);
         }
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted && !timedOut) {
           continue;
         }
         this.failures += 1;
         await this.sleep(backoffMs(error, this.failures), controller.signal);
+      } finally {
+        if (deadline) clearTimeout(deadline);
       }
     }
   }

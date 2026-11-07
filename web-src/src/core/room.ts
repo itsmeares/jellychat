@@ -70,7 +70,7 @@ export class RoomStore {
     return () => this.signalListeners.delete(listener);
   }
 
-  applySync(response: SyncResponse): void {
+  applySync(response: SyncResponse, advance = true): void {
     const room = response.room;
     const nextGroup = room.inGroup ? room.groupId : "";
     if (nextGroup !== this.groupId) {
@@ -89,7 +89,9 @@ export class RoomStore {
     const signals: RoomSignal[] = [];
 
     response.events.forEach((event) => {
-      lastSequence = Math.max(lastSequence, event.sequence);
+      if (advance) {
+        lastSequence = Math.max(lastSequence, event.sequence);
+      }
       const mine = this.isMine(event.userId);
       if (event.type === "typing.update") {
         this.applyTyping(event, mine);
@@ -120,12 +122,25 @@ export class RoomStore {
       }
     });
 
+    this.events.sort((a, b) => a.sequence - b.sequence);
     if (this.events.length > maxTimelineEvents) {
       this.events = this.events.slice(-maxTimelineEvents);
     }
     this.state = { ...this.state, room, ready: true, lastSequence, roomVersion: response.roomVersion };
     this.rebuild();
     signals.forEach((signal) => this.signalListeners.forEach((listener) => listener(signal)));
+  }
+
+  /** Drop everything tied to the previous signed-in account. */
+  reset(): void {
+    this.events = [];
+    this.pending = [];
+    this.typingUntil.clear();
+    this.groupId = "";
+    this.firstSync = true;
+    this.iAmTyping = false;
+    this.state = { room: null, ready: false, items: [], typing: [], lastSequence: 0, roomVersion: "" };
+    this.emit();
   }
 
   setRoom(room: RoomInfo): void {
@@ -172,7 +187,7 @@ export class RoomStore {
   private async deliver(message: ChatMessage, clientEventId: string): Promise<void> {
     try {
       const stored = await this.deps.send({ type: "chat.message", clientEventId, text: message.text, replyTo: message.replyTo || undefined });
-      this.applySync({ room: this.state.room!, roomVersion: this.state.roomVersion, events: [stored] });
+      this.applySync({ room: this.state.room!, roomVersion: this.state.roomVersion, events: [stored] }, false);
     } catch {
       message.status = "failed";
       this.rebuild();

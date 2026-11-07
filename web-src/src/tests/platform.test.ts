@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { isNativeShell } from "../core/host";
+import { findVideo, isNativeShell, isVideoRoute } from "../core/host";
 import { itemIdFromSource } from "../core/playback";
 import { searchCatalog } from "../core/emoji/search";
 import { emojiCatalog } from "../core/emoji/catalog";
@@ -36,5 +36,21 @@ describe("normalizeServerConfig", () => {
   it("accepts server PascalCase and falls back on bad values", () => {
     expect(normalizeServerConfig({ Theme: "glass", Layout: "floating", MessageSide: "sideways", AllowUserAppearance: false })).toMatchObject({ theme: "glass", layout: "floating", messageSide: "left", allowUserAppearance: false });
     expect(normalizeServerConfig(null).theme).toBe("violet");
+  });
+});
+
+describe("playback detection", () => {
+  it("ignores a preview video on Home", () => {
+    window.location.hash = "#/home";
+    document.body.innerHTML = "<video></video>";
+    expect(findVideo()).toBeNull();
+    expect(isVideoRoute()).toBe(false);
+  });
+
+  it("finds the player video on the video route", () => {
+    window.location.hash = "#/video";
+    document.body.innerHTML = '<div class="videoPlayerContainer"><video class="htmlvideoplayer"></video></div>';
+    expect(findVideo()).not.toBeNull();
+    expect(isVideoRoute()).toBe(true);
   });
 });

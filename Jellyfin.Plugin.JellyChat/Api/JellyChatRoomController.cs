@@ -60,6 +60,7 @@ public class JellyChatRoomController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public ActionResult<JellyChatRoomInfo> UnlockRoom([FromBody, Required] JellyChatRoomPasswordRequest request)
     {
         if (request is null || request.Password is null)
@@ -70,6 +71,11 @@ public class JellyChatRoomController : ControllerBase
         if (!TryResolveRoom(request.SenderSessionId, out var caller, out var room, out var failure))
         {
             return failure!;
+        }
+
+        if (_eventStore.IsUnlockThrottled(caller.Session.Id))
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, "Too many wrong passwords. Try again in a minute.");
         }
 
         return _eventStore.TryUnlock(room, caller.Session.Id, caller.UserId, request.Password, out var access)

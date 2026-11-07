@@ -24,6 +24,29 @@ function playbackText(item: Extract<TimelineItem, { kind: "playback" }>): string
   return `${name} resumed at ${ticksToClock(notice.toTicks)}`;
 }
 
+function copyText(text: string): void {
+  const done = navigator.clipboard?.writeText(text);
+  if (done) {
+    done.catch(() => legacyCopy(text));
+  } else {
+    legacyCopy(text);
+  }
+}
+
+function legacyCopy(text: string): void {
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.style.cssText = "position:fixed;opacity:0";
+  document.body.appendChild(area);
+  area.select();
+  try {
+    document.execCommand("copy");
+  } catch {
+    /* nothing more to try */
+  }
+  area.remove();
+}
+
 export function typingLabel(names: string[]): string {
   if (names.length === 0) return "";
   if (names.length === 1) return `${names[0]} is typing`;
@@ -123,7 +146,7 @@ export function MessageList({ items, typing, onReply, onRetry }: Props) {
                         <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(message)}>
                           <Icon name="reply" />
                         </button>
-                        <button type="button" aria-label="Copy" title="Copy" onClick={() => void navigator.clipboard?.writeText(message.text)}>
+                        <button type="button" aria-label="Copy" title="Copy" onClick={() => copyText(message.text)}>
                           <Icon name="copy" />
                         </button>
                       </div>

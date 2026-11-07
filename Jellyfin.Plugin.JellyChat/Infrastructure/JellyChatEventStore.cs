@@ -14,13 +14,16 @@ namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 public class JellyChatEventStore
 {
     private const int MaxEventsPerGroup = 200;
+    private const int MaxUnlockFailures = 5;
     private const int PasswordSaltLength = 16;
     private const int PasswordHashLength = 32;
     private const int PasswordIterations = 100000;
     private const string TypingUpdateEventType = "typing.update";
+    private static readonly TimeSpan UnlockWindow = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan TypingEventTtl = TimeSpan.FromSeconds(6);
     private readonly Dictionary<Guid, GroupRoomState> _rooms = [];
     private readonly object _syncLock = new object();
+    private readonly Dictionary<string, (int Failures, DateTime WindowStart)> _unlockFailures = [];
     private readonly Func<string, byte[], byte[]> _passwordHasher;
     private TaskCompletionSource _change = NewChangeSource();
 
@@ -151,6 +154,21 @@ public class JellyChatEventStore
         }
     }
 
+    /// <summary>
+    /// Returns true when a session has made too many wrong password guesses recently.
+    /// </summary>
+    /// <param name="sessionId">The Jellyfin session id.</param>
+    /// <returns>Whether further guesses should be refused.</returns>
+    internal bool IsUnlockThrottled(string sessionId)
+    {
+        lock (_syncLock)
+        {
+            return _unlockFailures.TryGetValue(sessionId, out var entry)
+                && DateTime.UtcNow - entry.WindowStart < UnlockWindow
+                && entry.Failures >= MaxUnlockFailures;
+        }
+    }
+
     internal bool TryUnlock(
         JellyChatSyncPlayRoomSnapshot room,
         string sessionId,
@@ -220,6 +238,14 @@ public class JellyChatEventStore
                 if (matched)
                 {
                     currentState.AuthorizedSessions.Add(sessionId);
+                    _unlockFailures.Remove(sessionId);
+                }
+                else
+                {
+                    DateTime now = DateTime.UtcNow;
+                    _unlockFailures[sessionId] = _unlockFailures.TryGetValue(sessionId, out var previous) && now - previous.WindowStart < UnlockWindow
+                        ? (previous.Failures + 1, previous.WindowStart)
+                        : (1, now);
                 }
 
                 accessState = CreateAccessState(currentState, room, sessionId, userId);

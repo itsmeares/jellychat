@@ -30,13 +30,17 @@ function start(): void {
 
   let loadedFor = "";
   const watchSession = () => {
-    if (!isSignedIn()) {
-      loadedFor = "";
+    const userId = isSignedIn() ? currentUserId() : "";
+    if (userId === loadedFor) {
       return;
     }
-    const userId = currentUserId();
-    if (userId && userId !== loadedFor) {
-      loadedFor = userId;
+    if (loadedFor) {
+      prefs.reset();
+      room.reset();
+      loop.wake();
+    }
+    loadedFor = userId;
+    if (userId) {
       void prefs.load();
     }
   };

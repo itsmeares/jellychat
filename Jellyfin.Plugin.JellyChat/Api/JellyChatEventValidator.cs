@@ -13,6 +13,10 @@ internal static class JellyChatEventValidator
     private const int MaxReplyUserNameLength = 80;
     private const int MaxReplyPreviewLength = 140;
     private const int MaxReplyCreatedAtLength = 64;
+    private const int MaxTextLength = 2000;
+    private const int MaxEmojiLength = 32;
+    private const int MaxIdLength = 128;
+    private const int MaxItemNameLength = 300;
 
     internal static bool TryCreate(
         JellyChatEventRequest request,
@@ -33,7 +37,7 @@ internal static class JellyChatEventValidator
             return false;
         }
 
-        if (!ArePositionsValid(request, out error))
+        if (!ArePositionsValid(request, out error) || !AreLengthsValid(request, out error))
         {
             return false;
         }
@@ -165,6 +169,29 @@ internal static class JellyChatEventValidator
         roomEvent.ToPositionTicks = includeSeekTarget ? request.ToPositionTicks : null;
         roomEvent.ItemId = Normalize(request.ItemId);
         roomEvent.ItemName = Normalize(request.ItemName);
+    }
+
+    private static bool AreLengthsValid(JellyChatEventRequest request, out string error)
+    {
+        error = string.Empty;
+        if ((request.Text?.Length ?? 0) > MaxTextLength)
+        {
+            error = "Text is too long.";
+        }
+        else if ((request.Emoji?.Length ?? 0) > MaxEmojiLength)
+        {
+            error = "Emoji is too long.";
+        }
+        else if ((request.ClientEventId?.Length ?? 0) > MaxIdLength || (request.ItemId?.Length ?? 0) > MaxIdLength)
+        {
+            error = "ClientEventId and ItemId must be 128 characters or fewer.";
+        }
+        else if ((request.ItemName?.Length ?? 0) > MaxItemNameLength)
+        {
+            error = "ItemName is too long.";
+        }
+
+        return error.Length == 0;
     }
 
     private static bool ArePositionsValid(JellyChatEventRequest request, out string error)

@@ -65,4 +65,23 @@ describe("SyncLoop", () => {
     await vi.waitFor(() => expect(calls).toBe(3));
     expect(waits).toEqual([1000, 2000]);
   });
+
+  it("gives up on a stalled request and backs off", async () => {
+    vi.useFakeTimers();
+    const waits: number[] = [];
+    let calls = 0;
+    let loop: SyncLoop;
+    loop = new SyncLoop({
+      signedIn: () => true,
+      isHidden: () => false,
+      cursor: () => ({ afterSequence: 0, roomVersion: "" }),
+      fetchSync: (_query, signal) => { calls++; if (calls > 1) loop.stop(); return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted")))); },
+      onResponse: () => undefined,
+      sleep: async (ms) => { waits.push(ms); }
+    });
+    loop.start();
+    await vi.advanceTimersByTimeAsync(11000);
+    expect(waits).toEqual([1000]);
+    vi.useRealTimers();
+  });
 });

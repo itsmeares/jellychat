@@ -127,6 +127,7 @@
                 var base = { violet: { CustomAccent: '#8b7cf6', CustomBackground: '#14151a', CustomSurface: '#1c1e25', CustomText: '#eceef4' }, glass: { CustomAccent: '#ffffff', CustomBackground: '#0e1016', CustomSurface: '#2b2d34', CustomText: '#f4f6fb' } };
                 var state = {};
                 var touched = {};
+                var saved = {};
                 var page = document.getElementById('JellyChatConfigPage');
                 function $(selector) { return page.querySelector(selector); }
                 function all(selector) { return Array.prototype.slice.call(page.querySelectorAll(selector)); }
@@ -188,7 +189,7 @@
                 });
                 all('[data-color]').forEach(function (input) { input.addEventListener('input', function () { touched[input.getAttribute('data-color')] = true; render(); }); });
                 $('#JellyChatBlur').addEventListener('input', function (event) { state.CustomGlassBlur = Number(event.target.value); render(); });
-                $('#JellyChatResetColors').addEventListener('click', function () { touched = {}; setDefaultsFor(state.CustomBase); render(); });
+                $('#JellyChatResetColors').addEventListener('click', function () { touched = {}; saved = {}; setDefaultsFor(state.CustomBase); render(); });
 
                 page.addEventListener('pageshow', function () {
                     page.setAttribute('data-active', 'theme');
@@ -198,12 +199,14 @@
                             DefaultTheme: config.DefaultTheme || 'violet', DefaultLayout: config.DefaultLayout || 'docked', DefaultMessageSide: config.DefaultMessageSide || 'left',
                             DefaultMessageStyle: config.DefaultMessageStyle || 'bubbles', DefaultAutoHide: config.DefaultAutoHide !== false, ShortcutEnabled: config.ShortcutEnabled !== false,
                             AllowUserAppearance: config.AllowUserAppearance !== false, CustomBase: config.CustomBase || 'violet', CustomCorners: config.CustomCorners || 'soft',
-                            CustomGlass: parseBool(config.CustomGlass), CustomGlassBlur: config.CustomGlassBlur || 20
+                            CustomGlass: parseBool(config.CustomGlass), CustomGlassBlur: typeof config.CustomGlassBlur === 'number' ? config.CustomGlassBlur : 20
                         };
                         touched = {};
+                        saved = {};
                         setDefaultsFor(state.CustomBase);
                         ['CustomAccent', 'CustomBackground', 'CustomSurface', 'CustomText'].forEach(function (key) {
-                            if (config[key]) { $('[data-color="' + key + '"]').value = config[key]; touched[key] = true; }
+                            saved[key] = config[key] || '';
+                            if (/^#[0-9a-fA-F]{6}$/.test(saved[key])) { $('[data-color="' + key + '"]').value = saved[key]; }
                         });
                         $('#JellyChatBlur').value = state.CustomGlassBlur;
                         $('#JellyChatCustomCss').value = config.CustomCss || '';
@@ -222,7 +225,7 @@
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                         Object.keys(state).forEach(function (key) { config[key] = state[key]; });
                         ['CustomAccent', 'CustomBackground', 'CustomSurface', 'CustomText'].forEach(function (key) {
-                            config[key] = touched[key] ? $('[data-color="' + key + '"]').value : '';
+                            config[key] = touched[key] ? $('[data-color="' + key + '"]').value : (saved[key] || '');
                         });
                         config.CustomCss = $('#JellyChatCustomCss').value;
                         config.SchemaVersion = Math.max(config.SchemaVersion || 0, 3);

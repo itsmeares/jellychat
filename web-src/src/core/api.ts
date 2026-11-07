@@ -57,6 +57,7 @@ type RequestOptions = {
   query?: Record<string, string | number | undefined>;
   body?: unknown;
   signal?: AbortSignal;
+  keepalive?: boolean;
 };
 
 export async function request(path: string, options: RequestOptions = {}): Promise<unknown> {
@@ -82,6 +83,7 @@ export async function request(path: string, options: RequestOptions = {}): Promi
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
+    keepalive: options.keepalive,
     cache: "no-store"
   });
 
