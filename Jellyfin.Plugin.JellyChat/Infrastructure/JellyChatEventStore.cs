@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.JellyChat.Api;
 
 namespace Jellyfin.Plugin.JellyChat.Infrastructure;
@@ -12,14 +14,19 @@ namespace Jellyfin.Plugin.JellyChat.Infrastructure;
 public class JellyChatEventStore
 {
     private const int MaxEventsPerGroup = 200;
+    private const int MaxUnlockFailures = 5;
     private const int PasswordSaltLength = 16;
     private const int PasswordHashLength = 32;
     private const int PasswordIterations = 100000;
     private const string TypingUpdateEventType = "typing.update";
+    private static readonly TimeSpan UnlockWindow = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan TypingEventTtl = TimeSpan.FromSeconds(6);
     private readonly Dictionary<Guid, GroupRoomState> _rooms = [];
     private readonly object _syncLock = new object();
+    private readonly Dictionary<string, (int Failures, DateTime WindowStart)> _unlockFailures = [];
     private readonly Func<string, byte[], byte[]> _passwordHasher;
+    private readonly TimeProvider _timeProvider;
+    private TaskCompletionSource _change = NewChangeSource();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="JellyChatEventStore"/> class.
@@ -29,10 +36,16 @@ public class JellyChatEventStore
     {
     }
 
-    internal JellyChatEventStore(Func<string, byte[], byte[]> passwordHasher)
+    internal JellyChatEventStore(Func<string, byte[], byte[]> passwordHasher, TimeProvider? timeProvider = null)
     {
         _passwordHasher = passwordHasher;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
+
+    /// <summary>
+    /// Gets a task that completes the next time any room changes. Capture it before reading room state to avoid missing a change.
+    /// </summary>
+    internal Task ChangeToken => _change.Task;
 
     internal void ReconcileActiveRooms(IReadOnlyList<JellyChatSyncPlayRoomSnapshot> activeRooms)
     {
@@ -97,6 +110,7 @@ public class JellyChatEventStore
                 state.TypingBySession[addedEvent.SessionId] = addedEvent;
                 PruneTyping(state);
                 storedEvent = Snapshot(addedEvent);
+                SignalChange();
                 return true;
             }
 
@@ -107,6 +121,7 @@ public class JellyChatEventStore
             }
 
             storedEvent = Snapshot(addedEvent);
+            SignalChange();
             return true;
         }
     }
@@ -141,6 +156,21 @@ public class JellyChatEventStore
         }
     }
 
+    /// <summary>
+    /// Returns true when a session has exhausted its recent password guess limit, including pending guesses.
+    /// </summary>
+    /// <param name="sessionId">The Jellyfin session id.</param>
+    /// <returns>Whether further guesses should be refused.</returns>
+    internal bool IsUnlockThrottled(string sessionId)
+    {
+        lock (_syncLock)
+        {
+            PruneUnlockFailures(_timeProvider.GetUtcNow().UtcDateTime);
+            return _unlockFailures.TryGetValue(sessionId, out var entry)
+                && entry.Failures >= MaxUnlockFailures;
+        }
+    }
+
     internal bool TryUnlock(
         JellyChatSyncPlayRoomSnapshot room,
         string sessionId,
@@ -154,6 +184,8 @@ public class JellyChatEventStore
         long passwordRevision;
         lock (_syncLock)
         {
+            DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
+            PruneUnlockFailures(now);
             var state = ReconcileRoomLocked(room);
             if (!IsActiveParticipant(state, room, sessionId, userId))
             {
@@ -168,6 +200,15 @@ public class JellyChatEventStore
                 return true;
             }
 
+            _unlockFailures.TryGetValue(sessionId, out var entry);
+            if (entry.Failures >= MaxUnlockFailures)
+            {
+                accessState = CreateAccessState(state, room, sessionId, userId);
+                return false;
+            }
+
+            // Reserve a guess before hashing so concurrent attempts share the limit.
+            _unlockFailures[sessionId] = (entry.Failures + 1, entry.Failures == 0 ? now : entry.WindowStart);
             passwordState = state;
             passwordSalt = state.PasswordSalt!.ToArray();
             expectedHash = state.PasswordHash!.ToArray();
@@ -210,6 +251,7 @@ public class JellyChatEventStore
                 if (matched)
                 {
                     currentState.AuthorizedSessions.Add(sessionId);
+                    _unlockFailures.Remove(sessionId);
                 }
 
                 accessState = CreateAccessState(currentState, room, sessionId, userId);
@@ -328,6 +370,17 @@ public class JellyChatEventStore
             state.PasswordRevision += 1;
             accessState = CreateAccessState(state, room, sessionId, userId);
             return true;
+        }
+    }
+
+    private void PruneUnlockFailures(DateTime now)
+    {
+        foreach (string sessionId in _unlockFailures
+            .Where(entry => now - entry.Value.WindowStart >= UnlockWindow)
+            .Select(static entry => entry.Key)
+            .ToList())
+        {
+            _unlockFailures.Remove(sessionId);
         }
     }
 
@@ -564,6 +617,14 @@ public class JellyChatEventStore
             MessagePreview = source.MessagePreview,
             CreatedAt = source.CreatedAt
         };
+    }
+
+    private static TaskCompletionSource NewChangeSource() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private void SignalChange()
+    {
+        TaskCompletionSource previous = Interlocked.Exchange(ref _change, NewChangeSource());
+        previous.TrySetResult();
     }
 
     private sealed class GroupRoomState

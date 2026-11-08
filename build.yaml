@@ -4,9 +4,9 @@ guid: "a69744cc-2281-48bf-adef-8e451a16ff71"
 version: "2.1.4.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
-overview: "JellyChat drawer for Jellyfin SyncPlay sessions."
+overview: "Chat for Jellyfin SyncPlay watch parties."
 description: >
-  Adds a JellyChat drawer to Jellyfin web clients for SyncPlay sessions using a
+  Adds chat to Jellyfin web clients for SyncPlay sessions using a
   plugin-owned in-memory event stream. It does not use Jellyfin toast chat
   transport, an external WebSocket server, or additional network ports.
 category: "General"

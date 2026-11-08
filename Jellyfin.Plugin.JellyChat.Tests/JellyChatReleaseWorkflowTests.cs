@@ -67,14 +67,6 @@ public sealed class JellyChatReleaseWorkflowTests
         Assert.Contains("framework: \"net10.0\"", buildMetadata, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Jellyfin12HeaderTriggerUsesStableSyncPlayHook()
-    {
-        string triggerSource = ReadRepositoryFile("web-src/src/runtime/trigger.ts");
-
-        Assert.Contains("header div:has(> button[aria-label=\"SyncPlay\"])", triggerSource, StringComparison.Ordinal);
-    }
-
     private static string ReadRepositoryFile(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

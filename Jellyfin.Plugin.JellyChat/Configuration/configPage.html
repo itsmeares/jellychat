@@ -7,862 +7,235 @@
 <body>
     <div id="JellyChatConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
         <style>
-            #JellyChatConfigPage .jellyChatColorControl {
-                display: flex;
-                align-items: center;
-                gap: .75em;
-            }
-
-            #JellyChatConfigPage .jellyChatColorControl .emby-input {
-                flex: 1;
-                min-width: 0;
-            }
-
-            #JellyChatConfigPage .jellyChatColorSwatch {
-                width: 3.5em;
-                height: 2.5em;
-                min-width: 3.5em;
-                margin: 0;
-                padding: .2em;
-                overflow: hidden;
-                cursor: pointer;
-                border: 1px solid rgba(255, 255, 255, .24);
-                border-radius: .35em;
-                background-color: #b5b5b5;
-                background-image: linear-gradient(45deg, #d5d5d5 25%, transparent 25%), linear-gradient(-45deg, #d5d5d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d5d5d5 75%), linear-gradient(-45deg, transparent 75%, #d5d5d5 75%);
-                background-position: 0 0, 0 .35em, .35em -.35em, -.35em 0;
-                background-size: .7em .7em;
-            }
-
-            #JellyChatConfigPage .jellyChatColorSwatch:hover {
-                border-color: rgba(255, 255, 255, .55);
-            }
-
-            #JellyChatConfigPage .jellyChatColorSwatch:focus-visible {
-                outline: 2px solid #00a4dc;
-                outline-offset: 2px;
-            }
-
-            #JellyChatConfigPage .jellyChatColorSwatchFill {
-                display: block;
-                width: 100%;
-                height: 100%;
-                border-radius: .2em;
-                pointer-events: none;
-            }
-
-            .jellyChatConfigColorPopover[hidden] {
-                display: none;
-            }
-
-            .jellyChatConfigColorPopover {
-                position: fixed;
-                z-index: 1200;
-                width: min(17em, calc(100vw - 1em));
-                max-height: calc(100vh - 1em);
-                box-sizing: border-box;
-                padding: .85em;
-                overflow-y: auto;
-                color: #fff;
-                background: #202020;
-                border: 1px solid rgba(255, 255, 255, .2);
-                border-radius: .35em;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, .45);
-            }
-
-            .jellyChatConfigColorHeading {
-                margin: 0 0 .7em;
-                font-size: 1.05em;
-            }
-
-            .jellyChatConfigColorSv {
-                position: relative;
-                width: 100%;
-                height: 9.5em;
-                overflow: hidden;
-                touch-action: none;
-                cursor: crosshair;
-                border-radius: .25em;
-                background-color: hsl(var(--jellychat-picker-hue, 0), 100%, 50%);
-                background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
-            }
-
-            .jellyChatConfigColorSv:focus-visible {
-                outline: 2px solid #00a4dc;
-                outline-offset: 2px;
-            }
-
-            .jellyChatConfigColorSvMarker {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: .8em;
-                height: .8em;
-                box-sizing: border-box;
-                border: 2px solid #fff;
-                border-radius: 50%;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, .8);
-                transform: translate(-50%, -50%);
-                pointer-events: none;
-            }
-
-            .jellyChatConfigColorSliderRow {
-                margin-top: .65em;
-            }
-
-            .jellyChatConfigColorSliderLabel {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: .25em;
-                font-size: .9em;
-            }
-
-            .jellyChatConfigColorRange {
-                width: 100%;
-                height: .75em;
-                margin: .35em 0;
-                padding: 0;
-                cursor: pointer;
-                appearance: none;
-                -webkit-appearance: none;
-                border: 0;
-                border-radius: .4em;
-            }
-
-            .jellyChatConfigColorRange:focus-visible {
-                outline: 2px solid #00a4dc;
-                outline-offset: 3px;
-            }
-
-            .jellyChatConfigColorHue {
-                background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
-            }
-
-            .jellyChatConfigColorAlpha {
-                background-color: #b5b5b5;
-                background-image: linear-gradient(to right, transparent, var(--jellychat-picker-alpha-color, #f00)), linear-gradient(45deg, #d5d5d5 25%, transparent 25%), linear-gradient(-45deg, #d5d5d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d5d5d5 75%), linear-gradient(-45deg, transparent 75%, #d5d5d5 75%);
-                background-position: 0 0, 0 0, 0 .3em, .3em -.3em, -.3em 0;
-                background-size: 100% 100%, .6em .6em, .6em .6em, .6em .6em, .6em .6em;
-            }
-
-            .jellyChatConfigColorRange::-webkit-slider-runnable-track {
-                height: .75em;
-                background: transparent;
-            }
-
-            .jellyChatConfigColorRange::-webkit-slider-thumb {
-                width: 1.1em;
-                height: 1.1em;
-                margin-top: -.18em;
-                appearance: none;
-                -webkit-appearance: none;
-                border: 2px solid #fff;
-                border-radius: 50%;
-                background: #202020;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, .7);
-            }
-
-            .jellyChatConfigColorRange::-moz-range-track {
-                height: .75em;
-                background: transparent;
-                border: 0;
-            }
-
-            .jellyChatConfigColorRange::-moz-range-thumb {
-                width: .85em;
-                height: .85em;
-                border: 2px solid #fff;
-                border-radius: 50%;
-                background: #202020;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, .7);
-            }
-
-            .jellyChatConfigColorValueRow {
-                display: flex;
-                align-items: flex-end;
-                gap: .65em;
-                margin-top: .7em;
-            }
-
-            .jellyChatConfigColorPreview {
-                position: relative;
-                width: 2.5em;
-                height: 2.5em;
-                flex: 0 0 2.5em;
-                overflow: hidden;
-                border: 1px solid rgba(255, 255, 255, .24);
-                border-radius: .25em;
-                background-color: #b5b5b5;
-                background-image: linear-gradient(45deg, #d5d5d5 25%, transparent 25%), linear-gradient(-45deg, #d5d5d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d5d5d5 75%), linear-gradient(-45deg, transparent 75%, #d5d5d5 75%);
-                background-position: 0 0, 0 .35em, .35em -.35em, -.35em 0;
-                background-size: .7em .7em;
-            }
-
-            .jellyChatConfigColorPreviewFill {
-                position: absolute;
-                inset: 0;
-            }
-
-            .jellyChatConfigColorHexContainer {
-                flex: 1;
-                min-width: 0;
-                margin-bottom: 0;
-            }
-
-            .jellyChatConfigColorActions {
-                display: flex;
-                justify-content: flex-end;
-                gap: .5em;
-                margin-top: .85em;
-            }
+            #JellyChatConfigPage .jc-wrap { max-width: 1040px; margin: 0 auto; padding: 1.5em 1em 4em; }
+            #JellyChatConfigPage .jc-tabs { display: flex; gap: .25em; border-bottom: 1px solid rgba(128,128,128,.3); margin-bottom: 1.5em; }
+            #JellyChatConfigPage .jc-tab { all: unset; cursor: pointer; padding: .7em 1.1em; color: inherit; opacity: .65; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+            #JellyChatConfigPage .jc-tab:hover { opacity: 1; }
+            #JellyChatConfigPage .jc-tab[aria-selected="true"] { opacity: 1; color: #00a4dc; border-bottom-color: #00a4dc; }
+            #JellyChatConfigPage .jc-tab:focus-visible { outline: 2px solid #00a4dc; }
+            #JellyChatConfigPage .jc-pane[hidden] { display: none; }
+            #JellyChatConfigPage h3 { margin: 1.4em 0 .5em; font-weight: 500; }
+            #JellyChatConfigPage .jc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8em; margin-bottom: 1.2em; }
+            #JellyChatConfigPage .jc-card { all: unset; box-sizing: border-box; cursor: pointer; border-radius: 12px; padding: .7em; box-shadow: inset 0 0 0 1px rgba(128,128,128,.35); display: flex; flex-direction: column; gap: .5em; }
+            #JellyChatConfigPage .jc-card[aria-checked="true"] { box-shadow: inset 0 0 0 2px #00a4dc; }
+            #JellyChatConfigPage .jc-card:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+            #JellyChatConfigPage .jc-card small { opacity: .65; }
+            #JellyChatConfigPage .jc-sw { height: 56px; border-radius: 8px; display: flex; align-items: flex-end; gap: 5px; padding: 7px; background: linear-gradient(135deg, #2b3350, #6b3a52 55%, #b8794a); }
+            #JellyChatConfigPage .jc-sw i { display: block; height: 18px; border-radius: 7px; }
+            #JellyChatConfigPage .jc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 2em; align-items: start; }
+            #JellyChatConfigPage .jc-row { display: flex; justify-content: space-between; align-items: center; gap: 1.5em; padding: .75em 0; border-bottom: 1px solid rgba(128,128,128,.2); }
+            #JellyChatConfigPage .jc-row small { display: block; opacity: .65; max-width: 48ch; margin-top: .15em; }
+            #JellyChatConfigPage .jc-seg { display: inline-flex; padding: 2px; border-radius: 99px; background: rgba(128,128,128,.18); flex: none; }
+            #JellyChatConfigPage .jc-seg button { all: unset; cursor: pointer; padding: .35em .95em; border-radius: 99px; opacity: .75; white-space: nowrap; }
+            #JellyChatConfigPage .jc-seg button[aria-pressed="true"] { background: #00a4dc; color: #fff; opacity: 1; }
+            #JellyChatConfigPage .jc-seg button:focus-visible { outline: 2px solid #fff; }
+            #JellyChatConfigPage .jc-off { opacity: .4; pointer-events: none; }
+            #JellyChatConfigPage input[type="color"] { width: 46px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; }
+            #JellyChatConfigPage input[type="range"] { width: 150px; accent-color: #00a4dc; }
+            #JellyChatConfigPage textarea { width: 100%; min-height: 220px; font: 13px/1.5 ui-monospace, Consolas, monospace; padding: .8em; box-sizing: border-box; border-radius: 8px; border: 1px solid rgba(128,128,128,.4); background: rgba(0,0,0,.25); color: inherit; }
+            #JellyChatConfigPage .jc-vars { font: 12.5px/1.8 ui-monospace, Consolas, monospace; opacity: .8; columns: 2; }
+            #JellyChatConfigPage .jc-save { display: flex; align-items: center; gap: 1em; margin-top: 2em; }
+            #JellyChatConfigPage .jc-note { opacity: .75; }
+            #JellyChatConfigPage .pv { --bg: #14151a; --surf: #1c1e25; --tx: #eceef4; --mu: #9a9fae; --ac: #8b7cf6; --acfg: #fff; --rad: 14px; --in: 99px; --me: var(--ac); --mefg: var(--acfg); --line: rgba(255,255,255,.08); border-radius: 16px; background: var(--bg); color: var(--tx); font-size: 13.5px; line-height: 1.4; box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+            #JellyChatConfigPage .pvwrap { border-radius: 14px; padding: 16px; background: linear-gradient(135deg, #2b3350, #6b3a52 55%, #b8794a); }
+            #JellyChatConfigPage .pv[data-theme="glass"] { --bg: rgba(14,16,22,.58); --surf: rgba(255,255,255,.12); --me: #fff; --mefg: #0c1018; --ac: #fff; --acfg: #0c1018; --line: rgba(255,255,255,.14); backdrop-filter: blur(24px) saturate(1.5); border-radius: 24px; }
+            #JellyChatConfigPage .pv[data-glass="1"] { backdrop-filter: blur(var(--blur, 20px)) saturate(1.5); }
+            #JellyChatConfigPage .pv[data-corners="sharp"] { --rad: 4px; --in: 6px; }
+            #JellyChatConfigPage .pv[data-corners="soft"] { --rad: 12px; --in: 12px; }
+            #JellyChatConfigPage .pv header { padding: 11px 14px; border-bottom: 1px solid var(--line); font-weight: 600; }
+            #JellyChatConfigPage .pv header span { display: block; font-weight: 400; font-size: 12px; color: var(--mu); }
+            #JellyChatConfigPage .pv .l { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+            #JellyChatConfigPage .pv p { margin: 0; display: inline-block; padding: 6px 12px; border-radius: var(--rad); background: var(--surf); box-shadow: inset 0 0 0 1px var(--line); max-width: 85%; }
+            #JellyChatConfigPage .pv p.me { background: var(--me); color: var(--mefg); box-shadow: none; }
+            #JellyChatConfigPage .pv[data-style="flat"] p { background: none; box-shadow: none; padding: 1px 3px; border-radius: 0; color: var(--tx); }
+            #JellyChatConfigPage .pv[data-side="right"] p.me { align-self: flex-end; }
+            #JellyChatConfigPage .pv footer { display: flex; gap: 7px; padding: 4px 12px 12px; }
+            #JellyChatConfigPage .pv footer i { flex: 1; height: 32px; border-radius: var(--in); background: var(--surf); }
+            #JellyChatConfigPage .pv footer b { width: 32px; height: 32px; border-radius: var(--in); background: var(--ac); }
+            @media (max-width: 860px) { #JellyChatConfigPage .jc-grid { grid-template-columns: 1fr; } #JellyChatConfigPage .jc-cards { grid-template-columns: 1fr; } }
         </style>
-        <div data-role="content">
-            <div class="content-primary">
-                <form id="JellyChatConfigForm">
-                    <section aria-labelledby="JellyChatAppearanceHeading">
-                        <h2 id="JellyChatAppearanceHeading">Appearance</h2>
-                        <p>Set server-wide JellyChat colors. Leave any value empty to use the JellyChat default.</p>
+        <div class="content-primary jc-wrap">
+            <h2>JellyChat</h2>
+            <div class="jc-tabs" role="tablist">
+                <button class="jc-tab" role="tab" type="button" data-pane="theme" aria-selected="true">Theme</button>
+                <button class="jc-tab" role="tab" type="button" data-pane="behavior" aria-selected="false">Behavior</button>
+                <button class="jc-tab" role="tab" type="button" data-pane="advanced" aria-selected="false">Advanced</button>
+            </div>
 
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyChatAccentColor">Accent color</label>
-                            <div class="jellyChatColorControl">
-                                <button id="JellyChatAccentColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose accent color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
-                                <input id="JellyChatAccentColor" type="text" is="emby-input" autocomplete="off" placeholder="#00a4dc">
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyChatDrawerBackgroundColor">Drawer background color</label>
-                            <div class="jellyChatColorControl">
-                                <button id="JellyChatDrawerBackgroundColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose drawer background color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
-                                <input id="JellyChatDrawerBackgroundColor" type="text" is="emby-input" autocomplete="off" placeholder="#101317">
-                            </div>
-                            <div class="fieldDescription">Per-client Background % continues to control drawer opacity.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyChatPanelBackgroundColor">Panel/input background color</label>
-                            <div class="jellyChatColorControl">
-                                <button id="JellyChatPanelBackgroundColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose panel and input background color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
-                                <input id="JellyChatPanelBackgroundColor" type="text" is="emby-input" autocomplete="off" placeholder="#16191e">
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyChatBorderColor">Border color</label>
-                            <div class="jellyChatColorControl">
-                                <button id="JellyChatBorderColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose border color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
-                                <input id="JellyChatBorderColor" type="text" is="emby-input" autocomplete="off" placeholder="rgba(255, 255, 255, 0.12)">
-                            </div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyChatTextColor">Text color</label>
-                            <div class="jellyChatColorControl">
-                                <button id="JellyChatTextColorSwatch" type="button" is="emby-button" class="emby-button jellyChatColorSwatch" aria-label="Choose text color" aria-haspopup="dialog" aria-expanded="false" aria-controls="JellyChatColorPopover"><span class="jellyChatColorSwatchFill" aria-hidden="true"></span></button>
-                                <input id="JellyChatTextColor" type="text" is="emby-input" autocomplete="off" placeholder="#f6f8fb">
-                            </div>
-                            <div class="fieldDescription">Accepts CSS colors including hex, rgb(), rgba(), hsl(), and CSS variables.</div>
-                        </div>
-
-                        <div style="display:flex;flex-wrap:wrap;gap:.75em;margin:1.5em 0">
-                            <button id="JellyChatResetColors" is="emby-button" type="button" class="raised emby-button">Reset colors</button>
-                        </div>
-                    </section>
-
-                    <section aria-labelledby="JellyChatCustomCssHeading">
-                        <h2 id="JellyChatCustomCssHeading">Advanced custom CSS</h2>
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="JellyChatCustomCss">Custom CSS</label>
-                            <textarea id="JellyChatCustomCss" is="emby-input" rows="14" spellcheck="false" style="width:100%;box-sizing:border-box;font-family:monospace;resize:vertical"></textarea>
-                            <div class="fieldDescription">Raw CSS is loaded after JellyChat styles and color overrides. JellyChat-specific selectors such as <code>#jellyChatDrawer</code> and <code>.jellyChatComposer</code> are recommended.</div>
-                        </div>
-                        <button id="JellyChatResetCustomCss" is="emby-button" type="button" class="raised emby-button">Reset custom CSS</button>
-                    </section>
-
-                    <div style="margin-top:1.5em">
-                        <button id="JellyChatResetAll" is="emby-button" type="button" class="raised emby-button">Reset all appearance settings</button>
+            <form id="JellyChatConfigForm">
+                <section class="jc-pane" data-pane="theme">
+                    <h3>Default theme</h3>
+                    <p class="jc-note">Everyone sees this theme unless they pick another one in their chat settings.</p>
+                    <div class="jc-cards" role="radiogroup" aria-label="Default theme">
+                        <button class="jc-card" type="button" role="radio" data-theme="violet"><span class="jc-sw"><i style="width:46%;background:#1c1e25"></i><i style="width:34%;background:#8b7cf6"></i></span><b>Violet</b><small>Solid dark panel with a violet accent.</small></button>
+                        <button class="jc-card" type="button" role="radio" data-theme="glass"><span class="jc-sw"><i style="width:46%;background:rgba(14,16,22,.6)"></i><i style="width:34%;background:#fff"></i></span><b>Glass</b><small>Frosted panel that lets the video show through.</small></button>
+                        <button class="jc-card" type="button" role="radio" data-theme="custom"><span class="jc-sw"><i id="JellyChatSwA" style="width:46%"></i><i id="JellyChatSwB" style="width:34%"></i></span><b>Custom</b><small>Your own colors and corners. Only admins can edit it.</small></button>
                     </div>
-                    <div style="margin-top:2em">
-                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
-                            <span>Save</span>
-                        </button>
+                    <div id="JellyChatCustom" class="jc-grid">
+                        <div>
+                            <h3 style="margin-top:0">Custom theme</h3>
+                            <div class="jc-row"><span>Start from</span><div class="jc-seg" data-field="CustomBase"><button type="button" data-v="violet">Violet</button><button type="button" data-v="glass">Glass</button></div></div>
+                            <div class="jc-row"><span>Accent</span><input type="color" data-color="CustomAccent"></div>
+                            <div class="jc-row"><span>Background</span><input type="color" data-color="CustomBackground"></div>
+                            <div class="jc-row"><span>Surface</span><input type="color" data-color="CustomSurface"></div>
+                            <div class="jc-row"><span>Text</span><input type="color" data-color="CustomText"></div>
+                            <div class="jc-row"><span>Corners</span><div class="jc-seg" data-field="CustomCorners"><button type="button" data-v="sharp">Sharp</button><button type="button" data-v="soft">Soft</button><button type="button" data-v="pill">Pill</button></div></div>
+                            <div class="jc-row"><span>Frosted glass</span><div class="jc-seg" data-field="CustomGlass"><button type="button" data-v="false">Off</button><button type="button" data-v="true">On</button></div></div>
+                            <div class="jc-row"><span>Blur strength</span><input id="JellyChatBlur" type="range" min="0" max="60" step="2"></div>
+                            <div class="jc-row"><span>Colors</span><button id="JellyChatResetColors" type="button" is="emby-button" class="emby-button button-flat">Reset colors</button></div>
+                        </div>
+                        <div>
+                            <h3 style="margin-top:0">Preview</h3>
+                            <div class="pvwrap"><div id="JellyChatPreview" class="pv" data-theme="violet" data-style="bubbles" data-side="left" data-corners="soft">
+                                <header>Movie night<span>3 watching</span></header>
+                                <div class="l"><p>Ready when you are.</p><p class="me">Starting now.</p><p>Sound is a bit low for me.</p></div>
+                                <footer><i></i><b></b></footer>
+                            </div></div>
+                        </div>
                     </div>
-                    <p id="JellyChatSaveStatus" role="status" aria-live="polite"></p>
-                </form>
-            </div>
-        </div>
-        <div id="JellyChatColorPopover" class="jellyChatConfigColorPopover" role="dialog" aria-modal="false" aria-labelledby="JellyChatColorPopoverHeading" hidden>
-            <h3 id="JellyChatColorPopoverHeading" class="jellyChatConfigColorHeading">Choose color</h3>
-            <div id="JellyChatColorSaturationValue" class="jellyChatConfigColorSv" role="slider" tabindex="0" aria-label="Saturation and brightness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="Saturation 100%, brightness 100%">
-                <span id="JellyChatColorSaturationValueMarker" class="jellyChatConfigColorSvMarker" aria-hidden="true"></span>
-            </div>
-            <div class="jellyChatConfigColorSliderRow">
-                <label class="jellyChatConfigColorSliderLabel" for="JellyChatColorHue"><span>Hue</span><span id="JellyChatColorHueValue">0°</span></label>
-                <input id="JellyChatColorHue" class="jellyChatConfigColorRange jellyChatConfigColorHue" type="range" min="0" max="360" step="1" value="0">
-            </div>
-            <div class="jellyChatConfigColorSliderRow">
-                <label class="jellyChatConfigColorSliderLabel" for="JellyChatColorAlpha"><span>Alpha</span><span id="JellyChatColorAlphaValue">100%</span></label>
-                <input id="JellyChatColorAlpha" class="jellyChatConfigColorRange jellyChatConfigColorAlpha" type="range" min="0" max="100" step="1" value="100">
-            </div>
-            <div class="jellyChatConfigColorValueRow">
-                <div id="JellyChatColorPreview" class="jellyChatConfigColorPreview" role="img" aria-label="Current color preview"><span id="JellyChatColorPreviewFill" class="jellyChatConfigColorPreviewFill"></span></div>
-                <div class="inputContainer jellyChatConfigColorHexContainer">
-                    <label class="inputLabel inputLabelUnfocused" for="JellyChatColorHex">Hex color</label>
-                    <input id="JellyChatColorHex" type="text" is="emby-input" autocomplete="off" spellcheck="false" placeholder="#00a4dc">
+                </section>
+
+                <section class="jc-pane" data-pane="behavior" hidden>
+                    <h3>Layout</h3>
+                    <div class="jc-row"><span>Default layout<small>Docked shrinks the page to make room. Floating sits over the video.</small></span><div class="jc-seg" data-field="DefaultLayout"><button type="button" data-v="docked">Docked</button><button type="button" data-v="floating">Floating</button></div></div>
+                    <div class="jc-row"><span>Your messages</span><div class="jc-seg" data-field="DefaultMessageSide"><button type="button" data-v="left">Left</button><button type="button" data-v="right">Right</button></div></div>
+                    <div class="jc-row"><span>Message style</span><div class="jc-seg" data-field="DefaultMessageStyle"><button type="button" data-v="bubbles">Bubbles</button><button type="button" data-v="flat">Flat</button></div></div>
+                    <div class="jc-row"><span>Hide while watching<small>The floating chat hides itself after a few quiet seconds during playback.</small></span><div class="jc-seg" data-field="DefaultAutoHide"><button type="button" data-v="false">Off</button><button type="button" data-v="true">On</button></div></div>
+                    <h3>Controls</h3>
+                    <div class="jc-row"><span>Keyboard shortcut<small>Press C to open or close chat during a SyncPlay session.</small></span><div class="jc-seg" data-field="ShortcutEnabled"><button type="button" data-v="false">Off</button><button type="button" data-v="true">On</button></div></div>
+                    <div class="jc-row"><span>Let users change their look<small>When off, everyone gets the settings above. Users can still change width, side and quick emoji.</small></span><div class="jc-seg" data-field="AllowUserAppearance"><button type="button" data-v="false">Off</button><button type="button" data-v="true">On</button></div></div>
+                </section>
+
+                <section class="jc-pane" data-pane="advanced" hidden>
+                    <h3>Custom CSS</h3>
+                    <p class="jc-note">Loaded after the theme. Reload Jellyfin Web to see changes.</p>
+                    <textarea id="JellyChatCustomCss" spellcheck="false" aria-label="Custom CSS"></textarea>
+                    <h3>Variables you can override</h3>
+                    <div class="jc-vars">--jc-bg<br>--jc-surf<br>--jc-tx<br>--jc-mu<br>--jc-ac<br>--jc-acfg<br>--jc-line<br>--jc-rad<br>--jc-in<br>--jc-card</div>
+                    <p class="jc-note">Old <code>--jellychat-*</code> variables from version 2 still work in the Custom theme.</p>
+                </section>
+
+                <div class="jc-save">
+                    <button type="submit" is="emby-button" class="raised button-submit block emby-button"><span>Save</span></button>
+                    <span id="JellyChatSaveStatus" class="jc-note" role="status"></span>
                 </div>
-            </div>
-            <div class="jellyChatConfigColorActions">
-                <button id="JellyChatColorCancel" type="button" is="emby-button" class="button-flat emby-button">Cancel</button>
-                <button id="JellyChatColorApply" type="button" is="emby-button" class="raised button-submit emby-button">Apply</button>
-            </div>
+            </form>
         </div>
         <script type="text/javascript">
             (function () {
                 var pluginId = 'a69744cc-2281-48bf-adef-8e451a16ff71';
-                var colors = [
-                    { property: 'AccentColor', input: 'JellyChatAccentColor', swatch: 'JellyChatAccentColorSwatch', label: 'accent color', defaultColor: '#00a4dc' },
-                    { property: 'DrawerBackgroundColor', input: 'JellyChatDrawerBackgroundColor', swatch: 'JellyChatDrawerBackgroundColorSwatch', label: 'drawer background color', defaultColor: '#101317' },
-                    { property: 'PanelBackgroundColor', input: 'JellyChatPanelBackgroundColor', swatch: 'JellyChatPanelBackgroundColorSwatch', label: 'panel and input background color', defaultColor: '#16191e' },
-                    { property: 'BorderColor', input: 'JellyChatBorderColor', swatch: 'JellyChatBorderColorSwatch', label: 'border color', defaultColor: 'rgba(255, 255, 255, 0.12)' },
-                    { property: 'TextColor', input: 'JellyChatTextColor', swatch: 'JellyChatTextColorSwatch', label: 'text color', defaultColor: '#f6f8fb' }
-                ];
-                var activeColor = null;
-                var draftColor = null;
-                var saturationPointerId = null;
+                var base = { violet: { CustomAccent: '#8b7cf6', CustomBackground: '#14151a', CustomSurface: '#1c1e25', CustomText: '#eceef4' }, glass: { CustomAccent: '#ffffff', CustomBackground: '#0e1016', CustomSurface: '#2b2d34', CustomText: '#f4f6fb' } };
+                var state = {};
+                var touched = {};
+                var saved = {};
+                var page = document.getElementById('JellyChatConfigPage');
+                function $(selector) { return page.querySelector(selector); }
+                function all(selector) { return Array.prototype.slice.call(page.querySelectorAll(selector)); }
 
-                function element(id) {
-                    return document.getElementById(id);
-                }
-
-                function clamp(value, minimum, maximum) {
-                    return Math.max(minimum, Math.min(maximum, value));
-                }
-
-                function swatchFill(entry) {
-                    return element(entry.swatch).querySelector('.jellyChatColorSwatchFill');
-                }
-
-                function isComputedTransparent(value) {
-                    return value === 'transparent' || value === 'rgba(0, 0, 0, 0)';
-                }
-
-                function parseComputedColor(value) {
-                    if (value === 'transparent') {
-                        return { r: 0, g: 0, b: 0, a: 0 };
-                    }
-
-                    if (!/^rgba?\(/i.test(value)) {
-                        return null;
-                    }
-
-                    var channels = value.match(/[\d.]+/g);
-                    if (!channels || channels.length < 3) {
-                        return null;
-                    }
-
-                    return {
-                        r: clamp(Math.round(Number(channels[0])), 0, 255),
-                        g: clamp(Math.round(Number(channels[1])), 0, 255),
-                        b: clamp(Math.round(Number(channels[2])), 0, 255),
-                        a: channels.length > 3 ? clamp(Number(channels[3]), 0, 1) : 1
-                    };
-                }
-
-                function parseHex(value) {
-                    var match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(value.trim());
-                    if (!match) {
-                        return null;
-                    }
-
-                    var digits = match[1];
-                    if (digits.length === 3) {
-                        digits = digits.charAt(0) + digits.charAt(0) +
-                            digits.charAt(1) + digits.charAt(1) +
-                            digits.charAt(2) + digits.charAt(2);
-                    }
-
-                    return {
-                        r: parseInt(digits.substring(0, 2), 16),
-                        g: parseInt(digits.substring(2, 4), 16),
-                        b: parseInt(digits.substring(4, 6), 16)
-                    };
-                }
-
-                function rgbToHex(rgb) {
-                    return '#' + [rgb.r, rgb.g, rgb.b].map(function (channel) {
-                        var hex = clamp(Math.round(channel), 0, 255).toString(16);
-                        return hex.length === 1 ? '0' + hex : hex;
-                    }).join('');
-                }
-
-                function rgbToHsv(rgb) {
-                    var red = rgb.r / 255;
-                    var green = rgb.g / 255;
-                    var blue = rgb.b / 255;
-                    var maximum = Math.max(red, green, blue);
-                    var minimum = Math.min(red, green, blue);
-                    var difference = maximum - minimum;
-                    var hue = 0;
-
-                    if (difference !== 0) {
-                        if (maximum === red) {
-                            hue = 60 * (((green - blue) / difference) % 6);
-                        } else if (maximum === green) {
-                            hue = 60 * (((blue - red) / difference) + 2);
-                        } else {
-                            hue = 60 * (((red - green) / difference) + 4);
-                        }
-                    }
-
-                    if (hue < 0) {
-                        hue += 360;
-                    }
-
-                    return {
-                        h: hue,
-                        s: maximum === 0 ? 0 : difference / maximum,
-                        v: maximum
-                    };
-                }
-
-                function hsvToRgb(hsv) {
-                    var hue = ((hsv.h % 360) + 360) % 360;
-                    var chroma = hsv.v * hsv.s;
-                    var intermediary = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
-                    var match = hsv.v - chroma;
-                    var red = 0;
-                    var green = 0;
-                    var blue = 0;
-
-                    if (hue < 60) {
-                        red = chroma;
-                        green = intermediary;
-                    } else if (hue < 120) {
-                        red = intermediary;
-                        green = chroma;
-                    } else if (hue < 180) {
-                        green = chroma;
-                        blue = intermediary;
-                    } else if (hue < 240) {
-                        green = intermediary;
-                        blue = chroma;
-                    } else if (hue < 300) {
-                        red = intermediary;
-                        blue = chroma;
-                    } else {
-                        red = chroma;
-                        blue = intermediary;
-                    }
-
-                    return {
-                        r: Math.round((red + match) * 255),
-                        g: Math.round((green + match) * 255),
-                        b: Math.round((blue + match) * 255)
-                    };
-                }
-
-                function syncSwatch(entry) {
-                    var value = element(entry.input).value.trim();
-                    var preview = value || entry.defaultColor;
-                    var fill = swatchFill(entry);
-                    var previous = entry.lastValidPreview || entry.defaultColor;
-
-                    if (value && (!window.CSS || !CSS.supports('color', value))) {
-                        fill.style.backgroundColor = previous;
-                        return;
-                    }
-
-                    fill.style.color = '';
-                    var inheritedColor = window.getComputedStyle(fill).color;
-                    fill.style.backgroundColor = preview;
-                    fill.style.color = preview;
-                    var computedStyle = window.getComputedStyle(fill);
-                    var computedBackground = computedStyle.backgroundColor;
-                    var computedColor = computedStyle.color;
-                    fill.style.color = '';
-                    var unresolvedVariable = /var\(/i.test(preview) &&
-                        isComputedTransparent(computedBackground) &&
-                        computedColor === inheritedColor &&
-                        !isComputedTransparent(inheritedColor);
-
-                    if (unresolvedVariable || !parseComputedColor(computedBackground)) {
-                        fill.style.backgroundColor = previous;
-                        return;
-                    }
-
-                    entry.lastValidPreview = preview;
-                }
-
-                function validateColor(entry) {
-                    var input = element(entry.input);
-                    var value = input.value.trim();
-                    var valid = !value || (window.CSS && CSS.supports('color', value));
-                    input.setCustomValidity(valid ? '' : 'Enter a valid CSS color value.');
-                    return valid;
-                }
-
-                function formatAlpha(value) {
-                    return String(Number(clamp(value, 0, 1).toFixed(3)));
-                }
-
-                function formatDraftColor() {
-                    var rgb = hsvToRgb(draftColor);
-                    if (draftColor.a >= .9995) {
-                        return rgbToHex(rgb);
-                    }
-
-                    return 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + formatAlpha(draftColor.a) + ')';
-                }
-
-                function renderPicker(preserveHexInput) {
-                    if (!draftColor) {
-                        return;
-                    }
-
-                    var rgb = hsvToRgb(draftColor);
-                    var saturation = Math.round(draftColor.s * 100);
-                    var brightness = Math.round(draftColor.v * 100);
-                    var alpha = Math.round(draftColor.a * 100);
-                    var saturationValue = element('JellyChatColorSaturationValue');
-
-                    saturationValue.style.setProperty('--jellychat-picker-hue', draftColor.h);
-                    element('JellyChatColorSaturationValueMarker').style.left = saturation + '%';
-                    element('JellyChatColorSaturationValueMarker').style.top = (100 - brightness) + '%';
-                    saturationValue.setAttribute('aria-valuenow', String(saturation));
-                    saturationValue.setAttribute('aria-valuetext', 'Saturation ' + saturation + '%, brightness ' + brightness + '%');
-
-                    element('JellyChatColorHue').value = String(Math.round(draftColor.h));
-                    element('JellyChatColorHueValue').textContent = Math.round(draftColor.h) + '°';
-                    element('JellyChatColorAlpha').value = String(alpha);
-                    element('JellyChatColorAlpha').style.setProperty('--jellychat-picker-alpha-color', 'rgb(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ')');
-                    element('JellyChatColorAlphaValue').textContent = alpha + '%';
-
-                    element('JellyChatColorPreviewFill').style.backgroundColor = 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + formatAlpha(draftColor.a) + ')';
-                    element('JellyChatColorPreview').setAttribute('aria-label', 'Current color ' + formatDraftColor());
-
-                    if (!preserveHexInput) {
-                        var hexInput = element('JellyChatColorHex');
-                        hexInput.value = rgbToHex(rgb);
-                        hexInput.setCustomValidity('');
-                        element('JellyChatColorApply').disabled = false;
-                    }
-                }
-
-                function setDraftRgb(rgb) {
-                    var hsv = rgbToHsv(rgb);
-                    if (draftColor && hsv.s === 0) {
-                        hsv.h = draftColor.h;
-                    }
-
-                    draftColor.h = hsv.h;
-                    draftColor.s = hsv.s;
-                    draftColor.v = hsv.v;
-                }
-
-                function positionColorPopover() {
-                    if (!activeColor) {
-                        return;
-                    }
-
-                    var trigger = element(activeColor.swatch);
-                    if (!trigger || !trigger.isConnected) {
-                        closeColorPopover(false);
-                        return;
-                    }
-
-                    var popover = element('JellyChatColorPopover');
-                    var triggerRect = trigger.getBoundingClientRect();
-                    var popoverRect = popover.getBoundingClientRect();
-                    var viewportWidth = document.documentElement.clientWidth || window.innerWidth;
-                    var viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-                    var gutter = 10;
-                    var gap = 8;
-                    var left = triggerRect.left;
-                    var top = triggerRect.bottom + gap;
-
-                    if (viewportWidth >= 700 && triggerRect.right + gap + popoverRect.width <= viewportWidth - gutter) {
-                        left = triggerRect.right + gap;
-                        top = triggerRect.top;
-                    } else if (top + popoverRect.height > viewportHeight - gutter && triggerRect.top - gap - popoverRect.height >= gutter) {
-                        top = triggerRect.top - gap - popoverRect.height;
-                    } else if (top + popoverRect.height > viewportHeight - gutter && triggerRect.left - gap - popoverRect.width >= gutter) {
-                        left = triggerRect.left - gap - popoverRect.width;
-                        top = triggerRect.top;
-                    }
-
-                    left = clamp(left, gutter, viewportWidth - popoverRect.width - gutter);
-                    top = clamp(top, gutter, viewportHeight - popoverRect.height - gutter);
-                    popover.style.left = left + 'px';
-                    popover.style.top = top + 'px';
-                }
-
-                function closeColorPopover(returnFocus) {
-                    if (!activeColor) {
-                        return;
-                    }
-
-                    var entry = activeColor;
-                    var trigger = element(entry.swatch);
-                    var popover = element('JellyChatColorPopover');
-                    activeColor = null;
-                    draftColor = null;
-                    saturationPointerId = null;
-                    popover.hidden = true;
-                    popover.style.left = '';
-                    popover.style.top = '';
-                    trigger.setAttribute('aria-expanded', 'false');
-                    element('JellyChatColorHex').setCustomValidity('');
-                    element('JellyChatColorApply').disabled = false;
-
-                    var page = element('JellyChatConfigPage');
-                    if (page && page.isConnected) {
-                        page.appendChild(popover);
-                    }
-
-                    if (returnFocus) {
-                        window.requestAnimationFrame(function () {
-                            if (trigger.isConnected) {
-                                trigger.focus();
-                            }
-                        });
-                    }
-                }
-
-                function openColorPopover(entry) {
-                    if (activeColor === entry) {
-                        closeColorPopover(true);
-                        return;
-                    }
-
-                    closeColorPopover(false);
-                    var computed = parseComputedColor(window.getComputedStyle(swatchFill(entry)).backgroundColor);
-                    if (!computed) {
-                        return;
-                    }
-
-                    var hsv = rgbToHsv(computed);
-                    activeColor = entry;
-                    draftColor = { h: hsv.h, s: hsv.s, v: hsv.v, a: computed.a };
-                    element(entry.swatch).setAttribute('aria-expanded', 'true');
-                    element('JellyChatColorPopoverHeading').textContent = 'Choose ' + entry.label;
-                    element('JellyChatColorHex').setCustomValidity('');
-                    element('JellyChatColorApply').disabled = false;
-
-                    var popover = element('JellyChatColorPopover');
-                    document.body.appendChild(popover);
-                    popover.hidden = false;
-                    renderPicker(false);
-                    positionColorPopover();
-                    element('JellyChatColorSaturationValue').focus();
-                }
-
-                function applyColorPopover() {
-                    if (!activeColor || !draftColor) {
-                        return;
-                    }
-
-                    var hexInput = element('JellyChatColorHex');
-                    var rgb = parseHex(hexInput.value);
-                    if (!rgb) {
-                        hexInput.setCustomValidity('Enter a hex color such as #00a4dc.');
-                        hexInput.reportValidity();
-                        return;
-                    }
-
-                    setDraftRgb(rgb);
-                    hexInput.setCustomValidity('');
-                    var colorInput = element(activeColor.input);
-                    colorInput.value = formatDraftColor();
-                    validateColor(activeColor);
-                    syncSwatch(activeColor);
-                    closeColorPopover(false);
-                    colorInput.focus();
-                }
-
-                function updateSaturationValue(event) {
-                    if (!draftColor) {
-                        return;
-                    }
-
-                    var rect = element('JellyChatColorSaturationValue').getBoundingClientRect();
-                    draftColor.s = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-                    draftColor.v = 1 - clamp((event.clientY - rect.top) / rect.height, 0, 1);
-                    renderPicker(false);
-                }
-
-                colors.forEach(function (entry) {
-                    entry.lastValidPreview = entry.defaultColor;
-                    syncSwatch(entry);
-                    element(entry.swatch).addEventListener('click', function () {
-                        openColorPopover(entry);
+                function setDefaultsFor(baseName) {
+                    Object.keys(base[baseName]).forEach(function (key) {
+                        if (!touched[key]) { $('[data-color="' + key + '"]').value = base[baseName][key]; }
                     });
-                    element(entry.input).addEventListener('input', function () {
-                        validateColor(entry);
-                        syncSwatch(entry);
+                }
+
+                function render() {
+                    all('.jc-tab').forEach(function (tab) { tab.setAttribute('aria-selected', String(tab.getAttribute('data-pane') === page.getAttribute('data-active'))); });
+                    all('.jc-pane').forEach(function (pane) { pane.hidden = pane.getAttribute('data-pane') !== page.getAttribute('data-active'); });
+                    all('.jc-card').forEach(function (card) { card.setAttribute('aria-checked', String(card.getAttribute('data-theme') === state.DefaultTheme)); card.setAttribute('tabindex', '0'); });
+                    all('.jc-seg').forEach(function (seg) {
+                        var value = String(state[seg.getAttribute('data-field')]);
+                        Array.prototype.forEach.call(seg.children, function (button) { button.setAttribute('aria-pressed', String(button.getAttribute('data-v') === value)); });
+                    });
+                    $('#JellyChatCustom').className = 'jc-grid' + (state.DefaultTheme === 'custom' ? '' : ' jc-off');
+                    var accent = $('[data-color="CustomAccent"]').value, surface = $('[data-color="CustomSurface"]').value;
+                    $('#JellyChatSwA').style.background = surface;
+                    $('#JellyChatSwB').style.background = accent;
+                    var pv = $('#JellyChatPreview');
+                    pv.setAttribute('data-theme', 'custom');
+                    pv.setAttribute('data-corners', state.CustomCorners);
+                    pv.setAttribute('data-glass', state.CustomGlass ? '1' : '0');
+                    pv.setAttribute('data-style', state.DefaultMessageStyle);
+                    pv.setAttribute('data-side', state.DefaultMessageSide);
+                    pv.style.setProperty('--blur', state.CustomGlassBlur + 'px');
+                    pv.style.setProperty('--ac', accent);
+                    pv.style.setProperty('--acfg', '#fff');
+                    pv.style.setProperty('--bg', state.CustomGlass ? hexToRgba($('[data-color="CustomBackground"]').value, 0.58) : $('[data-color="CustomBackground"]').value);
+                    pv.style.setProperty('--surf', surface);
+                    pv.style.setProperty('--tx', $('[data-color="CustomText"]').value);
+                    pv.style.setProperty('--mu', $('[data-color="CustomText"]').value + '99');
+                    pv.style.background = pv.style.getPropertyValue('--bg');
+                    pv.style.color = $('[data-color="CustomText"]').value;
+                }
+
+                function hexToRgba(hex, alpha) {
+                    var n = parseInt(hex.slice(1), 16);
+                    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + alpha + ')';
+                }
+
+                function parseBool(value) { return value === true || value === 'true'; }
+
+                all('.jc-tab').forEach(function (tab) { tab.addEventListener('click', function () { page.setAttribute('data-active', tab.getAttribute('data-pane')); render(); }); });
+                all('.jc-card').forEach(function (card) { card.addEventListener('click', function () { state.DefaultTheme = card.getAttribute('data-theme'); render(); }); });
+                all('.jc-seg').forEach(function (seg) {
+                    seg.addEventListener('click', function (event) {
+                        var button = event.target.closest('button');
+                        if (!button) { return; }
+                        var field = seg.getAttribute('data-field');
+                        var value = button.getAttribute('data-v');
+                        state[field] = (value === 'true' || value === 'false') ? value === 'true' : value;
+                        if (field === 'CustomBase') { setDefaultsFor(value); }
+                        render();
                     });
                 });
+                all('[data-color]').forEach(function (input) { input.addEventListener('input', function () { touched[input.getAttribute('data-color')] = true; render(); }); });
+                $('#JellyChatBlur').addEventListener('input', function (event) { state.CustomGlassBlur = Number(event.target.value); render(); });
+                $('#JellyChatResetColors').addEventListener('click', function () { touched = {}; saved = {}; setDefaultsFor(state.CustomBase); render(); });
 
-                element('JellyChatColorSaturationValue').addEventListener('pointerdown', function (event) {
-                    event.preventDefault();
-                    saturationPointerId = event.pointerId;
-                    this.setPointerCapture(event.pointerId);
-                    updateSaturationValue(event);
-                });
-                element('JellyChatColorSaturationValue').addEventListener('pointermove', function (event) {
-                    if (event.pointerId === saturationPointerId) {
-                        updateSaturationValue(event);
-                    }
-                });
-                element('JellyChatColorSaturationValue').addEventListener('pointerup', function (event) {
-                    if (event.pointerId === saturationPointerId) {
-                        saturationPointerId = null;
-                        this.releasePointerCapture(event.pointerId);
-                    }
-                });
-                element('JellyChatColorSaturationValue').addEventListener('pointercancel', function (event) {
-                    if (event.pointerId === saturationPointerId) {
-                        saturationPointerId = null;
-                    }
-                });
-                element('JellyChatColorSaturationValue').addEventListener('keydown', function (event) {
-                    if (!draftColor || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-                        return;
-                    }
-
-                    event.preventDefault();
-                    var step = event.shiftKey ? .1 : .01;
-                    if (event.key === 'ArrowLeft') {
-                        draftColor.s = clamp(draftColor.s - step, 0, 1);
-                    } else if (event.key === 'ArrowRight') {
-                        draftColor.s = clamp(draftColor.s + step, 0, 1);
-                    } else if (event.key === 'ArrowUp') {
-                        draftColor.v = clamp(draftColor.v + step, 0, 1);
-                    } else {
-                        draftColor.v = clamp(draftColor.v - step, 0, 1);
-                    }
-
-                    renderPicker(false);
-                });
-
-                element('JellyChatColorHue').addEventListener('input', function () {
-                    if (draftColor) {
-                        draftColor.h = Number(this.value);
-                        renderPicker(false);
-                    }
-                });
-                element('JellyChatColorAlpha').addEventListener('input', function () {
-                    if (draftColor) {
-                        draftColor.a = Number(this.value) / 100;
-                        renderPicker(false);
-                    }
-                });
-                element('JellyChatColorHex').addEventListener('input', function () {
-                    var rgb = parseHex(this.value);
-                    var valid = Boolean(rgb);
-                    this.setCustomValidity(valid ? '' : 'Enter a hex color such as #00a4dc.');
-                    element('JellyChatColorApply').disabled = !valid;
-                    if (valid && draftColor) {
-                        setDraftRgb(rgb);
-                        renderPicker(true);
-                    }
-                });
-                element('JellyChatColorHex').addEventListener('blur', function () {
-                    var rgb = parseHex(this.value);
-                    if (rgb) {
-                        this.value = rgbToHex(rgb);
-                    }
-                });
-                element('JellyChatColorHex').addEventListener('keydown', function (event) {
-                    if (event.key === 'Enter') {
-                        event.preventDefault();
-                        applyColorPopover();
-                    }
-                });
-                element('JellyChatColorApply').addEventListener('click', applyColorPopover);
-                element('JellyChatColorCancel').addEventListener('click', function () {
-                    closeColorPopover(true);
-                });
-
-                document.addEventListener('pointerdown', function (event) {
-                    if (!activeColor || element('JellyChatColorPopover').contains(event.target) || element(activeColor.swatch).contains(event.target)) {
-                        return;
-                    }
-
-                    closeColorPopover(false);
-                }, true);
-
-                document.addEventListener('keydown', function (event) {
-                    if (event.key === 'Escape' && activeColor) {
-                        event.preventDefault();
-                        closeColorPopover(true);
-                    }
-                });
-
-                window.addEventListener('resize', positionColorPopover);
-                window.addEventListener('scroll', positionColorPopover, true);
-
-                function resetColors() {
-                    closeColorPopover(false);
-                    colors.forEach(function (entry) {
-                        element(entry.input).value = '';
-                        validateColor(entry);
-                        syncSwatch(entry);
-                    });
-                    element('JellyChatSaveStatus').textContent = '';
-                }
-
-                element('JellyChatResetColors').addEventListener('click', resetColors);
-                element('JellyChatResetCustomCss').addEventListener('click', function () {
-                    element('JellyChatCustomCss').value = '';
-                    element('JellyChatSaveStatus').textContent = '';
-                });
-                element('JellyChatResetAll').addEventListener('click', function () {
-                    resetColors();
-                    element('JellyChatCustomCss').value = '';
-                });
-
-                element('JellyChatConfigPage').addEventListener('pageshow', function () {
+                page.addEventListener('pageshow', function () {
+                    page.setAttribute('data-active', 'theme');
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                        colors.forEach(function (entry) {
-                            element(entry.input).value = config[entry.property] || '';
-                            validateColor(entry);
-                            syncSwatch(entry);
+                        state = {
+                            DefaultTheme: config.DefaultTheme || 'violet', DefaultLayout: config.DefaultLayout || 'docked', DefaultMessageSide: config.DefaultMessageSide || 'left',
+                            DefaultMessageStyle: config.DefaultMessageStyle || 'bubbles', DefaultAutoHide: config.DefaultAutoHide !== false, ShortcutEnabled: config.ShortcutEnabled !== false,
+                            AllowUserAppearance: config.AllowUserAppearance !== false, CustomBase: config.CustomBase || 'violet', CustomCorners: config.CustomCorners || 'soft',
+                            CustomGlass: parseBool(config.CustomGlass), CustomGlassBlur: typeof config.CustomGlassBlur === 'number' ? config.CustomGlassBlur : 20
+                        };
+                        touched = {};
+                        saved = {};
+                        setDefaultsFor(state.CustomBase);
+                        ['CustomAccent', 'CustomBackground', 'CustomSurface', 'CustomText'].forEach(function (key) {
+                            saved[key] = config[key] || '';
+                            if (/^#[0-9a-fA-F]{6}$/.test(saved[key])) { $('[data-color="' + key + '"]').value = saved[key]; }
                         });
-                        element('JellyChatCustomCss').value = config.CustomCss || '';
-                        element('JellyChatSaveStatus').textContent = '';
+                        $('#JellyChatBlur').value = state.CustomGlassBlur;
+                        $('#JellyChatCustomCss').value = config.CustomCss || '';
+                        $('#JellyChatSaveStatus').textContent = '';
+                        render();
                         Dashboard.hideLoadingMsg();
                     }).catch(function () {
                         Dashboard.hideLoadingMsg();
-                        element('JellyChatSaveStatus').textContent = 'Unable to load JellyChat appearance settings.';
+                        $('#JellyChatSaveStatus').textContent = 'Could not load JellyChat settings.';
                     });
                 });
 
-                element('JellyChatConfigPage').addEventListener('pagehide', function () {
-                    closeColorPopover(false);
-                });
-
-                element('JellyChatConfigForm').addEventListener('submit', function (event) {
+                $('#JellyChatConfigForm').addEventListener('submit', function (event) {
                     event.preventDefault();
-                    if (!colors.map(validateColor).every(Boolean)) {
-                        element('JellyChatConfigForm').reportValidity();
-                        return false;
-                    }
-
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                        colors.forEach(function (entry) {
-                            config[entry.property] = element(entry.input).value.trim();
+                        Object.keys(state).forEach(function (key) { config[key] = state[key]; });
+                        ['CustomAccent', 'CustomBackground', 'CustomSurface', 'CustomText'].forEach(function (key) {
+                            config[key] = touched[key] ? $('[data-color="' + key + '"]').value : (saved[key] || '');
                         });
-                        config.CustomCss = element('JellyChatCustomCss').value;
+                        config.CustomCss = $('#JellyChatCustomCss').value;
+                        config.SchemaVersion = Math.max(config.SchemaVersion || 0, 3);
                         return ApiClient.updatePluginConfiguration(pluginId, config);
                     }).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
-                        element('JellyChatSaveStatus').textContent = 'Changes apply after refreshing Jellyfin Web.';
+                        $('#JellyChatSaveStatus').textContent = 'Saved. Reload Jellyfin Web to see the new look.';
                     }).catch(function () {
                         Dashboard.hideLoadingMsg();
-                        element('JellyChatSaveStatus').textContent = 'Unable to save JellyChat appearance settings.';
+                        $('#JellyChatSaveStatus').textContent = 'Could not save JellyChat settings.';
                     });
                     return false;
                 });
