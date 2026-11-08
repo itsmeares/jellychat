@@ -12,10 +12,19 @@ export function Dock({ open, side, width, glass, onClose }: Props) {
   const [live, setLive] = useState<number | null>(null);
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
   const shown = live ?? width;
+  const [phonePortrait, setPhonePortrait] = useState(isPhonePortrait);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 640px) and (orientation: portrait)");
+    const update = () => setPhonePortrait(media.matches);
+    media.addEventListener("change", update);
+    update();
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (!open || isPhonePortrait()) return;
+    if (!open || phonePortrait) return;
     root.dataset.jcDock = side;
     if (glass) root.dataset.jcGlass = "1";
     root.style.setProperty("--jc-dock", shown + "px");
@@ -24,7 +33,7 @@ export function Dock({ open, side, width, glass, onClose }: Props) {
       delete root.dataset.jcGlass;
       root.style.removeProperty("--jc-dock");
     };
-  }, [open, side, shown, glass]);
+  }, [open, side, shown, glass, phonePortrait]);
 
   const onDown = (event: React.PointerEvent<HTMLDivElement>) => {
     drag.current = { startX: event.clientX, startWidth: width };
