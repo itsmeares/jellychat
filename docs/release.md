@@ -74,7 +74,7 @@ cd web-src
 npm ci
 npm run build
 cd ..
-node --test scripts/
+node --test scripts/release-notes.test.mjs
 dotnet test Jellyfin.Plugin.JellyChat.sln -c Release
 git diff --check
 ```

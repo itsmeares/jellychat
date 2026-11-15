@@ -36,7 +36,7 @@ jobs:
         run: npm test
 
       - name: Test Release Notes
-        run: node --test scripts/
+        run: node --test scripts/release-notes.test.mjs
 
       - name: Build Frontend Assets
         working-directory: web-src
