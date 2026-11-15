@@ -175,12 +175,12 @@
 }
 
 /* Triggers */
-.jc-hbtn{all:unset;box-sizing:border-box;position:relative;cursor:pointer;display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;color:inherit}
+.jc-hbtn{position:relative}
 .jc-hbtn[data-idle]{opacity:.55}
-.jc-hbtn:hover{background:rgba(255,255,255,.1)}
 .jc-hbtn:focus-visible{outline:2px solid currentColor}
+.jc-tip{position:fixed;z-index:1500;transform:translateX(-50%);margin-top:14px;pointer-events:none;background:rgba(97,97,97,.92);color:#fff;border-radius:4px;padding:4px 8px;font-size:.6875rem;font-weight:500;line-height:1.4;max-width:300px;overflow-wrap:break-word}
 .jc-hbtn .jc-count{position:absolute;top:2px;right:2px;font-size:10px;min-width:16px;height:16px;line-height:16px;padding:0 4px}
-.jc-hbtn svg.jc-i{width:24px;height:24px}
+.jc-hbtn svg.jc-i{width:1.5rem;height:1.5rem}
 
 /* Floating reactions */
 .jc-react{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1249}

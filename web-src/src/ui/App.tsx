@@ -102,12 +102,13 @@ export function App() {
     return () => document.removeEventListener("keydown", onKey, true);
   }, [inGroup, resolved.shortcut, toggle]);
 
-  const slot = useHeaderSlot(true);
+  const header = useHeaderSlot(true);
 
-  if (!inGroup) return <HeaderButton slot={slot} unread={0} open={false} idle onClick={() => document.querySelector<HTMLElement>(syncPlayButton)?.click()} />;
+  if (!inGroup) return <HeaderButton {...header} unread={0} open={false} idle onClick={() => document.querySelector<HTMLElement>(syncPlayButton)?.click()} />;
 
+  // Jellyfin's video player changes the volume on any wheel event that reaches document.
   const tree = (
-    <div className="jc" data-theme={resolved.theme} data-style={resolved.messageStyle} data-side={resolved.messageSide} data-layout={resolved.layout} data-corners={resolved.theme === "custom" ? resolved.customCorners : undefined} data-glass={resolved.theme === "custom" && resolved.customGlass ? "1" : undefined} style={{ ["--jc-w" as string]: resolved.width + "px" }}>
+    <div className="jc" onWheel={(event) => event.stopPropagation()} data-theme={resolved.theme} data-style={resolved.messageStyle} data-side={resolved.messageSide} data-layout={resolved.layout} data-corners={resolved.theme === "custom" ? resolved.customCorners : undefined} data-glass={resolved.theme === "custom" && resolved.customGlass ? "1" : undefined} style={{ ["--jc-w" as string]: resolved.width + "px" }}>
       <ReactionOverlay />
       {floating ? (
         <Floating mode={mode} side={resolved.side} visible={player.onVideo && player.controls} unread={player.onVideo ? unread : 0} latest={latest} onOpen={openChat} onClose={closeChat} onActivity={() => { lastActivity.current = Date.now(); }} />
@@ -122,7 +123,7 @@ export function App() {
 
   return (
     <>
-      <HeaderButton slot={slot} unread={unread} open={open} onClick={toggle} />
+      <HeaderButton {...header} unread={unread} open={open} onClick={toggle} />
       {createPortal(tree, target)}
     </>
   );
