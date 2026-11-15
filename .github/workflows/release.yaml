@@ -29,7 +29,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout main
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
@@ -73,14 +73,14 @@ jobs:
           fi
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: web-src/package-lock.json
 
       - name: Prepare release metadata
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           CHANGELOG_INPUT: ${{ inputs.changelog }}
         with:
@@ -122,7 +122,7 @@ jobs:
             fs.writeFileSync('web-src/package-lock.json', JSON.stringify(packageLock, null, 2) + '\n');
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: "10.0.x"
 
@@ -152,7 +152,7 @@ jobs:
           echo "CHECKSUM=${CHECKSUM}" >> "${GITHUB_ENV}"
 
       - name: Update manifest.json
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           CHANGELOG_INPUT: ${{ inputs.changelog }}
         with:
@@ -218,7 +218,7 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Write release notes
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           CHANGELOG_INPUT: ${{ inputs.changelog }}
           PRERELEASE_INPUT: ${{ inputs.prerelease }}

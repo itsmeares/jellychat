@@ -104,6 +104,8 @@ A client sends about one request every 25 seconds while idle. The server holds a
 - [Development](docs/development.md): repo layout, frontend build, .NET publish, local deploy and tests.
 - [Release](docs/release.md): version bump, build, zip packaging, GitHub release asset and manifest update flow.
 - [Troubleshooting](docs/troubleshooting.md): missing button, cross-device messages, SyncPlay resolution, reverse proxy checks and `JellyChat.debug()`.
+- [Contributing](.github/CONTRIBUTING.md): what fits, PR titles and the checks to run.
+- [Security](.github/SECURITY.md): report security problems privately.
 
 ## Acknowledgements
 
