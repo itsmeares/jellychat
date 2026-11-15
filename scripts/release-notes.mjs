@@ -66,7 +66,7 @@ export async function collectPulls({ github, owner, repo, base, head }) {
     const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: commit.sha });
     for (const pull of data) {
       if (!pull.merged_at || pull.base.ref !== "main" || pulls.has(pull.number)) continue;
-      pulls.set(pull.number, { number: pull.number, title: pull.title, author: pull.user.login, labels: pull.labels.map((label) => label.name) });
+      pulls.set(pull.number, { number: pull.number, title: pull.title, author: pull.user?.login ?? "ghost", labels: pull.labels.map((label) => label.name) });
     }
   }
   return [...pulls.values()].sort((a, b) => a.number - b.number);
