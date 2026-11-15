@@ -21,17 +21,17 @@ test("groups pull requests by title prefix", () => {
     ]
   });
 
-  assert.match(notes, /^JellyChat 3\.0 is a rewrite\.\n\n## ✨ New features\n\n- \*\*ui:\*\* themes and layouts \(#45, @itsmeares\)\n/);
+  assert.match(notes, /^JellyChat 3\.0 is a rewrite\.\n\n## ✨ New features\n\n- \*\*ui:\*\* Themes and layouts \(#45, @itsmeares\)\n/);
   assert.doesNotMatch(notes, /#44/);
-  assert.match(notes, /## 🔒 Security\n\n- keep header button in line \(#46, @friend\)/);
+  assert.match(notes, /## 🔒 Security\n\n- Keep header button in line \(#46, @friend\)/);
   assert.match(notes, /<summary>🐛 Bug fixes \(16\)<\/summary>/);
   assert.match(notes, /<summary>📖 Documentation \(1\)<\/summary>/);
-  assert.match(notes, /<summary>📦 Dependencies \(1\)<\/summary>\n\n- \*\*deps:\*\* bump vite \(#48, @renovate\[bot\]\)/);
-  assert.match(notes, /<summary>🧹 Maintenance \(2\)<\/summary>\n\n- Simplify release publishing \(#50, @itsmeares\)\n- \*\*ci:\*\* use Node 24 actions \(#49, @itsmeares\)/);
+  assert.match(notes, /<summary>📦 Dependencies \(1\)<\/summary>\n\n- \*\*deps:\*\* Bump vite \(#48, @renovate\[bot\]\)/);
+  assert.match(notes, /<summary>🧹 Maintenance \(2\)<\/summary>\n\n- Simplify release publishing \(#50, @itsmeares\)\n- \*\*ci:\*\* Use Node 24 actions \(#49, @itsmeares\)/);
   assert.match(notes, /## ❤️ Contributors\n\n@itsmeares @friend\n\n\[Full changelog\]\(https:\/\/github\.com\/itsmeares\/jellychat\/compare\/v2\.1\.4\.\.\.v3\.0\.0\)\n$/);
 });
 
 test("keeps short bug fix lists open", () => {
   const notes = buildReleaseNotes({ summary: "Fixes.", compareUrl: "", pulls: [pull(1, "fix: one")] });
-  assert.equal(notes, "Fixes.\n\n## 🐛 Bug fixes\n\n- one (#1, @itsmeares)\n\n## ❤️ Contributors\n\n@itsmeares\n");
+  assert.equal(notes, "Fixes.\n\n## 🐛 Bug fixes\n\n- One (#1, @itsmeares)\n\n## ❤️ Contributors\n\n@itsmeares\n");
 });
