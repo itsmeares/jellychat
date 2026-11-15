@@ -6,7 +6,7 @@ import { Icon } from "./icons";
 export type HeaderSlot = { slot: HTMLElement | null; hostClass: string };
 
 // Jellyfin state classes like Mui-focusVisible belong to the SyncPlay button's own state.
-export function hostButtonClass(anchor: Element): string {
+function hostButtonClass(anchor: Element): string {
   return [...anchor.classList].filter((name) => !name.startsWith("Mui-")).join(" ");
 }
 

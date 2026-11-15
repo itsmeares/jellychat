@@ -1,9 +1,8 @@
-import { normalizeId } from "./normalize";
-import type { DevicePrefs, Resolved, ServerConfig, Side, UserPrefs } from "./types";
+import type { DevicePrefs, Resolved, ServerConfig, UserPrefs } from "./types";
 
 export const widthMin = 300;
 export const widthMax = 560;
-export const widthDefault = 380;
+const widthDefault = 380;
 export const quickDefault = ["👍", "❤️", "😂", "😮", "🎉", "🔥"];
 
 export function defaultUserPrefs(): UserPrefs {
@@ -95,9 +94,3 @@ export function legacyDevicePrefs(storage: Pick<Storage, "getItem">): DevicePref
   const side = storage.getItem("jellychat.drawerSide");
   return width || side ? parseDevicePrefs(width, side) : null;
 }
-
-export function sameUser(a: string, b: string): boolean {
-  return !!a && normalizeId(a) === normalizeId(b);
-}
-
-export type { Side };

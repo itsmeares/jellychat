@@ -2,7 +2,7 @@ import { normalizeEvent, normalizeId, normalizeRoom, normalizeServerConfig, norm
 import type { RoomEvent, RoomInfo, ServerConfig, SyncResponse } from "./types";
 
 /** The slice of Jellyfin Web's global ApiClient this plugin uses. */
-export type JellyfinApiClient = {
+type JellyfinApiClient = {
   serverAddress(): string;
   accessToken(): string | null | undefined;
   getCurrentUserId?(): string | null | undefined;
@@ -27,7 +27,7 @@ export class ApiError extends Error {
   }
 }
 
-export function jellyfinClient(): JellyfinApiClient | null {
+function jellyfinClient(): JellyfinApiClient | null {
   const client = window.ApiClient;
   return client && typeof client.serverAddress === "function" ? client : null;
 }
@@ -41,7 +41,7 @@ export function currentUserId(): string {
   return normalizeId(jellyfinClient()?.getCurrentUserId?.() || "");
 }
 
-export function authorizationHeader(client: JellyfinApiClient): string {
+function authorizationHeader(client: JellyfinApiClient): string {
   const part = (key: string, value: string | undefined) => key + '="' + (value ?? "").replace(/"/g, "") + '"';
   return "MediaBrowser " + [
     part("Client", client.appName?.() || "Jellyfin Web"),
