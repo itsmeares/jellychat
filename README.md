@@ -113,6 +113,10 @@ This project has since been renamed, refactored, and extended with a JellyChat-o
 
 Thanks to the original Syncplay Chat project for providing the starting point.
 
+## AI-assisted development
+
+Most of JellyChat's application code and tests were written with AI coding tools. I direct the architecture, priorities, and product decisions. User-facing documentation is reviewed and finalized by me.
+
 ## License
 
 This repository includes a GPL-3.0 license file. If GPL-3.0 terms apply to your distribution, distribute JellyChat under GPL-3.0 and preserve the required notices.
