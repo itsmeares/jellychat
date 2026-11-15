@@ -30,7 +30,7 @@ export function sectionOf(pull) {
 
 function line(pull) {
   const { area, text } = parseTitle(pull.title);
-  return `- ${area ? `**${area}:** ` : ""}${text} (#${pull.number}, @${pull.author})`;
+  return `- ${area ? `**${area}:** ` : ""}${text[0].toUpperCase()}${text.slice(1)} (#${pull.number}, @${pull.author})`;
 }
 
 // Release metadata pull requests opened by the release workflow are not changes.
