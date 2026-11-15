@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contribution guide
+    url: https://github.com/itsmeares/jellychat/blob/main/.github/CONTRIBUTING.md
+    about: Read how to set up, test, and open a pull request.
+  - name: Report a security problem
+    url: https://github.com/itsmeares/jellychat/security/advisories/new
+    about: Report security problems privately instead of in a public issue.

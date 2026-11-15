@@ -1,6 +1,73 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "extends": [
-        "github>jellyfin/.github//renovate-presets/default"
+        "config:recommended",
+        "mergeConfidence:all-badges",
+        "security:minimumReleaseAgeNpm",
+        "helpers:pinGitHubActionDigests"
+    ],
+    "dependencyDashboard": true,
+    "timezone": "Europe/London",
+    "schedule": ["* 2-7 * * 1"],
+    "updateNotScheduled": false,
+    "automerge": false,
+    "prConcurrentLimit": 3,
+    "prHourlyLimit": 0,
+    "rangeStrategy": "bump",
+    "prCreation": "immediate",
+    "lockFileMaintenance": {
+        "enabled": false
+    },
+    "vulnerabilityAlerts": {
+        "enabled": true,
+        "addLabels": ["security"],
+        "groupName": null,
+        "schedule": [],
+        "dependencyDashboardApproval": false,
+        "minimumReleaseAge": null,
+        "minimumGroupSize": 1,
+        "prConcurrentLimit": 0,
+        "prCreation": "immediate",
+        "vulnerabilityFixStrategy": "lowest"
+    },
+    "packageRules": [
+        {
+            "matchManagers": ["npm"],
+            "groupName": "Web packages"
+        },
+        {
+            "matchManagers": ["npm"],
+            "matchDepTypes": ["devDependencies"],
+            "groupName": "Development tools"
+        },
+        {
+            "matchManagers": ["npm"],
+            "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+            "groupName": "React"
+        },
+        {
+            "matchManagers": ["npm"],
+            "matchPackageNames": ["vite", "@vitejs/plugin-react", "vitest", "jsdom"],
+            "groupName": "Vite and tests"
+        },
+        {
+            "matchManagers": ["nuget"],
+            "groupName": "NuGet packages"
+        },
+        {
+            "description": "The Jellyfin packages set the oldest Jellyfin server that can load the plugin. Raise them by hand together with targetAbi.",
+            "matchManagers": ["nuget"],
+            "matchPackageNames": ["Jellyfin.Controller", "Jellyfin.Model"],
+            "enabled": false
+        },
+        {
+            "matchManagers": ["github-actions"],
+            "groupName": "GitHub Actions"
+        },
+        {
+            "matchUpdateTypes": ["major"],
+            "groupName": null,
+            "dependencyDashboardApproval": true
+        }
     ]
 }

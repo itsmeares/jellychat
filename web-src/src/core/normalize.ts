@@ -45,7 +45,7 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
 
-export function normalizeReply(value: unknown): ReplyTarget | null {
+function normalizeReply(value: unknown): ReplyTarget | null {
   const source = bag(value);
   const eventId = text(pick(source, "EventId")).trim();
   const messagePreview = text(pick(source, "MessagePreview")).trim();

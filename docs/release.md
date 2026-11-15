@@ -62,7 +62,8 @@ Lines are sorted by area and end with the PR number and its author. Performance 
 ## Failure Recovery
 
 - Failures before draft creation leave no tag or release.
-- Failures after draft creation leave a non-public draft. Inspect the failed step, delete the draft and its tag from the GitHub Releases UI, then rerun the workflow.
+- Failures after draft creation leave a non-public draft. A draft has no tag until it is published. Inspect the failed step, delete the draft from the GitHub Releases UI, then rerun the workflow.
+- Published `v*` tags are protected by a ruleset and cannot be moved or deleted.
 - Existing public releases and tags are never overwritten; use a new patch version instead.
 
 ## Local Validation

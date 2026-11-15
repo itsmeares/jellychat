@@ -1,0 +1,101 @@
+name: Bug report
+description: Report a defect with enough detail to reproduce it.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking a close look. Do not include passwords, API keys, or server addresses you want to keep private.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      description: One line on what is broken.
+      placeholder: Scrolling the chat changes the video volume
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_behavior
+    attributes:
+      label: Current behavior
+      description: Describe what you are seeing now.
+      placeholder: While a video plays, scrolling over the chat messages turns the volume down.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: Describe the behavior you expected instead.
+      placeholder: Scrolling over the chat scrolls the messages and leaves the volume alone.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Reproduction steps
+      description: List the smallest set of steps needed to reproduce the problem.
+      placeholder: |
+        1. Join a SyncPlay group
+        2. Start a video
+        3. Open JellyChat
+        4. Scroll over the message list
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Pick the closest area.
+      options:
+        - Chat panel or floating card
+        - Header or player button
+        - Reactions or emoji picker
+        - My settings
+        - Admin page
+        - Room password or membership
+        - Install or update
+        - Other
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions and client
+      description: The JellyChat and Jellyfin versions are on Dashboard → Plugins and Dashboard → About.
+      placeholder: |
+        JellyChat version:
+        Jellyfin server version:
+        Client (Jellyfin Web, Jellyfin Desktop, Android, iOS, other):
+        Browser and version, if Jellyfin Web:
+        Custom CSS or other web plugins installed:
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Screenshots or log output
+      description: Paste browser console errors or Jellyfin server log lines that mention JellyChat. Drag screenshots into the issue after the form opens.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched the existing issues first.
+          required: true
+        - label: I removed passwords, tokens, and private server details from this report.
+          required: true

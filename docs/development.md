@@ -10,7 +10,9 @@ JellyChat is a .NET 10 Jellyfin server plugin with an injected React frontend fo
 - `Jellyfin.Plugin.JellyChat.Tests/`: room lifecycle, ownership, password, and access-control tests.
 - `Jellyfin.Plugin.JellyChat/Web/`: generated `jellychat.css` and `jellychat.js` served by the plugin.
 - `web-src/`: React/Vite/TypeScript source for the injected Jellyfin Web client.
-- `scripts/deploy-dev.sh`: local debug publish and plugin-folder copy helper.
+- `scripts/deploy-dev.sh`: debug publish and copy into a Jellyfin plugin folder.
+- `scripts/release-notes.mjs`: release notes built from merged PR titles.
+- `scripts/screenshots.mjs`: hand-run screenshots against a throwaway Jellyfin.
 - `docs/`: project documentation for development, release, and troubleshooting.
 
 ## Frontend Build
@@ -59,29 +61,19 @@ dotnet publish Jellyfin.Plugin.JellyChat.sln -c Debug
 
 ## Local Dev Deploy
 
-From the repository root:
+From the repository root, point the script at the JellyChat folder inside a throwaway Jellyfin's plugin directory:
 
 ```bash
-./scripts/deploy-dev.sh
+PLUGIN_DIR="/path/to/jellyfin/config/plugins/JellyChat" ./scripts/deploy-dev.sh
 ```
 
-The script publishes Debug output and copies it to the Jellyfin plugin directory. By default it uses:
-
-```text
-$HOME/Library/Application Support/jellyfin/plugins/JellyChat
-```
-
-Override the target as needed:
+or at the Jellyfin data folder:
 
 ```bash
-PLUGIN_DIR="/path/to/jellyfin/plugins/JellyChat" ./scripts/deploy-dev.sh
+JELLYFIN_DATA_DIR="/path/to/jellyfin/config" ./scripts/deploy-dev.sh
 ```
 
-or:
-
-```bash
-JELLYFIN_DATA_DIR="/path/to/jellyfin" ./scripts/deploy-dev.sh
-```
+The script publishes Debug output to `out/debug/` and copies it into the plugin folder. It uses `dotnet` when installed, and otherwise builds the web assets with npm and publishes in the `mcr.microsoft.com/dotnet/sdk:10.0` container with `-p:SkipWebBuild=true`.
 
 Restart Jellyfin after each deploy.
 

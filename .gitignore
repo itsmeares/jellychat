@@ -7,3 +7,4 @@ web-src/node_modules/
 web-src/*.tsbuildinfo
 .vscode/
 web-src/dist/
+out/

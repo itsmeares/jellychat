@@ -6,7 +6,7 @@ export type RoomSignal =
   | { kind: "reaction"; event: RoomEvent; mine: boolean }
   | { kind: "playback"; event: RoomEvent; mine: boolean };
 
-export type RoomState = {
+type RoomState = {
   room: RoomInfo | null;
   ready: boolean;
   items: TimelineItem[];
@@ -34,7 +34,7 @@ function defaultId(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function previewOf(text: string): string {
+function previewOf(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 140);
 }
 

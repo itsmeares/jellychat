@@ -10,7 +10,7 @@ const deviceSideKey = "jellychat.drawerSide";
 const saveDelayMs = 500;
 const retryDelayMs = 5000;
 
-export type PrefsState = { server: ServerConfig; user: UserPrefs; device: DevicePrefs; resolved: Resolved; loaded: boolean };
+type PrefsState = { server: ServerConfig; user: UserPrefs; device: DevicePrefs; resolved: Resolved; loaded: boolean };
 
 type DisplayPreferences = { CustomPrefs?: Record<string, string>; [key: string]: unknown };
 

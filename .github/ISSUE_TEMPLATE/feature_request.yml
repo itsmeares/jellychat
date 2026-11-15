@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a change with the problem and expected payoff spelled out.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ground this in a real watch-party need. For a security problem, use the private security report instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing, confusing, or hard to do right now?
+      placeholder: When someone joins late, they cannot tell what was said before they joined.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the change you want at a high level.
+      placeholder: Show the last few messages to people who join the room.
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Who benefits
+      description: Why is this worth doing, and for whom?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Note any workaround or smaller change.
+    validations:
+      required: false
